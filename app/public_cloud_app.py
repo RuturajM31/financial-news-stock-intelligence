@@ -871,10 +871,10 @@ def _input_form() -> tuple[str, str, str]:
 
     if not analyze_clicked:
         st.markdown(
-            '<div class="info-strip">ⓘ Enter an Article URL, upload an article, paste text, or click Use sample.</div>',
+            '<div class="info-strip">ⓘ Showing the executive sample dashboard. Enter a URL, upload, paste text, or click Analyze to run your own article.</div>',
             unsafe_allow_html=True,
         )
-        st.stop()
+        return _BASE_EXAMPLE, "sample executive overview", ""
 
     clean_url = _clean_text(article_url)
     clean_pasted = _clean_text(pasted_text)
