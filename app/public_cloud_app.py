@@ -491,7 +491,7 @@ def _initialize_exec_state() -> None:
 
 
 def _executive_analysis_control_center() -> tuple[str, str]:
-    """Collect article input with strict URL-first routing."""
+    """Collect article input with strict URL-first routing and no silent sample fallback."""
 
     url_col, upload_col = st.columns([1.35, 1.0])
 
@@ -500,14 +500,14 @@ def _executive_analysis_control_center() -> tuple[str, str]:
             "Article URL",
             value="",
             placeholder="https://example.com/company-earnings-news",
-            key="executive_article_url_v24",
+            key="executive_article_url_v25",
         )
 
     with upload_col:
         uploaded_file = st.file_uploader(
             "Upload article",
             type=["txt", "md", "csv", "json", "pdf"],
-            key="executive_article_upload_v24",
+            key="executive_article_upload_v25",
         )
 
     pasted_text = st.text_area(
@@ -515,10 +515,10 @@ def _executive_analysis_control_center() -> tuple[str, str]:
         value="",
         placeholder="Paste article text here. Leave empty when using an Article URL.",
         height=112,
-        key="executive_article_text_v24",
+        key="executive_article_text_v25",
     )
 
-    button_col_1, button_col_2, button_col_3, badge_col = st.columns([0.9, 0.9, 0.7, 2.3])
+    button_col_1, button_col_2, button_col_3, status_col = st.columns([0.9, 0.9, 0.7, 2.3])
 
     with button_col_1:
         analyze_clicked = st.button("Analyze", type="primary", width="stretch")
@@ -526,27 +526,28 @@ def _executive_analysis_control_center() -> tuple[str, str]:
         sample_clicked = st.button("Use sample", width="stretch")
     with button_col_3:
         clear_clicked = st.button("Clear", width="stretch")
-    with badge_col:
+    with status_col:
         st.markdown(
-            "<div class='control-badges'>"
-            "<span>URL priority</span>"
-            "<span>fetch status visible</span>"
-            "<span>no silent sample fallback</span>"
-            "</div>",
+            "<div class='input-status-pill'>URL first · upload second · paste third · sample only on click</div>",
             unsafe_allow_html=True,
         )
 
     if clear_clicked:
-        st.info("Inputs cleared. Enter a URL, upload an article, or paste text.")
+        st.info("Inputs cleared. Enter a URL, upload an article, paste text, or click Use sample.")
         st.stop()
 
     if sample_clicked:
+        st.success("Sample article loaded.")
         return _BASE_EXAMPLE, "sample article"
 
     clean_url = (article_url or "").strip()
     clean_pasted = (pasted_text or "").strip()
 
     if clean_url:
+        if not analyze_clicked:
+            st.info("URL entered. Click Analyze to fetch and analyze it.")
+            st.stop()
+
         try:
             fetched_text = _fetch_url_text(clean_url)
             st.success("Article URL fetched and analyzed.")
@@ -561,6 +562,10 @@ def _executive_analysis_control_center() -> tuple[str, str]:
             st.stop()
 
     if uploaded_file is not None:
+        if not analyze_clicked:
+            st.info("File uploaded. Click Analyze to process it.")
+            st.stop()
+
         try:
             raw = uploaded_file.read()
             uploaded_text = raw.decode("utf-8", errors="ignore").strip()
@@ -569,13 +574,18 @@ def _executive_analysis_control_center() -> tuple[str, str]:
 
         if uploaded_text:
             return uploaded_text, f"uploaded file: {uploaded_file.name}"
+
         st.warning("Uploaded file could not be read as text.")
         st.stop()
 
     if clean_pasted:
+        if not analyze_clicked:
+            st.info("Pasted text detected. Click Analyze to process it.")
+            st.stop()
         return clean_pasted, "pasted article"
 
-    return _BASE_EXAMPLE, "sample article"
+    st.info("Enter an Article URL, upload an article, paste text, or click Use sample.")
+    st.stop()
 
 
 def _article_inputs() -> tuple[str, str]:
@@ -1550,6 +1560,75 @@ def _apply_obsidian_aurora_theme_v24() -> None:
 
         label, p, span, div {
             text-rendering: geometricPrecision;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _apply_final_control_polish_v25() -> None:
+    """Apply final public dashboard theme/control polish."""
+
+    st.markdown(
+        """
+        <style>
+        [data-testid="stAppViewContainer"] {
+            background:
+                radial-gradient(circle at 8% 6%, rgba(168, 85, 247, 0.20), transparent 30rem),
+                radial-gradient(circle at 92% 10%, rgba(20, 184, 166, 0.18), transparent 32rem),
+                linear-gradient(180deg, #020106 0%, #050211 48%, #020617 100%) !important;
+        }
+
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #020106 0%, #050312 55%, #020617 100%) !important;
+            border-right: 1px solid rgba(168, 85, 247, 0.34) !important;
+        }
+
+        .input-status-pill {
+            display: inline-flex;
+            align-items: center;
+            min-height: 42px;
+            padding: 0 .95rem;
+            border-radius: 999px;
+            border: 1px solid rgba(45, 212, 191, .34);
+            background: linear-gradient(135deg, rgba(6, 78, 59, .42), rgba(88, 28, 135, .38));
+            color: #ecfeff;
+            font-size: .78rem;
+            font-weight: 900;
+            letter-spacing: .01em;
+            white-space: nowrap;
+        }
+
+        .control-badges {
+            display: none !important;
+        }
+
+        .stTextInput > div > div,
+        .stTextArea textarea,
+        .stFileUploader > div {
+            background: rgba(2, 6, 23, 0.92) !important;
+            border: 1px solid rgba(45, 212, 191, 0.34) !important;
+            border-radius: 18px !important;
+        }
+
+        .stButton > button {
+            border-radius: 18px !important;
+            border: 1px solid rgba(45, 212, 191, 0.34) !important;
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.96), rgba(20, 184, 166, 0.92)) !important;
+            color: white !important;
+            font-weight: 950 !important;
+            min-height: 3rem !important;
+        }
+
+        .exec-topbar,
+        .article-strip,
+        .exec-card,
+        .executive-insight,
+        .important-analysis,
+        .workflow-wrap,
+        .driver-panel {
+            border-color: rgba(168, 85, 247, .28) !important;
         }
         </style>
         """,
