@@ -463,7 +463,7 @@ def _executive_analysis_control_center() -> tuple[str, str]:
             "<div class='exec-control'><div class='exec-control-head'>"
             "<div><div class='exec-title-row'>📈 Executive Overview</div>"
             "<div class='exec-subrow'>Financial News → Sentiment → Movement → Forecast → Explainability</div>"
-            "<div class='control-note'>Enter a URL, upload an article, or paste text. Click Analyze to refresh every insight and chart.</div></div>"
+            "<div class='control-note'>Enter a URL, upload an article, or paste text. Click Analyze to refresh the conclusion, charts, workflow, and drivers.</div></div>"
             "<div class='exec-badges'><span>☁ Public Cloud Mode</span><span>🔗 Article URL Enabled</span>"
             "<span>⇧ Upload Enabled</span><span>👁 Model Workflow Visible</span></div></div>",
             unsafe_allow_html=True,
@@ -1301,6 +1301,112 @@ def _apply_commander_theme_override() -> None:
             letter-spacing: .14em !important;
             text-transform: uppercase !important;
             font-weight: 950 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+def _apply_executive_header_v20_polish() -> None:
+    """Polish only the Executive Overview analysis-control/header block."""
+
+    st.markdown(
+        """
+        <style>
+        .control-title {
+            max-width: 1320px;
+            margin: 0 auto .55rem auto !important;
+            color: #7dd3fc !important;
+            font-size: .78rem !important;
+            line-height: 1 !important;
+            letter-spacing: .18em !important;
+            text-transform: uppercase !important;
+            font-weight: 950 !important;
+        }
+
+        .exec-topbar {
+            max-width: 1320px;
+            margin: 0 auto 1.05rem auto !important;
+            min-height: 0 !important;
+            padding: 1.05rem 1.15rem !important;
+            display: grid !important;
+            grid-template-columns: minmax(0, 1.15fr) minmax(360px, .85fr) !important;
+            gap: 1rem !important;
+            align-items: center !important;
+            border-radius: 24px !important;
+            border: 1px solid rgba(56, 189, 248, .26) !important;
+            background:
+              radial-gradient(circle at 0% 0%, rgba(56,189,248,.12), transparent 23rem),
+              linear-gradient(135deg, rgba(8, 13, 28, .98), rgba(15, 23, 42, .82)) !important;
+            box-shadow: 0 18px 52px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.035) !important;
+        }
+
+        .exec-title-row {
+            font-size: 1.72rem !important;
+            line-height: 1.05 !important;
+            letter-spacing: -.045em !important;
+            font-weight: 950 !important;
+            color: #f8fbff !important;
+            margin: 0 0 .34rem 0 !important;
+        }
+
+        .exec-subrow {
+            max-width: 680px !important;
+            color: #a9b8cf !important;
+            font-size: .92rem !important;
+            line-height: 1.42 !important;
+            margin-top: .15rem !important;
+        }
+
+        .exec-badges {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: .56rem !important;
+            justify-content: stretch !important;
+            align-items: stretch !important;
+            margin: 0 !important;
+        }
+
+        .exec-badges span {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            min-height: 44px !important;
+            padding: .55rem .74rem !important;
+            border-radius: 14px !important;
+            border: 1px solid rgba(96,165,250,.24) !important;
+            background: linear-gradient(180deg, rgba(4,12,24,.92), rgba(15,23,42,.78)) !important;
+            color: #e7f3ff !important;
+            font-size: .76rem !important;
+            font-weight: 900 !important;
+            white-space: nowrap !important;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+        }
+
+        .exec-badges span:nth-child(1) {border-color: rgba(52,211,153,.28) !important;}
+        .exec-badges span:nth-child(2) {border-color: rgba(96,165,250,.28) !important;}
+        .exec-badges span:nth-child(3) {border-color: rgba(167,139,250,.30) !important;}
+        .exec-badges span:nth-child(4) {
+            grid-column: 1 / -1;
+            border-color: rgba(34,211,238,.32) !important;
+            background: linear-gradient(135deg, rgba(8,47,73,.60), rgba(15,23,42,.78)) !important;
+        }
+
+        .stTextInput label,
+        .stFileUploader label,
+        .stTextArea label {
+            font-weight: 850 !important;
+            color: #edf6ff !important;
+            letter-spacing: -.01em !important;
+        }
+
+        @media (max-width: 1100px) {
+            .exec-topbar {
+                grid-template-columns: 1fr !important;
+            }
+            .exec-badges {
+                grid-template-columns: 1fr !important;
+            }
         }
         </style>
         """,
