@@ -449,66 +449,84 @@ def _initialize_exec_state() -> None:
 
 
 def _executive_analysis_control_center() -> tuple[str, str]:
-    """Collect article input with stable URL state and no silent sample fallback."""
+    """Collect article input using a stable Streamlit form."""
 
-    st.session_state.setdefault("executive_article_url", "")
-    st.session_state.setdefault("executive_article_text", "")
-
-    url_col, upload_col = st.columns([1.35, 1.0])
-
-    with url_col:
-        article_url = st.text_input(
-            "Article URL",
-            placeholder="https://example.com/company-earnings-news",
-            key="executive_article_url",
-        )
-
-    with upload_col:
-        uploaded_file = st.file_uploader(
-            "Upload article",
-            type=["txt", "md", "csv", "json", "pdf"],
-            key="executive_article_upload",
-        )
-
-    pasted_text = st.text_area(
-        "Paste article / headline / news text",
-        placeholder="Paste article text here. Leave empty when using an Article URL.",
-        height=112,
-        key="executive_article_text",
+    st.markdown(
+        """
+        <div style="
+            max-width:1320px;
+            margin:0 auto 1.1rem auto;
+            padding:1.15rem 1.25rem;
+            border-radius:26px;
+            border:1px solid rgba(45,212,191,.36);
+            background:linear-gradient(135deg, rgba(3,2,8,.98), rgba(14,10,30,.88));
+            box-shadow:0 24px 70px rgba(0,0,0,.38);
+        ">
+            <div style="color:#5eead4;font-size:.76rem;font-weight:950;text-transform:uppercase;letter-spacing:.18em;margin-bottom:.72rem;">
+                Analysis Control Center
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;">
+                <div>
+                    <div style="color:#f8fafc;font-size:2rem;font-weight:950;letter-spacing:-.055em;">
+                        📈 Executive Overview
+                    </div>
+                    <div style="color:#c4b5fd;font-size:.96rem;font-weight:750;margin-top:.45rem;">
+                        Financial News → Sentiment → Movement → Forecast → Explainability
+                    </div>
+                    <div style="color:#cbd5e1;font-size:.84rem;margin-top:.42rem;">
+                        Enter a URL, upload an article, or paste text. The dashboard updates after Analyze.
+                    </div>
+                </div>
+                <div style="color:#ecfeff;font-size:.8rem;font-weight:900;text-align:right;">
+                    ☁ Public Cloud · 🔗 URL · ⇧ Upload · 👁 Workflow
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-    button_col_1, button_col_2, button_col_3, status_col = st.columns([0.9, 0.9, 0.7, 2.3])
+    with st.form("executive_article_form", clear_on_submit=False):
+        url_col, upload_col = st.columns([1.35, 1.0])
 
-    with button_col_1:
-        analyze_clicked = st.button("Analyze", type="primary", width="stretch")
-    with button_col_2:
-        sample_clicked = st.button("Use sample", width="stretch")
-    with button_col_3:
-        clear_clicked = st.button("Clear", width="stretch")
-    with status_col:
-        st.markdown(
-            "<div class='input-status-pill'>URL first · upload second · paste third · sample only on click</div>",
-            unsafe_allow_html=True,
+        with url_col:
+            article_url = st.text_input(
+                "Article URL",
+                value="",
+                placeholder="Paste article URL here",
+            )
+
+        with upload_col:
+            uploaded_file = st.file_uploader(
+                "Upload article",
+                type=["txt", "md", "csv", "json", "pdf"],
+            )
+
+        pasted_text = st.text_area(
+            "Paste article / headline / news text",
+            value="",
+            placeholder="Paste article text here. Leave empty when using an Article URL.",
+            height=112,
         )
 
-    if clear_clicked:
-        st.session_state["executive_article_url"] = ""
-        st.session_state["executive_article_text"] = ""
-        st.info("Inputs cleared. Enter a URL, upload an article, paste text, or click Use sample.")
-        st.stop()
+        button_col_1, button_col_2 = st.columns([1.0, 1.0])
+        with button_col_1:
+            analyze_clicked = st.form_submit_button("Analyze", type="primary", width="stretch")
+        with button_col_2:
+            sample_clicked = st.form_submit_button("Use sample", width="stretch")
+
+    clean_url = (article_url or "").strip()
+    clean_pasted = (pasted_text or "").strip()
 
     if sample_clicked:
         st.success("Sample article loaded.")
         return _BASE_EXAMPLE, "sample article"
 
-    clean_url = (article_url or "").strip()
-    clean_pasted = (pasted_text or "").strip()
+    if not analyze_clicked:
+        st.info("Enter an Article URL, upload an article, paste text, or click Use sample.")
+        st.stop()
 
     if clean_url:
-        if not analyze_clicked:
-            st.info("URL entered. Click Analyze to fetch and analyze it.")
-            st.stop()
-
         try:
             fetched_text = _fetch_url_text(clean_url)
             st.success("Article URL fetched and analyzed.")
@@ -523,10 +541,6 @@ def _executive_analysis_control_center() -> tuple[str, str]:
             st.stop()
 
     if uploaded_file is not None:
-        if not analyze_clicked:
-            st.info("File uploaded. Click Analyze to process it.")
-            st.stop()
-
         try:
             raw = uploaded_file.read()
             uploaded_text = raw.decode("utf-8", errors="ignore").strip()
@@ -540,12 +554,9 @@ def _executive_analysis_control_center() -> tuple[str, str]:
         st.stop()
 
     if clean_pasted:
-        if not analyze_clicked:
-            st.info("Pasted text detected. Click Analyze to process it.")
-            st.stop()
         return clean_pasted, "pasted article"
 
-    st.info("Enter an Article URL, upload an article, paste text, or click Use sample.")
+    st.warning("No input provided. Enter a URL, upload an article, paste text, or click Use sample.")
     st.stop()
 
 
