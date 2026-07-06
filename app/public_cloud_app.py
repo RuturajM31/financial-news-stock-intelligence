@@ -319,53 +319,70 @@ def _infer_ticker(text: str) -> tuple[str, str]:
 
 
 def _score_article(text: str | None) -> ArticleSignal:
-    """Score text with transparent public heuristics that mimic the model workflow."""
+    """Score text safely for public Executive Overview mode."""
 
-    if text is None:
-        text = ""
-    if not isinstance(text, str):
-        text = str(text)
+    try:
+        if text is None:
+            text = ""
+        if not isinstance(text, str):
+            text = str(text)
 
-    clean = re.sub(r"\s+", " ", text).strip()
-    if not clean:
+        clean = re.sub(r"\\s+", " ", text).strip()
+        if not clean:
+            clean = _BASE_EXAMPLE
+
+        positive = _hits(clean, _POSITIVE_TERMS)
+        negative = _hits(clean, _NEGATIVE_TERMS)
+        risk = _hits(clean, _RISK_TERMS)
+        tokens = _tokens(clean)
+        ticker, company = _infer_ticker(clean)
+
+        positive_weight = len(positive) * 1.15
+        negative_weight = len(negative) * 1.10
+        risk_weight = len(risk) * 0.82
+        length_dampener = min(1.0, max(0.42, len(tokens) / 85))
+
+        raw_sentiment = positive_weight - negative_weight
+        sentiment_score = max(-1.0, min(1.0, raw_sentiment / 7.0))
+        risk_score = max(0.05, min(0.95, (risk_weight + negative_weight * 0.4) / 8.0))
+
+        up = 0.34 + sentiment_score * 0.26 - risk_score * 0.07
+        down = 0.28 - sentiment_score * 0.20 + risk_score * 0.18
+        flat = 1.0 - up - down
+
+        values = [max(0.05, up), max(0.05, flat), max(0.05, down)]
+        total = sum(values)
+        movement_up, movement_flat, movement_down = [v / total for v in values]
+
+        confidence = min(
+            0.92,
+            max(0.55, 0.58 + abs(sentiment_score) * 0.22 + length_dampener * 0.12),
+        )
+
+        if movement_up > movement_down + 0.08:
+            label = "Bullish / positive movement pressure"
+        elif movement_down > movement_up + 0.08:
+            label = "Bearish / negative movement pressure"
+        else:
+            label = "Mixed / watchlist signal"
+
+        extracted_terms = sorted(set(positive + negative + risk))[:18]
+
+    except Exception:
         clean = _BASE_EXAMPLE
+        ticker, company = "NEWS", "Article"
+        positive = ["demand", "revenue"]
+        negative = []
+        risk = ["risk"]
+        sentiment_score = 0.35
+        risk_score = 0.20
+        movement_up = 0.45
+        movement_flat = 0.35
+        movement_down = 0.20
+        confidence = 0.65
+        label = "Fallback / safe public analysis"
+        extracted_terms = ["demand", "revenue", "risk"]
 
-    tokens = _tokens(clean)
-    positive = _hits(clean, _POSITIVE_TERMS)
-    negative = _hits(clean, _NEGATIVE_TERMS)
-    risk = _hits(clean, _RISK_TERMS)
-    ticker, company = _infer_ticker(clean)
-
-    positive_weight = len(positive) * 1.15
-    negative_weight = len(negative) * 1.10
-    risk_weight = len(risk) * 0.82
-    length_dampener = min(1.0, max(0.42, len(tokens) / 85))
-
-    raw_sentiment = positive_weight - negative_weight
-    sentiment_score = max(-1.0, min(1.0, raw_sentiment / 7.0))
-    risk_score = max(0.05, min(0.95, (risk_weight + negative_weight * 0.4) / 8.0))
-
-    up = 0.34 + sentiment_score * 0.26 - risk_score * 0.07
-    down = 0.28 - sentiment_score * 0.20 + risk_score * 0.18
-    flat = 1.0 - up - down
-
-    values = [max(0.05, up), max(0.05, flat), max(0.05, down)]
-    total = sum(values)
-    movement_up, movement_flat, movement_down = [v / total for v in values]
-
-    confidence = min(
-        0.92,
-        max(0.55, 0.58 + abs(sentiment_score) * 0.22 + length_dampener * 0.12),
-    )
-
-    if movement_up > movement_down + 0.08:
-        label = "Bullish / positive movement pressure"
-    elif movement_down > movement_up + 0.08:
-        label = "Bearish / negative movement pressure"
-    else:
-        label = "Mixed / watchlist signal"
-
-    extracted_terms = sorted(set(positive + negative + risk))[:18]
     return ArticleSignal(
         ticker=ticker,
         company=company,
@@ -1212,6 +1229,78 @@ def _apply_graphite_cobalt_theme_override() -> None:
             color: white !important;
             font-weight: 850 !important;
             min-height: 3rem !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _apply_commander_theme_override() -> None:
+    """Apply the cleaner premium cobalt/graphite public dashboard theme."""
+
+    st.markdown(
+        """
+        <style>
+        [data-testid="stAppViewContainer"] {
+            background:
+              radial-gradient(circle at 12% 8%, rgba(59, 130, 246, 0.13), transparent 30rem),
+              radial-gradient(circle at 88% 12%, rgba(124, 58, 237, 0.15), transparent 30rem),
+              radial-gradient(circle at 50% 100%, rgba(15, 23, 42, 0.75), transparent 34rem),
+              linear-gradient(180deg, #020617 0%, #07111f 46%, #0b1020 100%) !important;
+        }
+
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #020617 0%, #060b16 52%, #080f1f 100%) !important;
+            border-right: 1px solid rgba(96, 165, 250, 0.22) !important;
+        }
+
+        [data-testid="stHeader"] {
+            background: rgba(2, 6, 23, 0.82) !important;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.10) !important;
+            backdrop-filter: blur(18px);
+        }
+
+        .exec-topbar,
+        .article-strip,
+        .exec-card,
+        .important-analysis,
+        .workflow-wrap,
+        .driver-panel {
+            background: linear-gradient(145deg, rgba(8, 13, 28, 0.96), rgba(15, 23, 42, 0.78)) !important;
+            border-color: rgba(96, 165, 250, 0.20) !important;
+            box-shadow: 0 22px 64px rgba(0, 0, 0, 0.28) !important;
+        }
+
+        .executive-insight {
+            background:
+              radial-gradient(circle at 96% 100%, rgba(34, 197, 94, 0.12), transparent 20rem),
+              linear-gradient(145deg, rgba(15, 23, 42, 0.96), rgba(12, 74, 110, 0.42)) !important;
+            border-color: rgba(34, 211, 238, 0.34) !important;
+        }
+
+        .stTextInput > div > div,
+        .stTextArea textarea,
+        .stFileUploader > div {
+            background: rgba(2, 6, 23, 0.88) !important;
+            border: 1px solid rgba(96, 165, 250, 0.28) !important;
+            border-radius: 16px !important;
+        }
+
+        .stButton > button {
+            border-radius: 16px !important;
+            border: 1px solid rgba(129, 140, 248, 0.34) !important;
+            background: linear-gradient(135deg, rgba(37, 99, 235, 0.95), rgba(124, 58, 237, 0.92)) !important;
+            color: white !important;
+            font-weight: 900 !important;
+            min-height: 3rem !important;
+        }
+
+        .control-title {
+            color: #60a5fa !important;
+            letter-spacing: .14em !important;
+            text-transform: uppercase !important;
+            font-weight: 950 !important;
         }
         </style>
         """,
