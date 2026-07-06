@@ -9,12 +9,17 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from .config import ApiSettings
 from .errors import ApiProblem, problem_response
 from .extraction import clean_text, extract_public_url, extract_uploaded_bytes
-from .logging_config import configure_logging
+from .logging_config import (
+    bind_request_context,
+    configure_logging,
+    reset_request_context,
+)
+from .monitoring import get_metrics_registry, route_template
 from .rate_limit import FixedWindowRateLimiter
 from .schemas import (
     BatchSentimentResponse,
@@ -43,7 +48,7 @@ if TYPE_CHECKING:
     from .services import ApiServices
 
 
-APPLICATION_VERSION = "1.0.9"
+APPLICATION_VERSION = "1.1.0"
 SERVICE_NAME = "financial-news-stock-intelligence-api"
 FILE_UPLOAD_REQUEST_BODY = {
     "required": True,
@@ -105,20 +110,24 @@ def create_app(
         active_settings.rate_limit_window_seconds,
     )
     logger = configure_logging()
+    registry = get_metrics_registry()
+    registry.configure(service=SERVICE_NAME, version=APPLICATION_VERSION)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        registry.set_ready(True)
         logger.info(
             "FastAPI application lifecycle started.",
-            extra={"marker": "STARTED"},
+            extra={"marker": "STARTED", "component": "fastapi"},
         )
         try:
             yield
         finally:
+            registry.set_ready(False)
             active_services.close()
             logger.info(
                 "FastAPI application lifecycle stopped.",
-                extra={"marker": "PASSED"},
+                extra={"marker": "PASSED", "component": "fastapi"},
             )
 
     app = FastAPI(
@@ -142,39 +151,53 @@ def create_app(
     async def request_context(request: Request, call_next: Any) -> Any:
         request_id = request_id_from_header(request.headers.get("X-Request-ID"))
         request.state.request_id = request_id
+        context_token = bind_request_context(request_id)
+        registry.request_started()
         started = time.perf_counter()
+        status_code = 500
         try:
             response = await call_next(request)
+            status_code = response.status_code
+            response.headers["X-Request-ID"] = request_id
+            return response
         except Exception:
-            duration_ms = round((time.perf_counter() - started) * 1000, 3)
+            duration_seconds = max(0.0, time.perf_counter() - started)
             logger.exception(
                 "API request raised an unhandled exception.",
                 extra={
                     "marker": "FAILED",
                     "request_id": request_id,
                     "method": request.method,
-                    "path": request.url.path,
-                    "duration_ms": duration_ms,
+                    "path": route_template(request.scope),
+                    "duration_ms": round(duration_seconds * 1000, 3),
                     "client_ip": client_identity(request),
                 },
             )
             raise
-        duration_ms = round((time.perf_counter() - started) * 1000, 3)
-        response.headers["X-Request-ID"] = request_id
-        marker = "PASSED" if response.status_code < 400 else "FAILED"
-        logger.info(
-            "API request completed.",
-            extra={
-                "marker": marker,
-                "request_id": request_id,
-                "method": request.method,
-                "path": request.url.path,
-                "status_code": response.status_code,
-                "duration_ms": duration_ms,
-                "client_ip": client_identity(request),
-            },
-        )
-        return response
+        finally:
+            duration_seconds = max(0.0, time.perf_counter() - started)
+            safe_path = route_template(request.scope)
+            registry.observe_http(
+                method=request.method,
+                path=safe_path,
+                status_code=status_code,
+                duration_seconds=duration_seconds,
+            )
+            registry.request_finished()
+            marker = "PASSED" if status_code < 400 else "FAILED"
+            logger.info(
+                "API request completed.",
+                extra={
+                    "marker": marker,
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": safe_path,
+                    "status_code": status_code,
+                    "duration_ms": round(duration_seconds * 1000, 3),
+                    "client_ip": client_identity(request),
+                },
+            )
+            reset_request_context(context_token)
 
     @app.exception_handler(ApiProblem)
     async def api_problem_handler(
@@ -231,6 +254,20 @@ def create_app(
         limiter.check(key)
 
     protected = [Depends(require_api_key), Depends(enforce_rate_limit)]
+
+    @app.get(
+        "/metrics",
+        dependencies=[Depends(require_api_key)],
+        include_in_schema=False,
+        tags=["service"],
+    )
+    def metrics() -> PlainTextResponse:
+        """Expose aggregate Prometheus metrics without request content."""
+
+        return PlainTextResponse(
+            registry.render(),
+            media_type="text/plain; version=0.0.4",
+        )
 
     @app.get("/health", response_model=HealthResponse, tags=["service"])
     def health() -> HealthResponse:

@@ -14,6 +14,7 @@ from typing import Any, Mapping
 from .artifacts import ArtifactPaths, ArtifactRegistry
 from .config import ApiSettings
 from .movement_worker_client import MovementWorkerClient
+from .monitoring import observe_operation
 from .schemas import (
     DriverEvidence,
     ExplainabilityResponse,
@@ -92,6 +93,7 @@ class ApiServices:
             ],
         )
 
+    @observe_operation("sentiment_prediction")
     def predict_sentiment(
         self,
         texts: list[str],
@@ -147,6 +149,7 @@ class ApiServices:
             "sentiment": dict(sentiment_raw),
         }
 
+    @observe_operation("movement_prediction")
     def predict_movement(
         self,
         text: str,
@@ -163,6 +166,7 @@ class ApiServices:
         )
         return self._movement_response(raw, ticker, sentiment)
 
+    @observe_operation("historical_intelligence")
     def historical(
         self,
         text: str,
@@ -193,6 +197,7 @@ class ApiServices:
             ],
         )
 
+    @observe_operation("movement_explainability")
     def explain(
         self,
         text: str,
@@ -213,6 +218,7 @@ class ApiServices:
             local_drivers=[DriverEvidence(**item) for item in raw["local_drivers"]],
         )
 
+    @observe_operation("scenario_analysis")
     def scenario(self, request: ScenarioAnalysisRequest) -> ScenarioAnalysisResponse:
         """Return transparent user-controlled investment scenarios."""
 
@@ -244,11 +250,13 @@ class ApiServices:
             method=str(raw["method"]),
         )
 
+    @observe_operation("provenance_lookup")
     def provenance(self) -> dict[str, Any]:
         """Return licence-safe provenance without exposing private price rows."""
 
         return dict(self._movement_client().provenance()["provenance"])
 
+    @observe_operation("readiness_check")
     def readiness(self, run_deep_probe: bool = False) -> dict[str, Any]:
         """Return cached artifact readiness and optional isolated worker probes.
 

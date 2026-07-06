@@ -1,0 +1,32 @@
+{
+  "fixes": [
+    "Set project src directory on PYTHONPATH for all target-project test and verification subprocesses."
+  ],
+  "git_operations_performed": false,
+  "modified_files": [
+    "src/financial_news_intelligence/api/logging_config.py",
+    "src/financial_news_intelligence/api/app.py",
+    "src/financial_news_intelligence/api/services.py"
+  ],
+  "new_files": [
+    "src/financial_news_intelligence/api/monitoring.py",
+    "tests/test_monitoring_logging.py",
+    "scripts/verify_monitoring_logging.py",
+    "docs/MONITORING_LOGGING_CONTRACT.md",
+    "monitoring/prometheus/alert_rules.yml",
+    "monitoring/prometheus/scrape.example.yml",
+    "monitoring/grafana/dashboards/fnsi_overview.json",
+    "MONITORING_LOGGING_PACKAGE_MANIFEST.json"
+  ],
+  "package": "Monitoring and Centralized Logging Strike Package",
+  "persistent_servers_started": false,
+  "precondition_sha256": {
+    "src/financial_news_intelligence/api/app.py": "d7ffa8ee8b06167d11cee6794f994e6d98cf9c7f8403051aa37445112c556b37",
+    "src/financial_news_intelligence/api/logging_config.py": "d57fc013d78e2cfbe1856c1b45598dd6b0fca53b25b18b23bc1b31ccacabce0b",
+    "src/financial_news_intelligence/api/services.py": "7a1283a137e3cde57e9d99b1c994d5d0547721246a3a8abd3ed51b0790211483"
+  },
+  "public_deployment_changed": false,
+  "supersedes": "10.1",
+  "target_branch": "project-foundation-streamlit-closure",
+  "version": "10.2"
+}
