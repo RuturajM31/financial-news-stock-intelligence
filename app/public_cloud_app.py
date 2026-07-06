@@ -197,6 +197,103 @@ def _apply_theme() -> None:
             padding: .78rem .9rem;
             box-shadow: 0 16px 38px rgba(0,0,0,.20);
         }
+
+        .exec-topbar {
+            display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+            padding: .75rem .25rem 1rem; margin-bottom: .6rem;
+        }
+        .exec-title-row {font-size: 1.72rem; font-weight: 950; letter-spacing: -.04em;}
+        .exec-subrow {color: #a8b3c7; font-size: .92rem; margin-top: .14rem;}
+        .exec-badges {display: flex; flex-wrap: wrap; gap: .55rem; justify-content: flex-end;}
+        .exec-badges span {
+            border: 1px solid rgba(56,189,248,.22); border-radius: 12px; padding: .52rem .78rem;
+            background: rgba(15,23,42,.72); color: #dff7ff; font-weight: 800; font-size: .78rem;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+        }
+        .article-strip {
+            display: grid; grid-template-columns: 1.1fr 3.4fr 1.25fr 1fr; gap: 1rem; align-items: center;
+            border: 1px solid rgba(148,163,184,.16); border-radius: 18px; padding: .9rem 1rem;
+            background: linear-gradient(135deg, rgba(8,13,28,.94), rgba(15,23,42,.76));
+            margin-bottom: .75rem; box-shadow: 0 16px 48px rgba(0,0,0,.24);
+        }
+        .article-identity {display:flex; align-items:center; gap:.8rem;}
+        .ticker-logo {
+            width: 48px; height: 48px; display:grid; place-items:center; border-radius:14px;
+            background: linear-gradient(135deg, rgba(52,211,153,.95), rgba(34,211,238,.42));
+            color:#04111f; font-weight:950; letter-spacing:-.04em;
+            box-shadow: 0 0 28px rgba(52,211,153,.23);
+        }
+        .article-ticker {font-size:1.25rem; font-weight:950;}
+        .article-company, .article-label {color:#96a3b8; font-size:.76rem;}
+        .article-headline {font-size:.86rem; line-height:1.36; color:#f8fbff;}
+        .article-meta {border-left:1px solid rgba(148,163,184,.14); padding-left:1rem; font-size:.84rem;}
+        .exec-card-grid {display:grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap:.72rem; margin:.75rem 0;}
+        .exec-card {
+            min-height: 104px; border-radius:18px; padding:.92rem .94rem; position:relative; overflow:hidden;
+            border:1px solid rgba(148,163,184,.18); background:rgba(15,23,42,.76);
+            box-shadow:0 18px 52px rgba(0,0,0,.26);
+        }
+        .exec-card:after {content:""; position:absolute; inset:auto -20% -55% 30%; height:80px; filter:blur(28px); opacity:.42;}
+        .accent-violet {background:linear-gradient(135deg, rgba(49,46,129,.54), rgba(15,23,42,.82)); border-color:rgba(167,139,250,.30);}
+        .accent-cyan {background:linear-gradient(135deg, rgba(8,145,178,.36), rgba(15,23,42,.82)); border-color:rgba(34,211,238,.30);}
+        .accent-green {background:linear-gradient(135deg, rgba(22,101,52,.36), rgba(15,23,42,.82)); border-color:rgba(52,211,153,.30);}
+        .accent-amber {background:linear-gradient(135deg, rgba(146,64,14,.34), rgba(15,23,42,.82)); border-color:rgba(251,191,36,.27);}
+        .accent-purple {background:linear-gradient(135deg, rgba(88,28,135,.38), rgba(15,23,42,.82)); border-color:rgba(192,132,252,.30);}
+        .exec-card-top {display:flex; gap:.75rem; align-items:flex-start; position:relative; z-index:2;}
+        .exec-icon {width:42px; height:42px; border-radius:999px; display:grid; place-items:center; background:rgba(2,6,23,.45); border:1px solid rgba(255,255,255,.12); font-weight:950;}
+        .exec-label {font-size:.72rem; color:#cbd5e1; font-weight:850;}
+        .exec-value {font-size:1.75rem; line-height:1.05; font-weight:950; color:#fff; letter-spacing:-.05em;}
+        .exec-subtitle {font-size:.78rem; color:#cbd5e1; margin-top:.18rem;}
+        .exec-spark {position:absolute; right:.65rem; bottom:.45rem; width:112px; opacity:.88;}
+        .spark {width:112px; height:36px;}
+        .insight-grid {display:grid; grid-template-columns: 1.22fr .88fr; gap:.75rem; margin:.65rem 0 .8rem;}
+        .executive-insight {
+            border:1px solid rgba(34,211,238,.42); border-radius:20px; padding:1rem 1.1rem;
+            background:
+              radial-gradient(circle at 100% 100%, rgba(52,211,153,.22), transparent 22rem),
+              linear-gradient(135deg, rgba(8,47,73,.74), rgba(15,23,42,.86));
+            box-shadow:0 0 44px rgba(34,211,238,.12), 0 20px 58px rgba(0,0,0,.24);
+        }
+        .insight-kicker {font-size:.86rem; color:#7dd3fc; font-weight:950; letter-spacing:.02em; margin-bottom:.55rem;}
+        .insight-message {font-size:1.24rem; line-height:1.48; color:#fff; font-weight:760;}
+        .important-analysis {
+            border:1px solid rgba(148,163,184,.16); border-radius:20px; padding:1rem 1.1rem;
+            background:rgba(15,23,42,.72);
+        }
+        .section-title {font-size:.98rem; font-weight:950; color:#f8fbff; margin-bottom:.55rem;}
+        .important-analysis ul {margin:.25rem 0 0 1rem; padding:0;}
+        .important-analysis li {margin:.34rem 0; color:#dce7f7; font-size:.86rem;}
+        .workflow-wrap {
+            border:1px solid rgba(148,163,184,.16); border-radius:20px; background:rgba(15,23,42,.66);
+            padding: .9rem; margin:.75rem 0;
+        }
+        .workflow-grid {display:grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap:.55rem;}
+        .workflow-card {
+            position:relative; min-height:86px; border:1px solid rgba(96,165,250,.18); border-radius:14px;
+            padding:.62rem .62rem; background:linear-gradient(180deg, rgba(15,23,42,.85), rgba(30,41,59,.42));
+        }
+        .workflow-status {position:absolute; top:.44rem; right:.48rem; color:#34d399; font-weight:950;}
+        .workflow-number {font-size:.66rem; color:#7dd3fc; font-weight:950;}
+        .workflow-title {font-size:.80rem; font-weight:950; margin-top:.18rem;}
+        .workflow-detail {font-size:.68rem; color:#cbd5e1; line-height:1.28; margin-top:.18rem;}
+        .driver-grid {display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:.75rem; margin-top:.7rem;}
+        .driver-panel {border-radius:18px; padding:.9rem 1rem; border:1px solid rgba(148,163,184,.16); background:rgba(15,23,42,.68);}
+        .bullish-panel {border-color:rgba(52,211,153,.25);}
+        .risk-panel {border-color:rgba(251,191,36,.25);}
+        .monitor-panel {border-color:rgba(56,189,248,.25);}
+        .driver-title {font-weight:950; margin-bottom:.55rem;}
+        .driver-chip {
+            display:inline-block; padding:.38rem .64rem; margin:.2rem .18rem; border-radius:999px;
+            background:rgba(30,41,59,.84); border:1px solid rgba(148,163,184,.12); color:#dbeafe; font-size:.76rem; font-weight:760;
+        }
+        .exec-disclaimer {color:#94a3b8; font-size:.74rem; padding:.65rem .2rem;}
+        @media (max-width: 1200px) {
+            .exec-card-grid, .workflow-grid {grid-template-columns: repeat(2, minmax(0,1fr));}
+            .article-strip, .insight-grid, .driver-grid {grid-template-columns: 1fr;}
+            .exec-topbar {display:block;}
+            .exec-badges {justify-content:flex-start; margin-top:.65rem;}
+        }
+
         </style>
         """,
         unsafe_allow_html=True,
@@ -495,33 +592,386 @@ def _pipeline(signal: ArticleSignal, source: str) -> None:
         st.markdown(f"<div class='step'><strong>{name}</strong><br>{description}</div>", unsafe_allow_html=True)
 
 
-def _render_overview(signal: ArticleSignal, source: str) -> None:
-    """Render executive overview."""
 
-    _metric_strip(signal)
-    left, right = st.columns([1.12, .88])
-    with left:
-        st.markdown(
-            """
-            <div class='panel'>
-              <h3>Why this project was built</h3>
-              <p>
-              Financial news is noisy. Headlines, filings, and analyst reports can move prices,
-              but investors and reviewers need to see how an ML system translates text into
-              sentiment, movement pressure, forecasts, explainability, and provenance.
-              </p>
-              <p>
-              This public version proves the product story without paid backend hosting: it accepts
-              articles, shows the reasoning workflow, and visualizes the signal path.
-              </p>
-            </div>
-            """,
-            unsafe_allow_html=True,
+def _safe_pct(value: float) -> str:
+    """Return percentage text for compact executive cards."""
+
+    return f"{value:.0%}"
+
+
+def _company_logo_badge(signal: ArticleSignal) -> str:
+    """Return a compact ticker logo badge using the detected ticker."""
+
+    initials = (signal.ticker or "FN")[:4].upper()
+    return f"<div class='ticker-logo'>{initials}</div>"
+
+
+def _sparkline_svg(points: list[float], color: str = "#38bdf8") -> str:
+    """Return a tiny inline SVG sparkline for scorecards."""
+
+    if not points:
+        points = [0.2, 0.35, 0.28, 0.58, 0.50, 0.72]
+    width, height = 118, 38
+    xs = [i * width / (len(points) - 1) for i in range(len(points))]
+    min_v, max_v = min(points), max(points)
+    span = max(max_v - min_v, 0.001)
+    ys = [height - ((p - min_v) / span * (height - 6) + 3) for p in points]
+    path = " ".join(f"{x:.1f},{y:.1f}" for x, y in zip(xs, ys))
+    return (
+        f"<svg class='spark' viewBox='0 0 {width} {height}' preserveAspectRatio='none'>"
+        f"<polyline points='{path}' fill='none' stroke='{color}' stroke-width='3' "
+        f"stroke-linecap='round' stroke-linejoin='round'/>"
+        f"</svg>"
+    )
+
+
+def _executive_card(title: str, value: str, subtitle: str, icon: str, accent: str, spark: str = "") -> str:
+    """Return one premium scorecard as HTML."""
+
+    return f"""
+    <div class="exec-card accent-{accent}">
+      <div class="exec-card-top">
+        <div class="exec-icon">{icon}</div>
+        <div>
+          <div class="exec-label">{title}</div>
+          <div class="exec-value">{value}</div>
+          <div class="exec-subtitle">{subtitle}</div>
+        </div>
+      </div>
+      <div class="exec-spark">{spark}</div>
+    </div>
+    """
+
+
+def _driver_waterfall(signal: ArticleSignal) -> None:
+    """Render a premium horizontal driver-impact chart."""
+
+    positive = [
+        ("Demand / growth language", 1.90 if signal.positive_hits else 0.45),
+        ("Revenue / profit strength", 1.55 if {"revenue", "profit", "profits"} & set(signal.positive_hits) else 0.75),
+        ("AI / innovation terms", 1.25 if {"ai", "innovation", "launch"} & set(signal.positive_hits) or "ai" in " ".join(signal.extracted_terms) else 0.65),
+        ("Confidence lift", signal.confidence * 1.25),
+    ]
+    negative = [
+        ("Risk terms", -max(0.25, len(signal.risk_hits) * 0.32)),
+        ("Bearish terms", -max(0.10, len(signal.negative_hits) * 0.38)),
+        ("Uncertainty discount", -signal.risk_score * 1.05),
+    ]
+    rows = positive + negative
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=[v for _, v in rows],
+            y=[k for k, _ in rows],
+            orientation="h",
+            text=[f"{v:+.2f}" for _, v in rows],
+            textposition="outside",
+            marker={"line": {"width": 0}},
         )
-        _pipeline(signal, source)
-    with right:
-        _movement_chart(signal, "Executive movement summary")
-        _term_chart(signal)
+    )
+    fig.update_layout(
+        title="Driver Impact (Signal Contribution)",
+        height=380,
+        xaxis_title="Impact on signal score",
+        yaxis={"autorange": "reversed"},
+        **_layout(),
+    )
+    fig.add_vline(x=0, line_width=1, line_dash="dot", opacity=.55)
+    st.plotly_chart(fig, width="stretch")
+
+
+def _movement_donut(signal: ArticleSignal) -> None:
+    """Render movement probability as an executive donut."""
+
+    fig = go.Figure(
+        data=[
+            go.Pie(
+                labels=["Up", "Flat", "Down"],
+                values=[signal.movement_up, signal.movement_flat, signal.movement_down],
+                hole=0.62,
+                textinfo="label+percent",
+                sort=False,
+            )
+        ]
+    )
+    fig.update_layout(
+        title="Movement Probability",
+        height=380,
+        annotations=[
+            {
+                "text": f"<b>Up<br>{signal.movement_up:.0%}</b>",
+                "x": 0.5,
+                "y": 0.5,
+                "font": {"size": 25, "color": "#f8fbff"},
+                "showarrow": False,
+            }
+        ],
+        **_layout(),
+    )
+    st.plotly_chart(fig, width="stretch")
+
+
+def _sentiment_risk_quadrant(signal: ArticleSignal) -> None:
+    """Render the sentiment/risk executive quadrant."""
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=[signal.sentiment_score],
+            y=[signal.risk_score],
+            mode="markers+text",
+            text=[signal.ticker],
+            textposition="top center",
+            marker={"size": 26, "line": {"width": 2}},
+            name="Current article",
+        )
+    )
+    fig.add_hline(y=0.5, line_dash="dot", opacity=.38)
+    fig.add_vline(x=0, line_dash="dot", opacity=.38)
+    fig.add_annotation(x=-0.75, y=0.82, text="High Risk<br>Negative", showarrow=False, font={"size": 11})
+    fig.add_annotation(x=0.75, y=0.82, text="High Risk<br>Positive", showarrow=False, font={"size": 11})
+    fig.add_annotation(x=-0.75, y=0.18, text="Low Risk<br>Negative", showarrow=False, font={"size": 11})
+    fig.add_annotation(x=0.75, y=0.18, text="Low Risk<br>Positive", showarrow=False, font={"size": 11})
+    fig.update_layout(
+        title="Sentiment vs Risk",
+        height=380,
+        xaxis_title="Sentiment score",
+        yaxis_title="Risk level",
+        xaxis={"range": [-1.05, 1.05]},
+        yaxis={"range": [0, 1]},
+        **_layout(),
+    )
+    st.plotly_chart(fig, width="stretch")
+
+
+def _executive_forecast(signal: ArticleSignal) -> None:
+    """Render a premium forecast panel with bull/base/bear and confidence band."""
+
+    horizon = list(range(0, 61, 5))
+    sentiment_push = (signal.movement_up - signal.movement_down)
+    base = [100 + i * sentiment_push * 0.55 for i in range(len(horizon))]
+    bull = [v + i * (0.42 + signal.confidence * 0.18) for i, v in enumerate(base)]
+    bear = [v - i * (0.34 + signal.risk_score * 0.28) for i, v in enumerate(base)]
+    upper = [v + 2.5 + i * .07 for i, v in enumerate(base)]
+    lower = [v - 2.5 - i * .07 for i, v in enumerate(base)]
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=horizon, y=upper, mode="lines", line={"width": 0}, showlegend=False))
+    fig.add_trace(
+        go.Scatter(
+            x=horizon,
+            y=lower,
+            mode="lines",
+            fill="tonexty",
+            fillcolor="rgba(148, 163, 184, .16)",
+            line={"width": 0},
+            name="Confidence band",
+        )
+    )
+    fig.add_trace(go.Scatter(x=horizon, y=bull, mode="lines+markers", name="Bull case"))
+    fig.add_trace(go.Scatter(x=horizon, y=base, mode="lines+markers", name="Base case"))
+    fig.add_trace(go.Scatter(x=horizon, y=bear, mode="lines+markers", name="Bear case"))
+    fig.update_layout(
+        title="Forecast (Price Movement Scenarios)",
+        height=380,
+        xaxis_title="Trading days",
+        yaxis_title="Normalized price",
+        **_layout(),
+    )
+    st.plotly_chart(fig, width="stretch")
+
+
+def _workflow_strip(signal: ArticleSignal, source: str) -> None:
+    """Render a compact horizontal model workflow strip."""
+
+    steps = [
+        ("01", "Article Intake", "URL/upload/text normalized", "✓"),
+        ("02", "Text Extraction", "Boilerplate removed", "✓"),
+        ("03", "Sentiment Signal", f"{len(signal.positive_hits)} bullish / {len(signal.negative_hits)} bearish", "✓"),
+        ("04", "Movement Estimate", f"Up {signal.movement_up:.0%} · Down {signal.movement_down:.0%}", "✓"),
+        ("05", "Risk Adjustment", f"Risk {signal.risk_score:.0%}", "✓"),
+        ("06", "Forecast", "Bull / base / bear paths", "✓"),
+        ("07", "Explainability", "Drivers visible", "✓"),
+    ]
+    cards = []
+    for number, name, detail, status in steps:
+        cards.append(
+            f"""
+            <div class="workflow-card">
+              <div class="workflow-status">{status}</div>
+              <div class="workflow-number">{number}</div>
+              <div class="workflow-title">{name}</div>
+              <div class="workflow-detail">{detail}</div>
+            </div>
+            """
+        )
+    st.markdown(
+        "<div class='workflow-wrap'><div class='section-title'>What the Model is Doing</div>"
+        + "<div class='workflow-grid'>"
+        + "".join(cards)
+        + "</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _chip_panel(title: str, icon: str, chips: list[str], tone: str) -> str:
+    """Return one bottom executive chip panel."""
+
+    chip_html = "".join(f"<span class='driver-chip'>{chip}</span>" for chip in chips)
+    return f"""
+    <div class="driver-panel {tone}">
+      <div class="driver-title">{icon} {title}</div>
+      <div class="driver-chips">{chip_html}</div>
+    </div>
+    """
+
+
+def _executive_conclusion(signal: ArticleSignal) -> str:
+    """Build the user-facing conclusion message."""
+
+    if signal.sentiment_score >= 0.35 and signal.movement_up >= signal.movement_down:
+        sentiment = "strongly positive" if signal.sentiment_score > 0.70 else "positive"
+        direction = "bullish movement pressure"
+    elif signal.sentiment_score <= -0.25:
+        sentiment = "negative"
+        direction = "bearish movement pressure"
+    else:
+        sentiment = "mixed"
+        direction = "watchlist / confirmation-needed movement pressure"
+
+    risk_language = "moderate" if signal.risk_score < 0.45 else "elevated"
+    return (
+        f"Conclusion: The article is {sentiment} for {signal.ticker}. "
+        f"The signal estimates {direction} with {_safe_pct(signal.confidence)} confidence. "
+        f"Risk is {risk_language}, driven by "
+        f"{', '.join(signal.risk_hits[:3]) if signal.risk_hits else 'limited explicit risk language'}."
+    )
+
+
+def _render_executive_overview_premium(signal: ArticleSignal, source: str, text: str) -> None:
+    """Render the premium Executive Overview command center."""
+
+    headline = re.sub(r"\s+", " ", text.strip())[:220] or "No article text supplied."
+    article_date = "Live public analysis"
+
+    st.markdown(
+        """
+        <div class="exec-topbar">
+          <div>
+            <div class="exec-title-row">📈 Executive Overview</div>
+            <div class="exec-subrow">Financial News → Sentiment → Movement → Forecast → Explainability</div>
+          </div>
+          <div class="exec-badges">
+            <span>☁ Public Cloud Mode</span>
+            <span>🔗 Article URL Enabled</span>
+            <span>⇧ Upload Enabled</span>
+            <span>👁 Model Workflow Visible</span>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        f"""
+        <div class="article-strip">
+          <div class="article-identity">
+            {_company_logo_badge(signal)}
+            <div>
+              <div class="article-ticker">{signal.ticker}</div>
+              <div class="article-company">{signal.company}</div>
+            </div>
+          </div>
+          <div class="article-headline">
+            <div class="article-label">Article / Headline</div>
+            <div>{headline}</div>
+          </div>
+          <div class="article-meta">
+            <div class="article-label">Source</div>
+            <div>{source}</div>
+          </div>
+          <div class="article-meta">
+            <div class="article-label">Mode</div>
+            <div>{article_date}</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    spark_up = _sparkline_svg([.18, .31, .28, .47, .43, .66, .58, .78, .72, .88], "#34d399")
+    spark_sent = _sparkline_svg([.32, .40, .36, .55, .48, .70, .62, .82], "#22d3ee")
+    spark_risk = _sparkline_svg([.20, .30, .25, .37, .31, .43, .35, .48], "#f59e0b")
+    spark_conf = _sparkline_svg([.44, .51, .58, .64, .71, .78, .85, .92], "#a78bfa")
+    cards = [
+        _executive_card("Ticker", signal.ticker, signal.company, "▣", "violet"),
+        _executive_card("Sentiment Score", f"{signal.sentiment_score:+.2f}", "Strongly positive" if signal.sentiment_score > .4 else "Mixed signal", "◉", "cyan", spark_sent),
+        _executive_card("Movement Signal", "Bullish" if signal.movement_up >= signal.movement_down else "Bearish", "Upward pressure" if signal.movement_up >= signal.movement_down else "Downside pressure", "↗", "green", spark_up),
+        _executive_card("Risk Level", _safe_pct(signal.risk_score), "Moderate risk" if signal.risk_score < .45 else "Elevated risk", "◇", "amber", spark_risk),
+        _executive_card("Confidence", _safe_pct(signal.confidence), "High confidence" if signal.confidence > .75 else "Medium confidence", "◎", "purple", spark_conf),
+    ]
+    st.markdown("<div class='exec-card-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
+
+    conclusion = _executive_conclusion(signal)
+    important = [
+        f"Primary movement bias: {'Bullish' if signal.movement_up >= signal.movement_down else 'Bearish'}",
+        f"Positive evidence terms detected: {len(signal.positive_hits)}",
+        f"Risk terms detected: {len(signal.risk_hits)}",
+        f"Confidence level: {_safe_pct(signal.confidence)}",
+        "Watch follow-up news for guidance, margins, demand, competition, and policy changes.",
+    ]
+    bullets = "".join(f"<li>{item}</li>" for item in important)
+
+    st.markdown(
+        f"""
+        <div class="insight-grid">
+          <div class="executive-insight">
+            <div class="insight-kicker">✦ Executive Insight</div>
+            <div class="insight-message">{conclusion}</div>
+          </div>
+          <div class="important-analysis">
+            <div class="section-title">◎ Most Important Analysis</div>
+            <ul>{bullets}</ul>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    c1, c2, c3, c4 = st.columns([.95, 1.05, 1.28, 1.55])
+    with c1:
+        _movement_donut(signal)
+    with c2:
+        _sentiment_risk_quadrant(signal)
+    with c3:
+        _driver_waterfall(signal)
+    with c4:
+        _executive_forecast(signal)
+
+    _workflow_strip(signal, source)
+
+    bullish = signal.positive_hits[:6] or ["demand", "revenue", "growth", "market strength"]
+    risks = signal.risk_hits[:6] or ["competition", "margin pressure", "macro risk"]
+    monitor = ["next guidance", "gross margin", "demand trend", "volume confirmation", "competitor moves", "policy updates"]
+
+    st.markdown(
+        "<div class='driver-grid'>"
+        + _chip_panel("Bullish Drivers", "●", bullish, "bullish-panel")
+        + _chip_panel("Risk Drivers", "▲", risks, "risk-panel")
+        + _chip_panel("What to Monitor Next", "◉", monitor, "monitor-panel")
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<div class='exec-disclaimer'>Public-mode analytical demo. Results are generated for informational portfolio demonstration only. Not investment advice.</div>",
+        unsafe_allow_html=True,
+    )
+
+def _render_overview(signal: ArticleSignal, source: str) -> None:
+    """Render premium executive overview."""
+
+    text = st.session_state.get("public_current_article_text", _BASE_EXAMPLE)
+    _render_executive_overview_premium(signal, source, text)
 
 
 def _render_analyze(signal: ArticleSignal, text: str, source: str) -> None:
