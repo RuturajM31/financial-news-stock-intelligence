@@ -87,7 +87,6 @@ def _require_client(
 
 def main() -> None:
     """Render one complete Streamlit page rerun with fail-closed routing."""
-
     app_settings = get_app_settings(PROJECT_ROOT)
     brand = get_portfolio_brand()
 
