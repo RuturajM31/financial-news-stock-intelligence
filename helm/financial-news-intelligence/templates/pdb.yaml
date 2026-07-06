@@ -1,0 +1,31 @@
+{{- if .Values.podDisruptionBudget.fastapi.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "financial-news-intelligence.fastapiFullname" . }}
+  labels:
+    {{- include "financial-news-intelligence.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fastapi
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.fastapi.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "financial-news-intelligence.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: fastapi
+---
+{{- end }}
+{{- if .Values.podDisruptionBudget.streamlit.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "financial-news-intelligence.streamlitFullname" . }}
+  labels:
+    {{- include "financial-news-intelligence.labels" . | nindent 4 }}
+    app.kubernetes.io/component: streamlit
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.streamlit.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "financial-news-intelligence.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: streamlit
+{{- end }}

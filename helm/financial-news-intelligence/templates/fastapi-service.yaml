@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "financial-news-intelligence.fastapiFullname" . }}
+  labels:
+    {{- include "financial-news-intelligence.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fastapi
+spec:
+  type: {{ .Values.fastapi.service.type }}
+  selector:
+    {{- include "financial-news-intelligence.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: fastapi
+  ports:
+    - name: http
+      port: {{ .Values.fastapi.service.port }}
+      targetPort: http
+      protocol: TCP
