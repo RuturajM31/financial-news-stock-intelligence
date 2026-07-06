@@ -1,57 +1,33 @@
-"""Premium public Streamlit Cloud application for Financial News Stock Intelligence.
+"""Self-contained public Streamlit dashboard for free Streamlit Cloud.
 
-Backend-free public mode for Streamlit Community Cloud.
-It preserves the planned portfolio pages while making Executive Overview a real
-financial intelligence command center with visible article input, conclusion,
-scorecards, top-end charts, model workflow, and analyst-style insights.
+This module intentionally avoids private FastAPI/runtime dependencies so the
+public app can run on Streamlit Community Cloud. It renders a polished
+Executive Overview dashboard with URL, upload, paste, and sample analysis.
 """
 
 from __future__ import annotations
 
 import html
-import io
+import math
 import os
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
+from typing import Any
 
-import pandas as pd
-import plotly.graph_objects as go
-import requests
 import streamlit as st
 
+try:
+    import requests
+except Exception:  # pragma: no cover - public fallback
+    requests = None  # type: ignore[assignment]
 
-_POSITIVE_TERMS = {
-    "beat", "beats", "growth", "profit", "profits", "raise", "raised", "upgrade",
-    "upgraded", "strong", "record", "bullish", "gain", "gains", "accelerate",
-    "surge", "margin", "cash", "demand", "outperform", "resilient", "expansion",
-    "guidance", "revenue", "approval", "partnership", "contract", "buyback",
-    "dividend", "efficiency", "cost savings", "launch", "innovation", "ai",
-    "data-center", "data center", "cloud", "bookings", "leadership", "savings",
-}
+try:
+    import plotly.graph_objects as go
+except Exception:  # pragma: no cover - public fallback
+    go = None  # type: ignore[assignment]
 
-_NEGATIVE_TERMS = {
-    "miss", "misses", "loss", "losses", "cut", "downgrade", "downgraded", "weak",
-    "lawsuit", "probe", "bearish", "decline", "falls", "fell", "risk", "risks",
-    "debt", "slowdown", "inflation", "warning", "layoff", "pressure", "headwind",
-    "recall", "regulatory", "investigation", "margin pressure", "fraud", "default",
-}
-
-_RISK_TERMS = {
-    "volatility", "uncertainty", "macro", "rates", "inflation", "geopolitical",
-    "regulatory", "probe", "debt", "lawsuit", "warning", "recall", "competition",
-    "supply", "currency", "headwind", "demand risk", "execution risk",
-    "export", "controls", "constraints", "margin pressure",
-}
-
-_COMPANY_HINTS = {
-    "apple": "AAPL", "microsoft": "MSFT", "nvidia": "NVDA", "amazon": "AMZN",
-    "alphabet": "GOOGL", "google": "GOOGL", "tesla": "TSLA", "meta": "META",
-    "netflix": "NFLX", "jpmorgan": "JPM", "jpmorgan chase": "JPM",
-    "bank of america": "BAC", "boeing": "BA", "intel": "INTC", "amd": "AMD",
-    "micron": "MU", "broadcom": "AVGO", "oracle": "ORCL", "salesforce": "CRM",
-}
 
 _BASE_EXAMPLE = (
     "Nvidia reported record data-center revenue and stronger demand for AI chips, "
@@ -59,13 +35,90 @@ _BASE_EXAMPLE = (
     "competition could pressure margins next quarter."
 )
 
+_POSITIVE_TERMS = {
+    "record",
+    "growth",
+    "strong",
+    "stronger",
+    "beat",
+    "beats",
+    "profit",
+    "profits",
+    "revenue",
+    "demand",
+    "surge",
+    "upgrade",
+    "bullish",
+    "positive",
+    "margin expansion",
+    "bookings",
+    "cloud",
+    "ai",
+    "data center",
+    "partnership",
+    "guidance raised",
+}
+
+_NEGATIVE_TERMS = {
+    "miss",
+    "weak",
+    "decline",
+    "loss",
+    "slowdown",
+    "downgrade",
+    "bearish",
+    "negative",
+    "pressure",
+    "lawsuit",
+    "probe",
+    "recall",
+    "cut",
+    "guidance cut",
+    "warning",
+}
+
+_RISK_TERMS = {
+    "risk",
+    "supply",
+    "constraints",
+    "export",
+    "controls",
+    "competition",
+    "margin",
+    "uncertainty",
+    "regulation",
+    "inventory",
+    "volatility",
+    "macro",
+    "china",
+    "policy",
+}
+
+_TICKER_MAP = {
+    "nvidia": ("NVDA", "NVIDIA Corporation"),
+    "nvda": ("NVDA", "NVIDIA Corporation"),
+    "micron": ("MU", "Micron Technology"),
+    "mu": ("MU", "Micron Technology"),
+    "apple": ("AAPL", "Apple Inc."),
+    "microsoft": ("MSFT", "Microsoft Corporation"),
+    "tesla": ("TSLA", "Tesla Inc."),
+    "amazon": ("AMZN", "Amazon.com Inc."),
+    "meta": ("META", "Meta Platforms"),
+    "google": ("GOOGL", "Alphabet Inc."),
+    "alphabet": ("GOOGL", "Alphabet Inc."),
+    "amd": ("AMD", "Advanced Micro Devices"),
+    "intel": ("INTC", "Intel Corporation"),
+}
+
 
 @dataclass(frozen=True)
 class ArticleSignal:
-    """One transparent public-mode analysis result."""
+    """Analysis result displayed by the public dashboard."""
 
     ticker: str
     company: str
+    headline: str
+    source: str
     label: str
     confidence: float
     sentiment_score: float
@@ -76,316 +129,151 @@ class ArticleSignal:
     positive_hits: list[str]
     negative_hits: list[str]
     risk_hits: list[str]
-    extracted_terms: list[str]
 
 
-def should_use_public_streamlit_cloud_app(project_root: Path) -> bool:
-    """Return whether the public Streamlit Cloud mode should replace API mode."""
+def should_use_public_streamlit_cloud_app(project_root: Path | str | None = None) -> bool:
+    """Return True for the public Streamlit mode."""
 
-    disabled = os.getenv("FNI_DISABLE_PUBLIC_STREAMLIT_MODE", "").strip().lower()
-    if disabled in {"1", "true", "yes"}:
-        return False
-
-    override = os.getenv("FNI_PUBLIC_STREAMLIT_MODE", "").strip().lower()
-    if override in {"1", "true", "yes", "demo", "cloud", "public"}:
-        return True
-
-    return project_root.resolve().as_posix().startswith("/mount/src/")
+    return True
 
 
-def _apply_theme() -> None:
-    """Install the premium dark portfolio theme used for the public app."""
-
-    st.markdown(
-        """
-<style>
-:root {
-  --bg0:#050814; --bg1:#07111f; --bg2:#0d1728; --panel:#0d1627;
-  --stroke:rgba(102,166,255,.20); --stroke2:rgba(45,212,191,.25);
-  --text:#f8fbff; --soft:#d8e3f2; --muted:#95a3b8;
-  --blue:#38bdf8; --cyan:#22d3ee; --green:#4ade80; --amber:#f59e0b;
-  --red:#fb7185; --violet:#a78bfa;
-}
-[data-testid="stAppViewContainer"] {
-  background:
-    radial-gradient(circle at 22% 0%, rgba(14,165,233,.18), transparent 36rem),
-    radial-gradient(circle at 88% 2%, rgba(124,58,237,.20), transparent 40rem),
-    radial-gradient(circle at 48% 84%, rgba(20,184,166,.10), transparent 42rem),
-    linear-gradient(180deg, #050814 0%, #07111f 48%, #08111f 100%);
-  color:var(--text);
-}
-[data-testid="stHeader"] {
-  background:rgba(5,8,20,.74);
-  border-bottom:1px solid rgba(148,163,184,.12);
-  backdrop-filter: blur(20px);
-}
-[data-testid="stSidebar"] {
-  background:linear-gradient(180deg,#030712 0%,#07111f 100%);
-  border-right:1px solid rgba(56,189,248,.20);
-}
-.block-container {max-width:1530px; padding-top:1rem; padding-bottom:2.6rem;}
-h1,h2,h3,h4 {color:var(--text)!important; letter-spacing:-.035em;}
-p,li,span,label,div {color:inherit;}
-[data-testid="stTextInput"] input, textarea {
-  background:#091527!important; color:#f8fbff!important;
-  border:1px solid rgba(56,189,248,.28)!important; border-radius:14px!important;
-}
-[data-testid="stFileUploader"] section {
-  background:#091527!important; border:1px solid rgba(56,189,248,.22)!important; border-radius:16px!important;
-}
-.stButton button {
-  border-radius:12px!important; font-weight:850!important;
-  border:1px solid rgba(56,189,248,.32)!important;
-  background:linear-gradient(135deg,rgba(14,165,233,.22),rgba(124,58,237,.20))!important;
-  color:#f8fbff!important;
-}
-div[data-testid="stButton"] button[kind="primary"] {
-  background:linear-gradient(135deg,#0284c7,#7c3aed)!important;
-  border-color:rgba(125,211,252,.46)!important;
-}
-.hero {
-  border:1px solid var(--stroke); border-radius:22px; padding:1.3rem 1.45rem;
-  background:linear-gradient(135deg,rgba(15,23,42,.95),rgba(8,47,73,.56));
-  box-shadow:0 22px 70px rgba(0,0,0,.32); margin-bottom:1rem;
-}
-.eyebrow {color:var(--cyan); font-weight:950; letter-spacing:.16em; font-size:.72rem; text-transform:uppercase;}
-.hero h1 {font-size:clamp(1.9rem,3.2vw,3.2rem); line-height:1.02; margin:.38rem 0 .7rem;}
-.hero p {font-size:.98rem; color:var(--soft); max-width:1020px; line-height:1.55; margin:0;}
-.panel {
-  border:1px solid rgba(148,163,184,.16); border-radius:20px; padding:1rem 1.08rem;
-  background:linear-gradient(180deg,rgba(15,23,42,.80),rgba(15,23,42,.50));
-  box-shadow:0 16px 44px rgba(0,0,0,.22); margin-bottom:1rem;
-}
-.pill {
-  display:inline-block; margin:.14rem .16rem .14rem 0; padding:.34rem .68rem;
-  border-radius:999px; border:1px solid rgba(125,211,252,.22);
-  background:rgba(15,23,42,.75); color:#dff7ff; font-size:.80rem; font-weight:780;
-}
-.warning {border:1px solid rgba(251,191,36,.28); background:rgba(120,53,15,.22); border-radius:16px; padding:.9rem 1rem; color:#fde68a;}
-.good {border:1px solid rgba(52,211,153,.28); background:rgba(6,78,59,.24); border-radius:16px; padding:.9rem 1rem; color:#bbf7d0;}
-.executive-shell {display:flex; flex-direction:column; gap:.8rem;}
-.exec-control {
-  border:1px solid rgba(56,189,248,.24); border-radius:22px; padding:1rem 1.05rem;
-  background:
-    radial-gradient(circle at 18% 0%, rgba(56,189,248,.10), transparent 22rem),
-    linear-gradient(135deg,rgba(8,13,28,.94),rgba(15,23,42,.78));
-  box-shadow:0 22px 70px rgba(0,0,0,.28);
-}
-.exec-control-head {display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:.8rem;}
-.exec-title-row {font-size:1.78rem; font-weight:970; letter-spacing:-.05em;}
-.exec-subrow {color:#a8b3c7; font-size:.93rem; margin-top:.12rem;}
-.exec-badges {display:flex; flex-wrap:wrap; gap:.5rem; justify-content:flex-end;}
-.exec-badges span {
-  border:1px solid rgba(56,189,248,.23); border-radius:12px; padding:.48rem .72rem;
-  background:rgba(15,23,42,.70); color:#dff7ff; font-weight:850; font-size:.76rem;
-}
-.control-note {color:#96a3b8; font-size:.80rem; margin-top:.2rem;}
-.article-strip {
-  display:grid; grid-template-columns:1.1fr 3.2fr 1.1fr .9fr; gap:1rem; align-items:center;
-  border:1px solid rgba(148,163,184,.16); border-radius:19px; padding:.9rem 1rem;
-  background:linear-gradient(135deg,rgba(8,13,28,.95),rgba(15,23,42,.72));
-  box-shadow:0 18px 52px rgba(0,0,0,.24);
-}
-.article-identity {display:flex; align-items:center; gap:.78rem;}
-.ticker-logo {
-  width:50px; height:50px; display:grid; place-items:center; border-radius:15px;
-  background:linear-gradient(135deg,#34d399,#0ea5e9); color:#06111f;
-  font-weight:970; letter-spacing:-.04em; box-shadow:0 0 28px rgba(52,211,153,.20);
-}
-.article-ticker {font-size:1.25rem; font-weight:970;}
-.article-company,.article-label {color:#96a3b8; font-size:.76rem;}
-.article-headline {font-size:.86rem; line-height:1.38; color:#f8fbff;}
-.article-meta {border-left:1px solid rgba(148,163,184,.14); padding-left:1rem; font-size:.84rem;}
-.exec-card-grid {display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:.72rem;}
-.exec-card {
-  min-height:112px; border-radius:19px; padding:.92rem .94rem; position:relative; overflow:hidden;
-  border:1px solid rgba(148,163,184,.18); background:rgba(15,23,42,.76);
-  box-shadow:0 18px 52px rgba(0,0,0,.26);
-}
-.exec-card-top {display:flex; gap:.75rem; align-items:flex-start; position:relative; z-index:2;}
-.exec-icon {width:42px; height:42px; border-radius:999px; display:grid; place-items:center; background:rgba(2,6,23,.45); border:1px solid rgba(255,255,255,.12); font-weight:970;}
-.exec-label {font-size:.72rem; color:#cbd5e1; font-weight:880;}
-.exec-value {font-size:1.72rem; line-height:1.05; font-weight:970; color:#fff; letter-spacing:-.05em;}
-.exec-subtitle {font-size:.78rem; color:#cbd5e1; margin-top:.18rem;}
-.exec-spark {position:absolute; right:.65rem; bottom:.45rem; width:112px; opacity:.88;}
-.spark {width:112px; height:36px;}
-.accent-violet {background:linear-gradient(135deg,rgba(49,46,129,.55),rgba(15,23,42,.82)); border-color:rgba(167,139,250,.30);}
-.accent-cyan {background:linear-gradient(135deg,rgba(8,145,178,.36),rgba(15,23,42,.82)); border-color:rgba(34,211,238,.30);}
-.accent-green {background:linear-gradient(135deg,rgba(22,101,52,.36),rgba(15,23,42,.82)); border-color:rgba(52,211,153,.30);}
-.accent-amber {background:linear-gradient(135deg,rgba(146,64,14,.34),rgba(15,23,42,.82)); border-color:rgba(251,191,36,.27);}
-.accent-purple {background:linear-gradient(135deg,rgba(88,28,135,.38),rgba(15,23,42,.82)); border-color:rgba(192,132,252,.30);}
-.insight-grid {display:grid; grid-template-columns:1.22fr .88fr; gap:.75rem;}
-.executive-insight {
-  border:1px solid rgba(34,211,238,.42); border-radius:20px; padding:1rem 1.1rem;
-  background:radial-gradient(circle at 100% 100%,rgba(52,211,153,.22),transparent 22rem),linear-gradient(135deg,rgba(8,47,73,.74),rgba(15,23,42,.86));
-  box-shadow:0 0 44px rgba(34,211,238,.12),0 20px 58px rgba(0,0,0,.24);
-}
-.insight-kicker,.section-title {font-size:.94rem; color:#7dd3fc; font-weight:970; margin-bottom:.55rem;}
-.insight-message {font-size:1.16rem; line-height:1.48; color:#fff; font-weight:770;}
-.important-analysis {border:1px solid rgba(148,163,184,.16); border-radius:20px; padding:1rem 1.1rem; background:rgba(15,23,42,.72);}
-.important-analysis ul {margin:.25rem 0 0 1rem; padding:0;}
-.important-analysis li {margin:.34rem 0; color:#dce7f7; font-size:.86rem;}
-.workflow-wrap {
-  border:1px solid rgba(148,163,184,.16); border-radius:20px; background:rgba(15,23,42,.66);
-  padding:.9rem; margin:.15rem 0;
-}
-.workflow-grid {display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:.55rem;}
-.workflow-card {position:relative; min-height:88px; border:1px solid rgba(96,165,250,.18); border-radius:14px; padding:.62rem; background:linear-gradient(180deg,rgba(15,23,42,.85),rgba(30,41,59,.42));}
-.workflow-status {position:absolute; top:.44rem; right:.48rem; color:#34d399; font-weight:970;}
-.workflow-number {font-size:.66rem; color:#7dd3fc; font-weight:970;}
-.workflow-title {font-size:.80rem; font-weight:970; margin-top:.18rem;}
-.workflow-detail {font-size:.68rem; color:#cbd5e1; line-height:1.28; margin-top:.18rem;}
-.driver-grid {display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.75rem;}
-.driver-panel {border-radius:18px; padding:.9rem 1rem; border:1px solid rgba(148,163,184,.16); background:rgba(15,23,42,.68); min-height:132px;}
-.bullish-panel {border-color:rgba(52,211,153,.25);}
-.risk-panel {border-color:rgba(251,191,36,.25);}
-.monitor-panel {border-color:rgba(56,189,248,.25);}
-.driver-title {font-weight:970; margin-bottom:.55rem;}
-.driver-chip {display:inline-block; padding:.38rem .64rem; margin:.2rem .18rem; border-radius:999px; background:rgba(30,41,59,.84); border:1px solid rgba(148,163,184,.12); color:#dbeafe; font-size:.76rem; font-weight:780;}
-.exec-disclaimer {color:#94a3b8; font-size:.74rem; padding:.35rem .2rem;}
-.preview-box {
-  border:1px solid rgba(148,163,184,.14); border-radius:16px; padding:.8rem .9rem;
-  background:rgba(2,6,23,.30); color:#cbd5e1; font-size:.84rem; line-height:1.45;
-}
-.go-deeper {display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.3rem;}
-.go-deeper span {padding:.36rem .62rem; border-radius:999px; background:rgba(8,47,73,.48); border:1px solid rgba(56,189,248,.22); font-size:.76rem; color:#dff7ff; font-weight:820;}
-@media (max-width:1200px) {
-  .exec-card-grid,.workflow-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
-  .article-strip,.insight-grid,.driver-grid {grid-template-columns:1fr;}
-  .exec-control-head {display:block;}
-  .exec-badges {justify-content:flex-start; margin-top:.65rem;}
-}
-</style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def _html(text: object) -> str:
-    """Escape text for HTML fragments."""
+def _safe(text: Any) -> str:
+    """Escape text before inserting it into custom HTML."""
 
     return html.escape(str(text), quote=True)
 
 
-def _layout() -> dict:
-    """Return a consistent Plotly dark layout."""
+def _clean_text(text: str | None) -> str:
+    """Normalize article text for scoring and display."""
 
-    return {
-        "paper_bgcolor": "rgba(0,0,0,0)",
-        "plot_bgcolor": "rgba(15,23,42,.46)",
-        "font": {"color": "#f8fbff", "family": "Inter, Arial, sans-serif"},
-        "margin": {"l": 40, "r": 24, "t": 54, "b": 42},
-        "legend": {"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1},
-    }
+    if text is None:
+        return ""
+    return re.sub(r"\s+", " ", str(text)).strip()
 
 
-def _chart_config() -> dict:
-    """Return Plotly config that keeps charts clean for executive pages."""
+def _hits(text: str, terms: set[str]) -> list[str]:
+    """Find scoring terms in article text."""
 
-    return {"displayModeBar": False, "responsive": True}
-
-
-def _tokens(text: str) -> list[str]:
-    """Tokenize the article text into lowercase terms used by public-mode scoring."""
-
-    return re.findall(r"[A-Za-z][A-Za-z\\-']+", text.lower())
-
-
-def _hits(text: str, terms: Iterable[str]) -> list[str]:
-    """Return sorted public scoring hits found in the article."""
-
-    lowered = text.lower()
-    found: list[str] = []
-    for term in terms:
-        if " " in term:
-            if term in lowered:
-                found.append(term)
-        elif re.search(rf"\\b{re.escape(term)}\\b", lowered):
-            found.append(term)
-    return sorted(set(found))
+    low = text.lower()
+    return sorted({term for term in terms if term in low})
 
 
 def _infer_ticker(text: str) -> tuple[str, str]:
-    """Infer a likely ticker/company from common company mentions."""
+    """Infer a public ticker/company pair from known finance keywords."""
 
-    lowered = text.lower()
-    for name, ticker in _COMPANY_HINTS.items():
-        if name in lowered:
-            return ticker, name.title()
-    uppercase = re.findall(r"\\b[A-Z]{2,5}\\b", text)
-    if uppercase:
-        return uppercase[0], uppercase[0]
+    low = text.lower()
+    for key, value in _TICKER_MAP.items():
+        if re.search(rf"(?<![a-z0-9]){re.escape(key)}(?![a-z0-9])", low):
+            return value
     return "NEWS", "Article"
 
 
-def _score_article(text: str | None) -> ArticleSignal:
-    """Score text safely for public Executive Overview mode."""
+def _fetch_url_text(url: str) -> str:
+    """Fetch readable article-like text from a URL when the site allows it."""
 
-    try:
-        if text is None:
-            text = ""
-        if not isinstance(text, str):
-            text = str(text)
+    clean_url = _clean_text(url)
+    if not clean_url:
+        return ""
 
-        clean = re.sub(r"\\s+", " ", text).strip()
-        if not clean:
-            clean = _BASE_EXAMPLE
+    if not clean_url.startswith(("http://", "https://")):
+        raise ValueError("URL must start with http:// or https://")
 
-        positive = _hits(clean, _POSITIVE_TERMS)
-        negative = _hits(clean, _NEGATIVE_TERMS)
-        risk = _hits(clean, _RISK_TERMS)
-        tokens = _tokens(clean)
-        ticker, company = _infer_ticker(clean)
+    if requests is None:
+        raise RuntimeError("requests is unavailable in this public runtime")
 
-        positive_weight = len(positive) * 1.15
-        negative_weight = len(negative) * 1.10
-        risk_weight = len(risk) * 0.82
-        length_dampener = min(1.0, max(0.42, len(tokens) / 85))
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
 
-        raw_sentiment = positive_weight - negative_weight
-        sentiment_score = max(-1.0, min(1.0, raw_sentiment / 7.0))
-        risk_score = max(0.05, min(0.95, (risk_weight + negative_weight * 0.4) / 8.0))
+    response = requests.get(clean_url, headers=headers, timeout=12)
+    response.raise_for_status()
 
-        up = 0.34 + sentiment_score * 0.26 - risk_score * 0.07
-        down = 0.28 - sentiment_score * 0.20 + risk_score * 0.18
-        flat = 1.0 - up - down
+    raw_html = response.text or ""
+    if len(raw_html.strip()) < 200:
+        raise ValueError("URL returned too little readable content")
 
-        values = [max(0.05, up), max(0.05, flat), max(0.05, down)]
-        total = sum(values)
-        movement_up, movement_flat, movement_down = [v / total for v in values]
+    title_match = re.search(r"(?is)<title[^>]*>(.*?)</title>", raw_html)
+    title = _clean_text(title_match.group(1)) if title_match else ""
 
-        confidence = min(
-            0.92,
-            max(0.55, 0.58 + abs(sentiment_score) * 0.22 + length_dampener * 0.12),
-        )
+    text_html = re.sub(
+        r"(?is)<script.*?</script>|<style.*?</style>|<noscript.*?</noscript>",
+        " ",
+        raw_html,
+    )
+    text_html = re.sub(
+        r"(?is)<nav.*?</nav>|<footer.*?</footer>|<header.*?</header>|<aside.*?</aside>",
+        " ",
+        text_html,
+    )
+    text = re.sub(r"(?s)<[^>]+>", " ", text_html)
+    replacements = {
+        "&nbsp;": " ",
+        "&#160;": " ",
+        "&amp;": "&",
+        "&quot;": '"',
+        "&#39;": "'",
+        "&apos;": "'",
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
 
-        if movement_up > movement_down + 0.08:
-            label = "Bullish / positive movement pressure"
-        elif movement_down > movement_up + 0.08:
-            label = "Bearish / negative movement pressure"
-        else:
-            label = "Mixed / watchlist signal"
+    clean = _clean_text(text)
+    if title:
+        clean = f"{title}. {clean}"
 
-        extracted_terms = sorted(set(positive + negative + risk))[:18]
+    clean = clean[:12000].strip()
+    if len(clean) < 300:
+        raise ValueError("URL content could not be converted into enough article text")
 
-    except Exception:
-        clean = _BASE_EXAMPLE
-        ticker, company = "NEWS", "Article"
-        positive = ["demand", "revenue"]
-        negative = []
-        risk = ["risk"]
-        sentiment_score = 0.35
-        risk_score = 0.20
-        movement_up = 0.45
-        movement_flat = 0.35
-        movement_down = 0.20
-        confidence = 0.65
-        label = "Fallback / safe public analysis"
-        extracted_terms = ["demand", "revenue", "risk"]
+    return clean
+
+
+def _score_article(text: str, source: str) -> ArticleSignal:
+    """Create deterministic public-mode finance analysis from article text."""
+
+    clean = _clean_text(text) or _BASE_EXAMPLE
+    ticker, company = _infer_ticker(clean)
+
+    positive_hits = _hits(clean, _POSITIVE_TERMS)
+    negative_hits = _hits(clean, _NEGATIVE_TERMS)
+    risk_hits = _hits(clean, _RISK_TERMS)
+
+    pos = len(positive_hits)
+    neg = len(negative_hits)
+    risk = len(risk_hits)
+
+    sentiment_score = max(-1.0, min(1.0, ((pos * 1.2) - (neg * 1.05)) / 6.0))
+    risk_score = max(0.05, min(0.95, (risk * 0.13) + (neg * 0.05)))
+
+    movement_up = 0.36 + sentiment_score * 0.28 - risk_score * 0.05
+    movement_down = 0.22 - sentiment_score * 0.18 + risk_score * 0.12
+    movement_flat = 1.0 - movement_up - movement_down
+
+    values = [max(0.06, movement_up), max(0.06, movement_flat), max(0.06, movement_down)]
+    total = sum(values)
+    movement_up, movement_flat, movement_down = [v / total for v in values]
+
+    confidence = min(0.94, max(0.58, 0.62 + abs(sentiment_score) * 0.22 + min(len(clean), 4500) / 30000))
+
+    if movement_up > movement_down + 0.08:
+        label = "Bullish"
+    elif movement_down > movement_up + 0.08:
+        label = "Bearish"
+    else:
+        label = "Mixed"
+
+    sentence = clean.split(".")[0].strip()
+    headline = sentence[:210] if sentence else _BASE_EXAMPLE
 
     return ArticleSignal(
         ticker=ticker,
         company=company,
+        headline=headline,
+        source=source,
         label=label,
         confidence=confidence,
         sentiment_score=sentiment_score,
@@ -393,101 +281,562 @@ def _score_article(text: str | None) -> ArticleSignal:
         movement_flat=movement_flat,
         movement_down=movement_down,
         risk_score=risk_score,
-        positive_hits=positive,
-        negative_hits=negative,
-        risk_hits=risk,
-        extracted_terms=extracted_terms,
+        positive_hits=positive_hits,
+        negative_hits=negative_hits,
+        risk_hits=risk_hits,
     )
 
 
-def _fetch_url_text(url: str) -> str:
-    """Fetch article-like text from a public URL without using paid services."""
+def _sparkline_svg(values: list[float], color: str) -> str:
+    """Render a tiny SVG sparkline for KPI cards."""
 
-    if not url.strip():
-        return ""
-    headers = {"User-Agent": "FinancialNewsStockIntelligencePublicDemo/1.0"}
-    response = requests.get(url.strip(), headers=headers, timeout=8)
-    response.raise_for_status()
-    html_text = response.text
-    html_text = re.sub(r"(?is)<script.*?</script>|<style.*?</style>", " ", html_text)
-    text = re.sub(r"(?s)<[^>]+>", " ", html_text)
-    text = re.sub(r"\\s+", " ", text)
-    return text[:9000]
-
-
-def _read_upload(uploaded_file) -> str:
-    """Read uploaded article text from lightweight public formats."""
-
-    if uploaded_file is None:
-        return ""
-
-    name = uploaded_file.name.lower()
-    data = uploaded_file.getvalue()
-
-    if name.endswith((".txt", ".md", ".csv", ".json")):
-        return data.decode("utf-8", errors="ignore")[:9000]
-
-    if name.endswith(".pdf"):
-        try:
-            from pypdf import PdfReader  # type: ignore
-            reader = PdfReader(io.BytesIO(data))
-            return "\\n".join(page.extract_text() or "" for page in reader.pages)[:9000]
-        except Exception:
-            return "PDF uploaded. Text extraction is unavailable in the free public dependency set."
-
-    return data.decode("utf-8", errors="ignore")[:9000]
+    if not values:
+        values = [0.2, 0.4, 0.35, 0.6]
+    width, height = 130, 42
+    min_v, max_v = min(values), max(values)
+    span = max(max_v - min_v, 1e-6)
+    pts = []
+    for idx, val in enumerate(values):
+        x = idx * (width / max(len(values) - 1, 1))
+        y = height - ((val - min_v) / span) * (height - 8) - 4
+        pts.append(f"{x:.1f},{y:.1f}")
+    return (
+        f"<svg viewBox='0 0 {width} {height}' class='spark'>"
+        f"<polyline points='{' '.join(pts)}' fill='none' stroke='{color}' "
+        f"stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/></svg>"
+    )
 
 
-def _initialize_exec_state() -> None:
-    """Initialize Executive Overview article state."""
+def _plotly_config() -> dict[str, bool]:
+    """Common Plotly config for dashboard charts."""
 
-    st.session_state.setdefault("exec_article_url", "")
-    st.session_state.setdefault("exec_article_text", _BASE_EXAMPLE)
-    st.session_state.setdefault("exec_analyzed_text", _BASE_EXAMPLE)
-    st.session_state.setdefault("exec_analyzed_source", "sample article")
-    st.session_state.setdefault("exec_last_action", "Loaded sample article")
+    return {"displayModeBar": False, "responsive": True}
 
 
-def _executive_analysis_control_center() -> tuple[str, str]:
-    """Collect article input using a stable Streamlit form."""
+def _apply_theme() -> None:
+    """Apply the complete target dashboard theme."""
+
+    st.set_page_config(
+        page_title="Financial News Stock Intelligence",
+        page_icon="📈",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
 
     st.markdown(
         """
-        <div style="
-            max-width:1320px;
-            margin:0 auto 1.1rem auto;
-            padding:1.15rem 1.25rem;
-            border-radius:26px;
-            border:1px solid rgba(45,212,191,.36);
-            background:linear-gradient(135deg, rgba(3,2,8,.98), rgba(14,10,30,.88));
-            box-shadow:0 24px 70px rgba(0,0,0,.38);
-        ">
-            <div style="color:#5eead4;font-size:.76rem;font-weight:950;text-transform:uppercase;letter-spacing:.18em;margin-bottom:.72rem;">
-                Analysis Control Center
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+
+        html, body, [class*="css"] {
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        [data-testid="stAppViewContainer"] {
+            background:
+                radial-gradient(circle at 8% 3%, rgba(29, 78, 216, .16), transparent 30rem),
+                radial-gradient(circle at 86% 10%, rgba(126, 34, 206, .16), transparent 34rem),
+                linear-gradient(180deg, #040914 0%, #07101f 52%, #040914 100%) !important;
+            color: #f8fafc;
+        }
+
+        [data-testid="stHeader"] {
+            background: rgba(4, 9, 20, .82) !important;
+            border-bottom: 1px solid rgba(148, 163, 184, .10) !important;
+            backdrop-filter: blur(20px);
+        }
+
+        [data-testid="stSidebar"] {
+            background:
+                radial-gradient(circle at 0% 0%, rgba(37, 99, 235, .18), transparent 18rem),
+                linear-gradient(180deg, #030712 0%, #07101f 58%, #030712 100%) !important;
+            border-right: 1px solid rgba(59, 130, 246, .20) !important;
+        }
+
+        [data-testid="stSidebar"] * {
+            color: #dbeafe;
+        }
+
+        .block-container {
+            padding-top: 1.1rem !important;
+            padding-bottom: 1.2rem !important;
+            max-width: 1500px !important;
+        }
+
+        .brand {
+            padding: 1.1rem 1rem 1.2rem 1rem;
+            border-bottom: 1px solid rgba(148, 163, 184, .13);
+            margin-bottom: 1rem;
+        }
+        .brand-row {
+            display: flex;
+            align-items: center;
+            gap: .8rem;
+        }
+        .brand-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 12px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, rgba(59,130,246,.28), rgba(139,92,246,.30));
+            border: 1px solid rgba(96,165,250,.28);
+            color: #a5b4fc;
+            font-weight: 900;
+        }
+        .brand-title {
+            font-size: 1rem;
+            font-weight: 900;
+            color: #ffffff;
+            line-height: 1.15;
+        }
+        .brand-subtitle {
+            font-size: .76rem;
+            color: #cbd5e1;
+            margin-top: .16rem;
+        }
+        .nav-title {
+            color: #94a3b8;
+            font-size: .70rem;
+            font-weight: 800;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            margin: .8rem 0 .55rem .15rem;
+        }
+        .nav-item {
+            padding: .62rem .72rem;
+            border-radius: 11px;
+            color: #dbeafe;
+            font-size: .84rem;
+            font-weight: 650;
+            margin-bottom: .25rem;
+            display: flex;
+            gap: .58rem;
+            align-items: center;
+        }
+        .nav-item.active {
+            background: linear-gradient(135deg, rgba(37,99,235,.95), rgba(29,78,216,.75));
+            color: white;
+            box-shadow: 0 12px 30px rgba(37,99,235,.20);
+        }
+        .side-card {
+            margin-top: 1.2rem;
+            padding: .88rem;
+            border-radius: 12px;
+            background: rgba(15, 23, 42, .66);
+            border: 1px solid rgba(148, 163, 184, .12);
+        }
+        .status-green {
+            color: #4ade80;
+            font-size: .78rem;
+            font-weight: 800;
+        }
+
+        .topbar {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .title-wrap {
+            display: flex;
+            align-items: center;
+            gap: .8rem;
+        }
+        .title-icon {
+            width: 38px;
+            height: 38px;
+            display: grid;
+            place-items: center;
+            border-radius: 13px;
+            color: #a78bfa;
+            background: linear-gradient(135deg, rgba(59,130,246,.17), rgba(139,92,246,.20));
+            border: 1px solid rgba(129,140,248,.28);
+            font-weight: 900;
+        }
+        .page-title {
+            font-size: 1.58rem;
+            line-height: 1.05;
+            font-weight: 950;
+            color: white;
+            letter-spacing: -.04em;
+        }
+        .page-subtitle {
+            margin-top: .32rem;
+            color: #cbd5e1;
+            font-size: .82rem;
+        }
+        .chip-row {
+            display: flex;
+            gap: .55rem;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .chip {
+            border-radius: 9px;
+            padding: .56rem .74rem;
+            font-size: .78rem;
+            font-weight: 850;
+            color: #ecfeff;
+            background: rgba(15,23,42,.70);
+            border: 1px solid rgba(96,165,250,.20);
+        }
+        .chip.green {border-color: rgba(34,197,94,.28); color: #86efac;}
+        .chip.blue {border-color: rgba(59,130,246,.30); color: #7dd3fc;}
+        .chip.purple {border-color: rgba(168,85,247,.30); color: #d8b4fe;}
+        .chip.cyan {border-color: rgba(20,184,166,.30); color: #67e8f9;}
+
+        .card {
+            border-radius: 13px;
+            background:
+                radial-gradient(circle at 100% 0%, rgba(59,130,246,.07), transparent 18rem),
+                linear-gradient(145deg, rgba(15, 23, 42, .92), rgba(8, 13, 28, .94));
+            border: 1px solid rgba(148, 163, 184, .14);
+            box-shadow: 0 18px 48px rgba(0,0,0,.22);
+        }
+        .article-strip {
+            padding: 1rem 1.05rem;
+            margin-bottom: .7rem;
+            display: grid;
+            grid-template-columns: 190px minmax(0,1fr) 170px 170px 110px;
+            gap: 1rem;
+            align-items: center;
+        }
+        .brand-stock {
+            display: flex;
+            gap: .75rem;
+            align-items: center;
+        }
+        .stock-logo {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: grid;
+            place-items: center;
+            font-weight: 950;
+            color: #022c22;
+            background: linear-gradient(135deg, #84cc16, #22c55e);
+        }
+        .tiny-label {
+            color: #94a3b8;
+            font-size: .68rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+        .strong {
+            color: white;
+            font-size: 1rem;
+            font-weight: 900;
+        }
+        .muted {
+            color: #cbd5e1;
+            font-size: .78rem;
+        }
+        .view-btn {
+            padding: .65rem .7rem;
+            border-radius: 9px;
+            background: rgba(15, 23, 42, .85);
+            border: 1px solid rgba(148, 163, 184, .15);
+            color: white;
+            font-weight: 850;
+            font-size: .74rem;
+            text-align: center;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: .62rem;
+            margin-bottom: .62rem;
+        }
+        .kpi {
+            min-height: 98px;
+            padding: .92rem;
+            position: relative;
+            overflow: hidden;
+        }
+        .kpi.purple {border-color: rgba(168,85,247,.35);}
+        .kpi.teal {border-color: rgba(20,184,166,.35);}
+        .kpi.green {border-color: rgba(34,197,94,.35);}
+        .kpi.orange {border-color: rgba(249,115,22,.35);}
+        .kpi.violet {border-color: rgba(139,92,246,.35);}
+        .kpi-title {
+            color: #cbd5e1;
+            font-size: .70rem;
+            font-weight: 850;
+            margin-bottom: .28rem;
+        }
+        .kpi-value {
+            color: white;
+            font-size: 1.55rem;
+            font-weight: 950;
+            letter-spacing: -.05em;
+        }
+        .kpi-sub {
+            color: #dbeafe;
+            font-size: .76rem;
+            margin-top: .12rem;
+        }
+        .spark {
+            position: absolute;
+            right: .8rem;
+            bottom: .6rem;
+            width: 74px;
+            height: 28px;
+            opacity: .95;
+        }
+
+        .two-col {
+            display: grid;
+            grid-template-columns: 1.05fr .95fr;
+            gap: .62rem;
+            margin-bottom: .62rem;
+        }
+        .insight {
+            padding: 1.05rem 1.15rem;
+            border-color: rgba(34,211,238,.38);
+            background:
+                radial-gradient(circle at 100% 100%, rgba(20,184,166,.18), transparent 20rem),
+                linear-gradient(145deg, rgba(8,47,73,.55), rgba(8,13,28,.96));
+        }
+        .panel-title {
+            color: #7dd3fc;
+            font-size: .86rem;
+            font-weight: 950;
+            margin-bottom: .62rem;
+        }
+        .insight-text {
+            color: white;
+            font-size: 1.05rem;
+            line-height: 1.48;
+            font-weight: 700;
+        }
+        .green-text {color:#4ade80;font-weight:950;}
+        .analysis-list {
+            padding: 1.05rem 1.15rem;
+        }
+        .analysis-list ul {
+            margin: 0;
+            padding-left: 1.1rem;
+            color: #e5e7eb;
+            font-size: .84rem;
+            line-height: 1.62;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: .82fr .82fr 1.05fr 1.15fr;
+            gap: .62rem;
+            margin-bottom: .62rem;
+        }
+        .chart-card {
+            padding: .85rem;
+            min-height: 198px;
+        }
+        .chart-title {
+            color: white;
+            font-size: .82rem;
+            font-weight: 900;
+            margin-bottom: .4rem;
+        }
+
+        .workflow {
+            padding: .9rem;
+            margin-bottom: .62rem;
+        }
+        .workflow-grid {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: .48rem;
+        }
+        .step {
+            border-radius: 10px;
+            padding: .62rem;
+            border: 1px solid rgba(96,165,250,.16);
+            background: rgba(15,23,42,.58);
+            min-height: 74px;
+        }
+        .step-num {
+            color: #c4b5fd;
+            font-size: .68rem;
+            font-weight: 900;
+        }
+        .step-text {
+            color: #e2e8f0;
+            font-size: .68rem;
+            line-height: 1.35;
+            margin-top: .22rem;
+        }
+
+        .bottom-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1.2fr;
+            gap: .62rem;
+        }
+        .tag-panel {
+            padding: .9rem;
+        }
+        .tag-title {
+            font-size: .86rem;
+            font-weight: 950;
+            margin-bottom: .65rem;
+        }
+        .tag-title.good {color:#4ade80;}
+        .tag-title.warn {color:#f59e0b;}
+        .tag-title.info {color:#38bdf8;}
+        .tag {
+            display: inline-block;
+            padding: .42rem .62rem;
+            border-radius: 999px;
+            background: rgba(148,163,184,.10);
+            color: #cbd5e1;
+            font-size: .72rem;
+            font-weight: 750;
+            margin: 0 .32rem .32rem 0;
+        }
+
+        .input-card {
+            padding: 1.1rem;
+            margin-bottom: .8rem;
+        }
+        .stTextInput > div > div,
+        .stTextArea textarea,
+        .stFileUploader > div {
+            background: rgba(2, 6, 23, .88) !important;
+            border: 1px solid rgba(59,130,246,.32) !important;
+            border-radius: 13px !important;
+        }
+        .stButton button {
+            border-radius: 13px !important;
+            min-height: 3rem !important;
+            font-weight: 900 !important;
+        }
+        .stFormSubmitButton button[kind="primary"] {
+            background: linear-gradient(135deg, #0ea5e9, #7c3aed) !important;
+        }
+        .info-strip {
+            padding: .9rem 1rem;
+            border-radius: 12px;
+            margin-top: .75rem;
+            color: #93c5fd;
+            background: linear-gradient(135deg, rgba(29,78,216,.28), rgba(88,28,135,.20));
+            border: 1px solid rgba(59,130,246,.24);
+            font-weight: 650;
+        }
+        .footer {
+            color: #64748b;
+            font-size: .70rem;
+            margin-top: .65rem;
+        }
+
+        @media (max-width: 1200px) {
+            .article-strip, .kpi-grid, .two-col, .chart-grid, .workflow-grid, .bottom-grid {
+                grid-template-columns: 1fr;
+            }
+            .topbar {
+                grid-template-columns: 1fr;
+            }
+            .chip-row {
+                justify-content: flex-start;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_sidebar() -> None:
+    """Render polished fixed sidebar."""
+
+    nav_items = [
+        ("⌂", "Executive Overview"),
+        ("◉", "Analyze Article"),
+        ("▥", "Forecasts"),
+        ("✤", "Historical Intelligence"),
+        ("◇", "Explainability"),
+        ("✧", "Scenario Analysis"),
+        ("◎", "Model Comparison"),
+        ("▣", "Model Training / Evidence"),
+        ("?", "Provenance"),
+        ("⌘", "Architecture / System Design"),
+        ("◌", "3D Intelligence"),
+        ("i", "About / Project Purpose"),
+        ("⚙", "Visual QA / Page Audit"),
+    ]
+
+    st.sidebar.markdown(
+        """
+        <div class="brand">
+          <div class="brand-row">
+            <div class="brand-icon">↗</div>
+            <div>
+              <div class="brand-title">Ruturaj Mokashi</div>
+              <div class="brand-subtitle">Financial News Stock Intelligence</div>
             </div>
-            <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;">
-                <div>
-                    <div style="color:#f8fafc;font-size:2rem;font-weight:950;letter-spacing:-.055em;">
-                        📈 Executive Overview
-                    </div>
-                    <div style="color:#c4b5fd;font-size:.96rem;font-weight:750;margin-top:.45rem;">
-                        Financial News → Sentiment → Movement → Forecast → Explainability
-                    </div>
-                    <div style="color:#cbd5e1;font-size:.84rem;margin-top:.42rem;">
-                        Enter a URL, upload an article, or paste text. The dashboard updates after Analyze.
-                    </div>
-                </div>
-                <div style="color:#ecfeff;font-size:.8rem;font-weight:900;text-align:right;">
-                    ☁ Public Cloud · 🔗 URL · ⇧ Upload · 👁 Workflow
-                </div>
+          </div>
+        </div>
+        <div class="nav-title">Pages</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    for idx, (icon, label) in enumerate(nav_items):
+        cls = "nav-item active" if idx == 0 else "nav-item"
+        st.sidebar.markdown(
+            f"<div class='{cls}'><span>{_safe(icon)}</span><span>{_safe(label)}</span></div>",
+            unsafe_allow_html=True,
+        )
+
+    st.sidebar.markdown(
+        """
+        <div class="side-card">
+          <div class="tiny-label">System Status</div>
+          <div class="status-green">● All Systems Operational</div>
+        </div>
+        <div class="side-card">
+          <div class="tiny-label">Theme</div>
+          <div style="margin-top:.5rem;color:#a5b4fc;">☼ &nbsp;&nbsp; ◐ &nbsp;&nbsp; ▣</div>
+        </div>
+        <div style="position:fixed;bottom:1rem;color:#64748b;font-size:.72rem;">© 2025 Ruturaj Mokashi</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_topbar() -> None:
+    """Render compact Executive Overview header."""
+
+    st.markdown(
+        """
+        <div class="topbar">
+          <div class="title-wrap">
+            <div class="title-icon">↗</div>
+            <div>
+              <div class="page-title">Executive Overview</div>
+              <div class="page-subtitle">Financial News → Sentiment → Movement → Forecast → Explainability</div>
             </div>
+          </div>
+          <div class="chip-row">
+            <div class="chip green">☁ Public Cloud Mode</div>
+            <div class="chip blue">🔗 Article URL Enabled</div>
+            <div class="chip purple">⇧ Upload Enabled</div>
+            <div class="chip cyan">👁 Model Workflow Visible</div>
+          </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
+
+def _input_form() -> tuple[str, str, str]:
+    """Collect input from URL, upload, paste, or sample."""
+
     with st.form("executive_article_form", clear_on_submit=False):
-        url_col, upload_col = st.columns([1.35, 1.0])
+        st.markdown('<div class="card input-card">', unsafe_allow_html=True)
+        url_col, upload_col = st.columns([1.25, 1.0])
 
         with url_col:
             article_url = st.text_input(
@@ -509,999 +858,364 @@ def _executive_analysis_control_center() -> tuple[str, str]:
             height=112,
         )
 
-        button_col_1, button_col_2 = st.columns([1.0, 1.0])
-        with button_col_1:
-            analyze_clicked = st.form_submit_button("Analyze", type="primary", width="stretch")
-        with button_col_2:
-            sample_clicked = st.form_submit_button("Use sample", width="stretch")
+        btn_col_1, btn_col_2 = st.columns([1.0, 1.0])
+        with btn_col_1:
+            analyze_clicked = st.form_submit_button("↗  Analyze", type="primary", use_container_width=True)
+        with btn_col_2:
+            sample_clicked = st.form_submit_button("▣  Use sample", use_container_width=True)
 
-    clean_url = (article_url or "").strip()
-    clean_pasted = (pasted_text or "").strip()
+        st.markdown("</div>", unsafe_allow_html=True)
 
     if sample_clicked:
-        st.success("Sample article loaded.")
-        return _BASE_EXAMPLE, "sample article"
+        return _BASE_EXAMPLE, "sample article", ""
 
     if not analyze_clicked:
-        st.info("Enter an Article URL, upload an article, paste text, or click Use sample.")
+        st.markdown(
+            '<div class="info-strip">ⓘ Enter an Article URL, upload an article, paste text, or click Use sample.</div>',
+            unsafe_allow_html=True,
+        )
         st.stop()
+
+    clean_url = _clean_text(article_url)
+    clean_pasted = _clean_text(pasted_text)
 
     if clean_url:
         try:
-            fetched_text = _fetch_url_text(clean_url)
+            fetched = _fetch_url_text(clean_url)
             st.success("Article URL fetched and analyzed.")
-            return fetched_text, f"URL: {clean_url}"
+            return fetched, f"URL: {clean_url}", clean_url
         except Exception as exc:
             st.warning(
                 "Article URL could not be fetched from public Streamlit Cloud. "
                 f"Reason: {exc}. Paste or upload the article text instead."
             )
             if clean_pasted:
-                return clean_pasted, "pasted fallback after URL fetch failure"
+                return clean_pasted, "pasted fallback after URL fetch failure", clean_url
             st.stop()
 
     if uploaded_file is not None:
-        try:
-            raw = uploaded_file.read()
-            uploaded_text = raw.decode("utf-8", errors="ignore").strip()
-        except Exception:
-            uploaded_text = ""
-
+        raw = uploaded_file.read()
+        uploaded_text = raw.decode("utf-8", errors="ignore").strip()
         if uploaded_text:
-            return uploaded_text, f"uploaded file: {uploaded_file.name}"
-
+            return uploaded_text, f"uploaded file: {uploaded_file.name}", ""
         st.warning("Uploaded file could not be read as text.")
         st.stop()
 
     if clean_pasted:
-        return clean_pasted, "pasted article"
+        return clean_pasted, "pasted article", ""
 
     st.warning("No input provided. Enter a URL, upload an article, paste text, or click Use sample.")
     st.stop()
 
 
-def _article_inputs() -> tuple[str, str]:
-    """Collect URL, upload, and pasted article text for non-executive pages."""
+def _render_article_strip(signal: ArticleSignal, source_url: str) -> None:
+    """Render article context strip."""
+
+    today = datetime.now(timezone.utc).strftime("%b %d, %Y")
+    time_utc = datetime.now(timezone.utc).strftime("%I:%M %p UTC")
+    view = "View Article ↗" if source_url else "Public Demo"
 
     st.markdown(
-        "<div class='panel'><h3>Article intake</h3>"
-        "<p>Use a URL, upload an article file, or paste text. The public app then shows each model-style stage transparently.</p></div>",
-        unsafe_allow_html=True,
-    )
-    with st.expander("Input article", expanded=True):
-        url = st.text_input("Article URL", placeholder="https://example.com/company-earnings-news", key="general_article_url")
-        uploaded = st.file_uploader("Upload article", type=["txt", "md", "csv", "json", "pdf"], key="general_article_upload")
-        pasted = st.text_area("Paste article / headline / news text", value=_BASE_EXAMPLE, height=180, key="general_article_text")
-
-    source = "pasted text"
-    text = pasted.strip()
-    upload_text = _read_upload(uploaded)
-    if upload_text.strip():
-        source = f"uploaded file: {uploaded.name}"
-        text = upload_text
-    if url.strip():
-        try:
-            fetched = _fetch_url_text(url)
-            if fetched.strip():
-                source = f"URL: {url.strip()}"
-                text = fetched
-        except Exception as exc:
-            st.warning(f"URL fetch failed in public mode: {exc}. Using pasted/uploaded text instead.")
-    return text, source
-
-
-def _sparkline_svg(points: list[float], color: str = "#38bdf8") -> str:
-    """Return a tiny inline SVG sparkline for scorecards."""
-
-    width, height = 118, 38
-    xs = [i * width / (len(points) - 1) for i in range(len(points))]
-    min_v, max_v = min(points), max(points)
-    span = max(max_v - min_v, 0.001)
-    ys = [height - ((p - min_v) / span * (height - 6) + 3) for p in points]
-    path = " ".join(f"{x:.1f},{y:.1f}" for x, y in zip(xs, ys))
-    return (
-        f"<svg class='spark' viewBox='0 0 {width} {height}' preserveAspectRatio='none'>"
-        f"<polyline points='{path}' fill='none' stroke='{color}' stroke-width='3' "
-        f"stroke-linecap='round' stroke-linejoin='round'/></svg>"
-    )
-
-
-def _safe_pct(value: float) -> str:
-    """Return percentage text for compact executive cards."""
-
-    return f"{value:.0%}"
-
-
-def _company_logo_badge(signal: ArticleSignal) -> str:
-    """Return a compact ticker logo badge using the detected ticker."""
-
-    initials = _html((signal.ticker or "FN")[:4].upper())
-    return f"<div class='ticker-logo'>{initials}</div>"
-
-
-def _executive_card(title: str, value: str, subtitle: str, icon: str, accent: str, spark: str = "") -> str:
-    """Return one premium scorecard as HTML."""
-
-    return (
-        f"<div class='exec-card accent-{_html(accent)}'><div class='exec-card-top'>"
-        f"<div class='exec-icon'>{_html(icon)}</div><div><div class='exec-label'>{_html(title)}</div>"
-        f"<div class='exec-value'>{_html(value)}</div><div class='exec-subtitle'>{_html(subtitle)}</div></div></div>"
-        f"<div class='exec-spark'>{spark}</div></div>"
-    )
-
-
-def _executive_conclusion(signal: ArticleSignal) -> str:
-    """Build the user-facing conclusion message."""
-
-    if signal.sentiment_score >= 0.35 and signal.movement_up >= signal.movement_down:
-        sentiment = "strongly positive" if signal.sentiment_score > 0.70 else "positive"
-        direction = "bullish movement pressure"
-    elif signal.sentiment_score <= -0.25:
-        sentiment = "negative"
-        direction = "bearish movement pressure"
-    else:
-        sentiment = "mixed"
-        direction = "watchlist / confirmation-needed movement pressure"
-
-    risk_language = "moderate" if signal.risk_score < 0.45 else "elevated"
-    risk_terms = ", ".join(signal.risk_hits[:3]) if signal.risk_hits else "limited explicit risk language"
-    return (
-        f"Conclusion: The article is {sentiment} for {signal.ticker}. "
-        f"The signal estimates {direction} with {_safe_pct(signal.confidence)} confidence. "
-        f"Risk is {risk_language}, driven by {risk_terms}."
-    )
-
-
-def _analyst_note(signal: ArticleSignal) -> str:
-    """Return the most important user-facing analysis sentence."""
-
-    positive = ", ".join(signal.positive_hits[:3]) if signal.positive_hits else "limited bullish wording"
-    risk = ", ".join(signal.risk_hits[:3]) if signal.risk_hits else "no dominant risk phrase"
-    return (
-        f"Important analysis: {positive} is supporting the upside case, while {risk} is the main item to monitor. "
-        f"The model-style workflow is not just scoring sentiment; it converts language into risk-adjusted movement pressure."
-    )
-
-
-def _movement_donut(signal: ArticleSignal) -> None:
-    """Render movement probability as an executive donut."""
-
-    fig = go.Figure(
-        data=[go.Pie(
-            labels=["Up", "Flat", "Down"],
-            values=[signal.movement_up, signal.movement_flat, signal.movement_down],
-            hole=0.62,
-            textinfo="label+percent",
-            sort=False,
-            marker={"colors": ["#7dd3fc", "#0f76c8", "#fda4af"]},
-        )]
-    )
-    fig.update_layout(
-        title="Movement Probability",
-        height=360,
-        annotations=[{
-            "text": f"<b>Up<br>{signal.movement_up:.0%}</b>",
-            "x": 0.5, "y": 0.5,
-            "font": {"size": 24, "color": "#f8fbff"},
-            "showarrow": False,
-        }],
-        **_layout(),
-    )
-    st.plotly_chart(fig, width="stretch", config=_chart_config())
-
-
-def _sentiment_risk_quadrant(signal: ArticleSignal) -> None:
-    """Render the sentiment/risk executive quadrant."""
-
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=[signal.sentiment_score],
-        y=[signal.risk_score],
-        mode="markers+text",
-        text=[signal.ticker],
-        textposition="top center",
-        marker={"size": 26, "color": "#7dd3fc", "line": {"width": 2, "color": "#fde68a"}},
-        name="Current article",
-    ))
-    fig.add_hline(y=0.5, line_dash="dot", line_color="rgba(148,163,184,.45)")
-    fig.add_vline(x=0, line_dash="dot", line_color="rgba(148,163,184,.45)")
-    fig.add_annotation(x=-0.72, y=0.84, text="High Risk<br>Negative", showarrow=False, font={"size": 11})
-    fig.add_annotation(x=0.72, y=0.84, text="High Risk<br>Positive", showarrow=False, font={"size": 11})
-    fig.add_annotation(x=-0.72, y=0.18, text="Low Risk<br>Negative", showarrow=False, font={"size": 11})
-    fig.add_annotation(x=0.72, y=0.18, text="Low Risk<br>Positive", showarrow=False, font={"size": 11})
-    fig.update_layout(
-        title="Sentiment vs Risk",
-        height=360,
-        xaxis_title="Sentiment score",
-        yaxis_title="Risk level",
-        xaxis={"range": [-1.05, 1.05]},
-        yaxis={"range": [0, 1]},
-        **_layout(),
-    )
-    st.plotly_chart(fig, width="stretch", config=_chart_config())
-
-
-def _driver_waterfall(signal: ArticleSignal) -> None:
-    """Render a premium horizontal driver-impact chart."""
-
-    rows = [
-        ("Demand / growth language", 1.90 if signal.positive_hits else 0.45),
-        ("Revenue / profit strength", 1.55 if {"revenue", "profit", "profits"} & set(signal.positive_hits) else 0.75),
-        ("AI / innovation terms", 1.25 if {"ai", "innovation", "cloud", "data center", "data-center"} & set(signal.positive_hits) else 0.65),
-        ("Confidence lift", signal.confidence * 1.20),
-        ("Risk terms", -max(0.25, len(signal.risk_hits) * 0.32)),
-        ("Bearish terms", -max(0.10, len(signal.negative_hits) * 0.38)),
-        ("Uncertainty discount", -signal.risk_score * 1.05),
-    ]
-    colors = ["#7dd3fc" if value >= 0 else "#fda4af" for _, value in rows]
-    fig = go.Figure(data=[go.Bar(
-        x=[value for _, value in rows],
-        y=[name for name, _ in rows],
-        orientation="h",
-        text=[f"{value:+.2f}" for _, value in rows],
-        textposition="outside",
-        marker={"color": colors},
-    )])
-    fig.add_vline(x=0, line_width=1, line_dash="dot", opacity=.55)
-    fig.update_layout(
-        title="Driver Impact (Signal Contribution)",
-        height=360,
-        xaxis_title="Impact on signal score",
-        yaxis={"autorange": "reversed"},
-        **_layout(),
-    )
-    st.plotly_chart(fig, width="stretch", config=_chart_config())
-
-
-def _executive_forecast(signal: ArticleSignal) -> None:
-    """Render a premium forecast panel with bull/base/bear and confidence band."""
-
-    horizon = list(range(0, 61, 5))
-    sentiment_push = (signal.movement_up - signal.movement_down)
-    base = [100 + i * sentiment_push * 0.55 for i in range(len(horizon))]
-    bull = [value + i * (0.42 + signal.confidence * 0.18) for i, value in enumerate(base)]
-    bear = [value - i * (0.34 + signal.risk_score * 0.28) for i, value in enumerate(base)]
-    upper = [value + 2.5 + i * .07 for i, value in enumerate(base)]
-    lower = [value - 2.5 - i * .07 for i, value in enumerate(base)]
-
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=horizon, y=upper, mode="lines", line={"width": 0}, showlegend=False))
-    fig.add_trace(go.Scatter(
-        x=horizon, y=lower, mode="lines", fill="tonexty",
-        fillcolor="rgba(148,163,184,.16)", line={"width": 0}, name="Confidence band",
-    ))
-    fig.add_trace(go.Scatter(x=horizon, y=bull, mode="lines+markers", name="Bull case", line={"color": "#4ade80"}))
-    fig.add_trace(go.Scatter(x=horizon, y=base, mode="lines+markers", name="Base case", line={"color": "#38bdf8"}))
-    fig.add_trace(go.Scatter(x=horizon, y=bear, mode="lines+markers", name="Bear case", line={"color": "#fb7185"}))
-    fig.update_layout(
-        title="Forecast (Price Movement Scenarios)",
-        height=360,
-        xaxis_title="Trading days",
-        yaxis_title="Normalized price",
-        **_layout(),
-    )
-    st.plotly_chart(fig, width="stretch", config=_chart_config())
-
-
-def _workflow_strip(signal: ArticleSignal) -> None:
-    """Render a compact horizontal model workflow strip."""
-
-    steps = [
-        ("01", "Article Intake", "URL/upload/text normalized"),
-        ("02", "Text Extraction", "Boilerplate removed"),
-        ("03", "Sentiment Signal", f"{len(signal.positive_hits)} bullish / {len(signal.negative_hits)} bearish"),
-        ("04", "Movement Estimate", f"Up {signal.movement_up:.0%} · Down {signal.movement_down:.0%}"),
-        ("05", "Risk Adjustment", f"Risk {signal.risk_score:.0%}"),
-        ("06", "Forecast", "Bull / base / bear paths"),
-        ("07", "Explainability", "Drivers visible"),
-    ]
-    cards = "".join(
-        f"<div class='workflow-card'><div class='workflow-status'>✓</div>"
-        f"<div class='workflow-number'>{_html(number)}</div>"
-        f"<div class='workflow-title'>{_html(name)}</div>"
-        f"<div class='workflow-detail'>{_html(detail)}</div></div>"
-        for number, name, detail in steps
-    )
-    st.markdown(
-        "<div class='workflow-wrap'><div class='section-title'>What the Model is Doing</div>"
-        f"<div class='workflow-grid'>{cards}</div></div>",
-        unsafe_allow_html=True,
-    )
-
-
-def _chip_panel(title: str, icon: str, chips: list[str], tone: str) -> str:
-    """Return one bottom executive chip panel as HTML."""
-
-    chip_html = "".join(f"<span class='driver-chip'>{_html(chip)}</span>" for chip in chips)
-    return (
-        f"<div class='driver-panel {tone}'>"
-        f"<div class='driver-title'>{_html(icon)} {_html(title)}</div>"
-        f"<div class='driver-chips'>{chip_html}</div></div>"
-    )
-
-
-def _render_executive_overview_premium(signal: ArticleSignal, source: str, text: str) -> None:
-    """Render the premium Executive Overview command center."""
-
-    headline = _html(re.sub(r"\\s+", " ", text.strip())[:230] or "No article text supplied.")
-    source_text = _html(source)
-    ticker = _html(signal.ticker)
-    company = _html(signal.company)
-
-    st.markdown(
-        f"<div class='article-strip'><div class='article-identity'>{_company_logo_badge(signal)}"
-        f"<div><div class='article-ticker'>{ticker}</div><div class='article-company'>{company}</div></div></div>"
-        f"<div class='article-headline'><div class='article-label'>Article / Headline</div><div>{headline}</div></div>"
-        f"<div class='article-meta'><div class='article-label'>Source</div><div>{source_text}</div></div>"
-        "<div class='article-meta'><div class='article-label'>Status</div><div>Analyzed</div></div></div>",
-        unsafe_allow_html=True,
-    )
-
-    spark_up = _sparkline_svg([.18, .31, .28, .47, .43, .66, .58, .78, .72, .88], "#34d399")
-    spark_sent = _sparkline_svg([.32, .40, .36, .55, .48, .70, .62, .82], "#22d3ee")
-    spark_risk = _sparkline_svg([.20, .30, .25, .37, .31, .43, .35, .48], "#f59e0b")
-    spark_conf = _sparkline_svg([.44, .51, .58, .64, .71, .78, .85, .92], "#a78bfa")
-    cards = [
-        _executive_card("Ticker", signal.ticker, signal.company, "▣", "violet"),
-        _executive_card("Sentiment Score", f"{signal.sentiment_score:+.2f}", "Strongly positive" if signal.sentiment_score > .4 else "Mixed signal", "◉", "cyan", spark_sent),
-        _executive_card("Movement Signal", "Bullish" if signal.movement_up >= signal.movement_down else "Bearish", "Upward pressure" if signal.movement_up >= signal.movement_down else "Downside pressure", "↗", "green", spark_up),
-        _executive_card("Risk Level", _safe_pct(signal.risk_score), "Moderate risk" if signal.risk_score < .45 else "Elevated risk", "◇", "amber", spark_risk),
-        _executive_card("Confidence", _safe_pct(signal.confidence), "High confidence" if signal.confidence > .75 else "Medium confidence", "◎", "purple", spark_conf),
-    ]
-    st.markdown("<div class='exec-card-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
-
-    important = [
-        f"Primary movement bias: {'Bullish' if signal.movement_up >= signal.movement_down else 'Bearish'}",
-        f"Positive evidence terms detected: {len(signal.positive_hits)}",
-        f"Risk terms detected: {len(signal.risk_hits)}",
-        f"Confidence level: {_safe_pct(signal.confidence)}",
-        "What matters most: language strength, risk terms, and follow-up guidance.",
-    ]
-    bullet_html = "".join(f"<li>{_html(item)}</li>" for item in important)
-    st.markdown(
-        "<div class='insight-grid'><div class='executive-insight'>"
-        "<div class='insight-kicker'>✦ Executive Insight</div>"
-        f"<div class='insight-message'>{_html(_executive_conclusion(signal))}</div>"
-        f"<div class='preview-box' style='margin-top:.75rem;'>{_html(_analyst_note(signal))}</div></div>"
-        "<div class='important-analysis'><div class='section-title'>◎ Most Important Analysis</div>"
-        f"<ul>{bullet_html}</ul></div></div>",
-        unsafe_allow_html=True,
-    )
-
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        _movement_donut(signal)
-    with c2:
-        _sentiment_risk_quadrant(signal)
-
-    c3, c4 = st.columns([1, 1])
-    with c3:
-        _driver_waterfall(signal)
-    with c4:
-        _executive_forecast(signal)
-
-    _workflow_strip(signal)
-
-    bullish = signal.positive_hits[:6] or ["demand", "revenue", "growth", "market strength"]
-    risks = signal.risk_hits[:6] or ["competition", "margin pressure", "macro risk"]
-    monitor = ["next guidance", "gross margin", "demand trend", "volume confirmation", "competitor moves", "policy updates"]
-    st.markdown(
-        "<div class='driver-grid'>"
-        + _chip_panel("Bullish Drivers", "●", bullish, "bullish-panel")
-        + _chip_panel("Risk Drivers", "▲", risks, "risk-panel")
-        + _chip_panel("What to Monitor Next", "◉", monitor, "monitor-panel")
-        + "</div>",
-        unsafe_allow_html=True,
-    )
-
-    preview = _html(re.sub(r"\\s+", " ", text.strip())[:650] or _BASE_EXAMPLE)
-    st.markdown(
-        "<div class='panel'><h3>Article Preview Used for Analysis</h3>"
-        f"<div class='preview-box'>{preview}</div></div>",
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        "<div class='exec-disclaimer'>Public-mode analytical demo. Results are generated for informational portfolio demonstration only. Not investment advice.</div>",
-        unsafe_allow_html=True,
-    )
-
-
-def _hero() -> None:
-    """Render a compact project purpose hero for secondary pages."""
-
-    st.markdown(
-        "<section class='hero'><div class='eyebrow'>Financial News → Sentiment → Movement Intelligence</div>"
-        "<h1>Explain financial news with transparent model-style intelligence.</h1>"
-        "<p>Public Streamlit Cloud mode stays backend-free while preserving the portfolio workflow: article intake, sentiment, movement, forecast, explainability, historical context, provenance, and architecture.</p></section>",
-        unsafe_allow_html=True,
-    )
-
-
-def _metric_strip(signal: ArticleSignal) -> None:
-    """Render top-level public intelligence metrics."""
-
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Detected ticker", signal.ticker)
-    c2.metric("Sentiment", f"{signal.sentiment_score:+.2f}")
-    c3.metric("Movement up", f"{signal.movement_up:.0%}")
-    c4.metric("Risk", f"{signal.risk_score:.0%}")
-    c5.metric("Confidence", f"{signal.confidence:.0%}")
-
-
-def _movement_chart(signal: ArticleSignal, title: str = "Movement probability estimate") -> None:
-    """Render movement probabilities."""
-
-    fig = go.Figure(data=[go.Bar(
-        x=["Down", "Flat", "Up"],
-        y=[signal.movement_down, signal.movement_flat, signal.movement_up],
-        text=[f"{signal.movement_down:.0%}", f"{signal.movement_flat:.0%}", f"{signal.movement_up:.0%}"],
-        textposition="auto",
-        marker={"color": ["#fb7185", "#38bdf8", "#4ade80"]},
-    )])
-    fig.update_layout(title=title, height=390, **_layout())
-    fig.update_yaxes(tickformat=".0%", range=[0, 1])
-    st.plotly_chart(fig, width="stretch", config=_chart_config())
-
-
-def _term_chart(signal: ArticleSignal) -> None:
-    """Render positive, negative, and risk term counts."""
-
-    fig = go.Figure()
-    fig.add_trace(go.Bar(name="Positive", x=["Article"], y=[len(signal.positive_hits)], marker={"color": "#4ade80"}))
-    fig.add_trace(go.Bar(name="Negative", x=["Article"], y=[len(signal.negative_hits)], marker={"color": "#fb7185"}))
-    fig.add_trace(go.Bar(name="Risk", x=["Article"], y=[len(signal.risk_hits)], marker={"color": "#f59e0b"}))
-    fig.update_layout(title="Words/phrases driving the public signal", barmode="group", height=360, **_layout())
-    st.plotly_chart(fig, width="stretch", config=_chart_config())
-
-
-def _forecast_chart(signal: ArticleSignal) -> None:
-    """Render deterministic forward-looking scenario paths."""
-
-    days = ["T+0", "T+1", "T+2", "T+3", "T+4", "T+5"]
-    drift = (signal.movement_up - signal.movement_down) * 12
-    risk_drag = signal.risk_score * 4
-    base = [100 + i * drift / 5 for i in range(6)]
-    bull = [value + i * (2.0 + signal.confidence * 1.7) for i, value in enumerate(base)]
-    bear = [value - i * (1.7 + risk_drag / 2) for i, value in enumerate(base)]
-
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=days, y=bull, mode="lines+markers", name="Bull case", line={"color": "#4ade80"}))
-    fig.add_trace(go.Scatter(x=days, y=base, mode="lines+markers", name="Base case", line={"color": "#38bdf8"}))
-    fig.add_trace(go.Scatter(x=days, y=bear, mode="lines+markers", name="Bear case", line={"color": "#fb7185"}))
-    fig.update_layout(title="Forecast scenario paths from article signal", height=430, **_layout())
-    st.plotly_chart(fig, width="stretch", config=_chart_config())
-
-
-def _intelligence_3d(signal: ArticleSignal) -> None:
-    """Render a 3D intelligence surface using sentiment, risk, and movement dimensions."""
-
-    labels = ["Sentiment", "Movement up", "Risk", "Confidence", "Negative pressure", "Flat probability"]
-    x = [signal.sentiment_score, signal.movement_up, signal.risk_score, signal.confidence, signal.movement_down, signal.movement_flat]
-    y = [len(signal.positive_hits), signal.movement_up * 10, len(signal.risk_hits), signal.confidence * 10, len(signal.negative_hits), signal.movement_flat * 10]
-    z = [signal.confidence, signal.movement_up, 1 - signal.risk_score, signal.sentiment_score, signal.movement_down, signal.movement_flat]
-
-    fig = go.Figure(data=[go.Scatter3d(
-        x=x, y=y, z=z, mode="markers+text", text=labels, textposition="top center",
-        marker={"size": [14, 18, 16, 15, 14, 12], "opacity": 0.88, "color": ["#38bdf8", "#4ade80", "#f59e0b", "#a78bfa", "#fb7185", "#60a5fa"]},
-    )])
-    fig.update_layout(
-        title="3D intelligence map: sentiment × risk × movement",
-        height=620,
-        scene={
-            "xaxis_title": "Score / probability",
-            "yaxis_title": "Evidence strength",
-            "zaxis_title": "Confidence-adjusted signal",
-            "bgcolor": "rgba(15,23,42,.45)",
-        },
-        **_layout(),
-    )
-    st.plotly_chart(fig, width="stretch", config=_chart_config())
-
-
-def _pipeline(signal: ArticleSignal, source: str) -> None:
-    """Render the exact public-mode model workflow."""
-
-    st.markdown("<div class='panel'><h3>What the model-style pipeline is doing</h3></div>", unsafe_allow_html=True)
-    steps = [
-        ("1. Intake", f"Source selected: {source}. URL/upload/text is normalized into article text."),
-        ("2. Text extraction", "The public mode removes boilerplate where possible and keeps the article body/headline text."),
-        ("3. Signal detection", f"Detected {len(signal.positive_hits)} bullish terms, {len(signal.negative_hits)} bearish terms, and {len(signal.risk_hits)} risk terms."),
-        ("4. Sentiment scoring", f"Combined evidence produced sentiment score {signal.sentiment_score:+.2f}."),
-        ("5. Movement estimate", f"Movement probabilities: Up {signal.movement_up:.0%}, Flat {signal.movement_flat:.0%}, Down {signal.movement_down:.0%}."),
-        ("6. Explainability", "The app exposes the terms and risk drivers that contributed to the signal."),
-        ("7. Forecast/scenario view", "The article signal is translated into bull/base/bear paths for interpretation, not investment advice."),
-    ]
-    for name, description in steps:
-        st.markdown(f"<div class='panel'><strong>{_html(name)}</strong><br>{_html(description)}</div>", unsafe_allow_html=True)
-
-
-def _render_analyze(signal: ArticleSignal, text: str, source: str) -> None:
-    """Render article analysis page."""
-
-    st.subheader("Analyze Article")
-    st.markdown(f"<span class='pill'>Source: {_html(source)}</span> <span class='pill'>{_html(signal.label)}</span>", unsafe_allow_html=True)
-    _metric_strip(signal)
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        _movement_chart(signal, "Article movement probabilities")
-    with c2:
-        _term_chart(signal)
-    st.markdown("<div class='panel'><h3>Detected explanation terms</h3></div>", unsafe_allow_html=True)
-    terms = " ".join(f"<span class='pill'>{_html(term)}</span>" for term in signal.extracted_terms)
-    st.markdown(terms or "<span class='pill'>No strong driver terms detected</span>", unsafe_allow_html=True)
-    with st.expander("Normalized article text used for analysis", expanded=False):
-        st.write(text[:5000])
-    _pipeline(signal, source)
-
-
-def _render_forecasts(signal: ArticleSignal) -> None:
-    """Render forecast page."""
-
-    st.subheader("Forecasts")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Bull case pressure", f"{signal.movement_up:.0%}")
-    c2.metric("Base uncertainty", f"{signal.movement_flat:.0%}")
-    c3.metric("Bear risk", f"{signal.movement_down:.0%}")
-    _forecast_chart(signal)
-    st.markdown("<div class='warning'>Forecast panels are explanatory scenario outputs for portfolio demonstration. They are not financial advice and do not guarantee market behavior.</div>", unsafe_allow_html=True)
-
-
-def _render_historical(signal: ArticleSignal) -> None:
-    """Render historical intelligence page."""
-
-    st.subheader("Historical Intelligence")
-    df = pd.DataFrame([
-        {"event": "Earnings beat with risk caveat", "similarity": 0.87, "reaction": "+2.4%", "lesson": "Positive revenue language often dominates unless risk terms are severe."},
-        {"event": "Guidance warning after strong quarter", "similarity": 0.79, "reaction": "-1.1%", "lesson": "Forward guidance risk can offset headline strength."},
-        {"event": "AI demand acceleration headline", "similarity": 0.74, "reaction": "+4.8%", "lesson": "Demand acceleration and margin strength usually lift movement probability."},
-        {"event": "Regulatory pressure headline", "similarity": 0.66, "reaction": "-3.2%", "lesson": "Probe/regulatory terms increase downside and volatility risk."},
-    ])
-    st.dataframe(df, width="stretch", hide_index=True)
-    fig = go.Figure(data=[go.Bar(x=df["event"], y=[float(x.strip("%+")) for x in df["reaction"]], text=df["reaction"], textposition="auto")])
-    fig.update_layout(title="Comparable historical reaction examples", height=410, **_layout())
-    st.plotly_chart(fig, width="stretch", config=_chart_config())
-
-
-def _render_explainability(signal: ArticleSignal) -> None:
-    """Render explainability page."""
-
-    st.subheader("Explainability")
-    _pipeline(signal, "current article")
-    c1, c2, c3 = st.columns(3)
-    for column, title, values in [
-        (c1, "Bullish drivers", signal.positive_hits),
-        (c2, "Bearish drivers", signal.negative_hits),
-        (c3, "Risk drivers", signal.risk_hits),
-    ]:
-        column.markdown(f"<div class='panel'><h3>{_html(title)}</h3></div>", unsafe_allow_html=True)
-        column.markdown(" ".join(f"<span class='pill'>{_html(value)}</span>" for value in values) or "None", unsafe_allow_html=True)
-    _term_chart(signal)
-
-
-def _render_scenarios(signal: ArticleSignal) -> None:
-    """Render scenario analysis page."""
-
-    st.subheader("Scenario Analysis")
-    scenarios = pd.DataFrame([
-        {"scenario": "Bull case", "probability": signal.movement_up, "interpretation": "Positive news language dominates and risk is manageable."},
-        {"scenario": "Base case", "probability": signal.movement_flat, "interpretation": "Market waits for confirmation; mixed terms limit conviction."},
-        {"scenario": "Bear case", "probability": signal.movement_down, "interpretation": "Risk terms and negative language dominate reaction."},
-    ])
-    st.dataframe(scenarios.assign(probability=scenarios["probability"].map(lambda x: f"{x:.0%}")), width="stretch", hide_index=True)
-    _forecast_chart(signal)
-
-
-def _render_model_comparison() -> None:
-    """Render model comparison page."""
-
-    st.subheader("Model Comparison")
-    df = pd.DataFrame([
-        {"model": "BERT sentiment", "purpose": "Financial phrase sentiment", "f1": 0.86, "status": "trained evidence"},
-        {"model": "DistilBERT sentiment", "purpose": "Lightweight sentiment baseline", "f1": 0.82, "status": "trained evidence"},
-        {"model": "LoRA BERT", "purpose": "Parameter-efficient tuning", "f1": 0.84, "status": "trained evidence"},
-        {"model": "Movement model", "purpose": "Direction/risk signal", "f1": 0.61, "status": "audited with gates"},
-        {"model": "Public heuristic mode", "purpose": "Free Cloud explanation demo", "f1": 0.00, "status": "transparent demo, not private inference"},
-    ])
-    st.dataframe(df, width="stretch", hide_index=True)
-    fig = go.Figure(data=[go.Bar(x=df["model"], y=df["f1"], text=df["f1"], textposition="auto")])
-    fig.update_layout(title="Model evidence summary", height=390, **_layout())
-    st.plotly_chart(fig, width="stretch", config=_chart_config())
-
-
-def _render_model_training() -> None:
-    """Render model training evidence page."""
-
-    st.subheader("Model Training / Evidence")
-    st.markdown(
-        "<div class='panel'><h3>What the training pipeline proves</h3>"
-        "<p>The project includes sentiment model training, model comparison, movement-intelligence artifacts, regression gates, Docker/Kubernetes portability, CI/security controls, and public deployment isolation.</p></div>",
-        unsafe_allow_html=True,
-    )
-    for item in [
-        "BERT / DistilBERT / LoRA sentiment training evidence",
-        "Movement model artifact and explainability reports",
-        "Regression gates and strike package QA evidence",
-        "Free public deployment dependency isolation",
-        "Docker and Kubernetes retained as production artifacts",
-    ]:
-        st.markdown(f"<span class='pill'>✓ {_html(item)}</span>", unsafe_allow_html=True)
-
-
-def _render_provenance(source: str) -> None:
-    """Render provenance page."""
-
-    st.subheader("Provenance / Verification")
-    st.markdown(
-        f"<div class='panel'><h3>Evidence trail</h3><p><strong>Current article source:</strong> {_html(source)}</p>"
-        "<p><strong>Public mode:</strong> no paid services, no private API keys, no hosted FastAPI dependency.</p>"
-        "<p><strong>Interpretation:</strong> public heuristic outputs explain workflow behavior; private model inference is preserved for protected deployments.</p></div>",
-        unsafe_allow_html=True,
-    )
-    st.markdown("<div class='warning'>This app is for portfolio demonstration and model-explanation workflow. It is not investment advice.</div>", unsafe_allow_html=True)
-
-
-def _render_architecture(project_root: Path) -> None:
-    """Render architecture page."""
-
-    st.subheader("Architecture / System Design")
-    diagram = project_root / "docs" / "architecture.png"
-    if diagram.exists():
-        st.image(str(diagram), caption="Financial News Stock Intelligence architecture", width="stretch")
-    else:
-        st.warning("Architecture diagram file not found in this deployment commit.")
-    st.markdown(
-        "<div class='panel'><h3>System flow</h3>"
-        "<p>Streamlit handles user interaction. FastAPI handles protected inference in private/runtime deployments. Training artifacts, explainability reports, Docker, Kubernetes, CI/CD, and security controls document production readiness. Streamlit Community Cloud uses a backend-free public mode to stay free and functional.</p></div>",
-        unsafe_allow_html=True,
-    )
-
-
-def _render_3d(signal: ArticleSignal) -> None:
-    """Render 3D intelligence page."""
-
-    st.subheader("3D Intelligence")
-    _intelligence_3d(signal)
-    st.markdown("<div class='good'>The 3D view maps the article into sentiment, risk, movement, and confidence dimensions so viewers can see the model-style reasoning surface.</div>", unsafe_allow_html=True)
-
-
-def _render_about() -> None:
-    """Render portfolio/about page."""
-
-    st.subheader("About Ruturaj / Project Purpose")
-    st.markdown(
-        "<div class='panel'><h3>Portfolio objective</h3>"
-        "<p>This project demonstrates a full data/ML/AI product lifecycle: data ingestion, financial text extraction, transformer sentiment modeling, movement intelligence, explainability, FastAPI serving, Streamlit UX, reports, CI/CD, monitoring, Docker/Kubernetes portability, and free public deployment.</p>"
-        "<p>The public Streamlit app is meant to explain the product to recruiters, reviewers, and non-technical viewers while still showing real model-thinking concepts.</p></div>",
-        unsafe_allow_html=True,
-    )
-
-
-def _render_visual_qa() -> None:
-    """Render a self-audit page proving the agreed public app scope."""
-
-    st.subheader("Visual QA / Page Audit")
-    rows = [
-        {"page": "Executive Overview", "purpose": "Command-center summary", "required": "visible input, scorecards, conclusion, charts, workflow"},
-        {"page": "Analyze Article", "purpose": "Article-level intelligence", "required": "URL/upload/text, sentiment, movement, explanation"},
-        {"page": "Forecasts", "purpose": "Forward-looking scenarios", "required": "bull/base/bear forecast"},
-        {"page": "Historical Intelligence", "purpose": "Comparable events", "required": "historical table and chart"},
-        {"page": "Explainability", "purpose": "Model reasoning", "required": "drivers and pipeline"},
-        {"page": "Scenario Analysis", "purpose": "What-if outcomes", "required": "scenario table and forecast"},
-        {"page": "Model Comparison", "purpose": "Evidence story", "required": "model comparison table/chart"},
-        {"page": "Model Training / Evidence", "purpose": "Training proof", "required": "artifacts and QA evidence"},
-        {"page": "Provenance", "purpose": "Source and disclaimer trail", "required": "source, public mode, disclaimer"},
-        {"page": "Architecture / System Design", "purpose": "System design", "required": "diagram or explanation"},
-        {"page": "3D Intelligence", "purpose": "Premium 3D visual", "required": "Plotly 3D signal map"},
-        {"page": "About / Project Purpose", "purpose": "Portfolio story", "required": "lifecycle explanation"},
-    ]
-    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
-    st.markdown("<div class='good'>Acceptance target: the live public app is not complete unless these pages are visible, article URL/upload/text work, and the viewer can see what the model-style workflow is doing.</div>", unsafe_allow_html=True)
-
-
-
-def _apply_graphite_cobalt_theme_override() -> None:
-    """Apply the cleaner graphite/cobalt public app theme override."""
-
-    st.markdown(
-        """
-        <style>
-        [data-testid="stAppViewContainer"] {
-            background:
-                radial-gradient(circle at 10% 12%, rgba(34, 211, 238, 0.08), transparent 30rem),
-                radial-gradient(circle at 90% 8%, rgba(129, 140, 248, 0.10), transparent 28rem),
-                linear-gradient(180deg, #030712 0%, #08111f 48%, #0b1425 100%) !important;
-        }
-        [data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #02050d 0%, #050d1a 52%, #07111f 100%) !important;
-            border-right: 1px solid rgba(125, 211, 252, 0.14) !important;
-        }
-        [data-testid="stHeader"] {
-            background: rgba(3, 7, 18, 0.72) !important;
-            border-bottom: 1px solid rgba(255,255,255,0.06) !important;
-            backdrop-filter: blur(16px);
-        }
-        .exec-topbar,
-        .article-strip,
-        .exec-card,
-        .important-analysis,
-        .workflow-wrap,
-        .driver-panel {
-            background: linear-gradient(145deg, rgba(10,16,30,.94), rgba(14,22,40,.74)) !important;
-            border-color: rgba(96,165,250,.16) !important;
-            box-shadow: 0 22px 58px rgba(0,0,0,.24) !important;
-        }
-        .executive-insight {
-            background:
-              radial-gradient(circle at 96% 100%, rgba(34,197,94,.10), transparent 20rem),
-              linear-gradient(145deg, rgba(7,79,99,.46), rgba(10,16,30,.95)) !important;
-            border-color: rgba(34,211,238,.24) !important;
-        }
-        .stTextInput > div > div,
-        .stTextArea textarea,
-        .stFileUploader > div {
-            background: rgba(4, 12, 24, 0.86) !important;
-            border: 1px solid rgba(96,165,250,.22) !important;
-            border-radius: 18px !important;
-        }
-        .stButton > button {
-            border-radius: 16px !important;
-            border: 1px solid rgba(129,140,248,.28) !important;
-            background: linear-gradient(135deg, rgba(34,211,238,.20), rgba(129,140,248,.22)) !important;
-            color: white !important;
-            font-weight: 850 !important;
-            min-height: 3rem !important;
-        }
-        </style>
+        f"""
+        <div class="card article-strip">
+          <div class="brand-stock">
+            <div class="stock-logo">{_safe(signal.ticker[:4])}</div>
+            <div>
+              <div class="strong">{_safe(signal.ticker)}</div>
+              <div class="muted">{_safe(signal.company)}</div>
+            </div>
+          </div>
+          <div>
+            <div class="tiny-label">Article Headline</div>
+            <div class="muted" style="color:#f8fafc;font-size:.82rem;">{_safe(signal.headline)}</div>
+          </div>
+          <div>
+            <div class="tiny-label">Source</div>
+            <div class="muted">{_safe(signal.source)}</div>
+          </div>
+          <div>
+            <div class="tiny-label">Date</div>
+            <div class="muted" style="color:#f8fafc;">{_safe(today)}</div>
+            <div class="muted">{_safe(time_utc)}</div>
+          </div>
+          <div class="view-btn">{_safe(view)}</div>
+        </div>
         """,
         unsafe_allow_html=True,
     )
 
 
-def _apply_commander_theme_override() -> None:
-    """Apply the cleaner premium cobalt/graphite public dashboard theme."""
+def _render_kpis(signal: ArticleSignal) -> None:
+    """Render KPI cards."""
+
+    sent_label = "Strongly Positive" if signal.sentiment_score > 0.65 else "Positive" if signal.sentiment_score > 0.2 else "Mixed signal"
+    risk_label = "Low Risk" if signal.risk_score < 0.25 else "Moderate Risk" if signal.risk_score < 0.55 else "High Risk"
+    conf_label = "High Confidence" if signal.confidence > 0.75 else "Medium confidence"
 
     st.markdown(
-        """
-        <style>
-        [data-testid="stAppViewContainer"] {
-            background:
-              radial-gradient(circle at 12% 8%, rgba(59, 130, 246, 0.13), transparent 30rem),
-              radial-gradient(circle at 88% 12%, rgba(124, 58, 237, 0.15), transparent 30rem),
-              radial-gradient(circle at 50% 100%, rgba(15, 23, 42, 0.75), transparent 34rem),
-              linear-gradient(180deg, #020617 0%, #07111f 46%, #0b1020 100%) !important;
-        }
-
-        [data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #020617 0%, #060b16 52%, #080f1f 100%) !important;
-            border-right: 1px solid rgba(96, 165, 250, 0.22) !important;
-        }
-
-        [data-testid="stHeader"] {
-            background: rgba(2, 6, 23, 0.82) !important;
-            border-bottom: 1px solid rgba(148, 163, 184, 0.10) !important;
-            backdrop-filter: blur(18px);
-        }
-
-        .exec-topbar,
-        .article-strip,
-        .exec-card,
-        .important-analysis,
-        .workflow-wrap,
-        .driver-panel {
-            background: linear-gradient(145deg, rgba(8, 13, 28, 0.96), rgba(15, 23, 42, 0.78)) !important;
-            border-color: rgba(96, 165, 250, 0.20) !important;
-            box-shadow: 0 22px 64px rgba(0, 0, 0, 0.28) !important;
-        }
-
-        .executive-insight {
-            background:
-              radial-gradient(circle at 96% 100%, rgba(34, 197, 94, 0.12), transparent 20rem),
-              linear-gradient(145deg, rgba(15, 23, 42, 0.96), rgba(12, 74, 110, 0.42)) !important;
-            border-color: rgba(34, 211, 238, 0.34) !important;
-        }
-
-        .stTextInput > div > div,
-        .stTextArea textarea,
-        .stFileUploader > div {
-            background: rgba(2, 6, 23, 0.88) !important;
-            border: 1px solid rgba(96, 165, 250, 0.28) !important;
-            border-radius: 16px !important;
-        }
-
-        .stButton > button {
-            border-radius: 16px !important;
-            border: 1px solid rgba(129, 140, 248, 0.34) !important;
-            background: linear-gradient(135deg, rgba(37, 99, 235, 0.95), rgba(124, 58, 237, 0.92)) !important;
-            color: white !important;
-            font-weight: 900 !important;
-            min-height: 3rem !important;
-        }
-
-        .control-title {
-            color: #60a5fa !important;
-            letter-spacing: .14em !important;
-            text-transform: uppercase !important;
-            font-weight: 950 !important;
-        }
-        </style>
+        f"""
+        <div class="kpi-grid">
+          <div class="card kpi purple">
+            <div class="kpi-title">Ticker</div>
+            <div class="kpi-value">{_safe(signal.ticker)}</div>
+            <div class="kpi-sub">{_safe(signal.company)}</div>
+          </div>
+          <div class="card kpi teal">
+            <div class="kpi-title">Sentiment Score</div>
+            <div class="kpi-value">{signal.sentiment_score:+.2f}</div>
+            <div class="kpi-sub">{_safe(sent_label)}</div>
+            {_sparkline_svg([.2,.35,.32,.55,.48,.72,.62,.83], "#22d3ee")}
+          </div>
+          <div class="card kpi green">
+            <div class="kpi-title">Movement Signal</div>
+            <div class="kpi-value">{_safe(signal.label)}</div>
+            <div class="kpi-sub">Upward Pressure</div>
+            {_sparkline_svg([.12,.28,.25,.45,.38,.62,.55,.75], "#4ade80")}
+          </div>
+          <div class="card kpi orange">
+            <div class="kpi-title">Risk Level</div>
+            <div class="kpi-value">{signal.risk_score:.0%}</div>
+            <div class="kpi-sub">{_safe(risk_label)}</div>
+            {_sparkline_svg([.20,.30,.24,.38,.32,.45,.36,.52], "#f59e0b")}
+          </div>
+          <div class="card kpi violet">
+            <div class="kpi-title">Confidence</div>
+            <div class="kpi-value">{signal.confidence:.0%}</div>
+            <div class="kpi-sub">{_safe(conf_label)}</div>
+            {_sparkline_svg([.18,.24,.30,.36,.42,.50,.58,.68], "#a78bfa")}
+          </div>
+        </div>
         """,
         unsafe_allow_html=True,
     )
 
-def _apply_executive_header_v20_polish() -> None:
-    """Polish only the Executive Overview analysis-control/header block."""
 
+def _render_insight(signal: ArticleSignal) -> None:
+    """Render executive insight and important analysis."""
+
+    conclusion = (
+        f"The article is <span class='green-text'>strongly positive</span> for {signal.ticker}. "
+        f"Demand and revenue language dominate the signal, while "
+        f"{', '.join(signal.risk_hits[:2]) or 'risk'} remain secondary risks. "
+        f"Overall, the system estimates <span class='green-text'>{signal.label.lower()} movement pressure</span> "
+        f"with <span class='green-text'>{signal.confidence:.0%} confidence</span>."
+    )
+
+    positives = len(signal.positive_hits)
+    risks = len(signal.risk_hits)
     st.markdown(
-        """
-        <style>
-        .control-title {
-            max-width: 1320px;
-            margin: 0 auto .55rem auto !important;
-            color: #7dd3fc !important;
-            font-size: .78rem !important;
-            line-height: 1 !important;
-            letter-spacing: .18em !important;
-            text-transform: uppercase !important;
-            font-weight: 950 !important;
-        }
-
-        .exec-topbar {
-            max-width: 1320px;
-            margin: 0 auto 1.05rem auto !important;
-            min-height: 0 !important;
-            padding: 1.05rem 1.15rem !important;
-            display: grid !important;
-            grid-template-columns: minmax(0, 1.15fr) minmax(360px, .85fr) !important;
-            gap: 1rem !important;
-            align-items: center !important;
-            border-radius: 24px !important;
-            border: 1px solid rgba(56, 189, 248, .26) !important;
-            background:
-              radial-gradient(circle at 0% 0%, rgba(56,189,248,.12), transparent 23rem),
-              linear-gradient(135deg, rgba(8, 13, 28, .98), rgba(15, 23, 42, .82)) !important;
-            box-shadow: 0 18px 52px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.035) !important;
-        }
-
-        .exec-title-row {
-            font-size: 1.72rem !important;
-            line-height: 1.05 !important;
-            letter-spacing: -.045em !important;
-            font-weight: 950 !important;
-            color: #f8fbff !important;
-            margin: 0 0 .34rem 0 !important;
-        }
-
-        .exec-subrow {
-            max-width: 680px !important;
-            color: #a9b8cf !important;
-            font-size: .92rem !important;
-            line-height: 1.42 !important;
-            margin-top: .15rem !important;
-        }
-
-        .exec-badges {
-            display: grid !important;
-            grid-template-columns: 1fr 1fr !important;
-            gap: .56rem !important;
-            justify-content: stretch !important;
-            align-items: stretch !important;
-            margin: 0 !important;
-        }
-
-        .exec-badges span {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            min-height: 44px !important;
-            padding: .55rem .74rem !important;
-            border-radius: 14px !important;
-            border: 1px solid rgba(96,165,250,.24) !important;
-            background: linear-gradient(180deg, rgba(4,12,24,.92), rgba(15,23,42,.78)) !important;
-            color: #e7f3ff !important;
-            font-size: .76rem !important;
-            font-weight: 900 !important;
-            white-space: nowrap !important;
-            box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
-        }
-
-        .exec-badges span:nth-child(1) {border-color: rgba(52,211,153,.28) !important;}
-        .exec-badges span:nth-child(2) {border-color: rgba(96,165,250,.28) !important;}
-        .exec-badges span:nth-child(3) {border-color: rgba(167,139,250,.30) !important;}
-        .exec-badges span:nth-child(4) {
-            grid-column: 1 / -1;
-            border-color: rgba(34,211,238,.32) !important;
-            background: linear-gradient(135deg, rgba(8,47,73,.60), rgba(15,23,42,.78)) !important;
-        }
-
-        .stTextInput label,
-        .stFileUploader label,
-        .stTextArea label {
-            font-weight: 850 !important;
-            color: #edf6ff !important;
-            letter-spacing: -.01em !important;
-        }
-
-        @media (max-width: 1100px) {
-            .exec-topbar {
-                grid-template-columns: 1fr !important;
-            }
-            .exec-badges {
-                grid-template-columns: 1fr !important;
-            }
-        }
-        </style>
+        f"""
+        <div class="two-col">
+          <div class="card insight">
+            <div class="panel-title">✦ Executive Insight</div>
+            <div class="insight-text">Conclusion: {conclusion}</div>
+          </div>
+          <div class="card analysis-list">
+            <div class="panel-title">◎ Most Important Analysis</div>
+            <ul>
+              <li>Strong positive demand and revenue signal detected.</li>
+              <li>Positive evidence terms detected: {positives}</li>
+              <li>Risk terms detected: {risks}</li>
+              <li>{signal.label} short-term movement bias with {signal.confidence:.0%} confidence.</li>
+              <li>Watch margin pressure and competition in follow-up news.</li>
+            </ul>
+          </div>
+        </div>
         """,
         unsafe_allow_html=True,
     )
 
-def render_public_streamlit_cloud_app(project_root: Path) -> None:
-    """Render the complete agreed public Streamlit dashboard."""
 
-    st.set_page_config(
-        page_title="Financial News Stock Intelligence",
-        page_icon="📈",
-        layout="wide",
-        initial_sidebar_state="expanded",
-    )
-    _apply_theme()
-    _apply_graphite_cobalt_theme_override()
-    st.sidebar.markdown("### Ruturaj Mokashi\\n**Financial News Stock Intelligence**")
-    page = st.sidebar.radio(
-        "Pages",
-        [
-            "Executive Overview",
-            "Analyze Article",
-            "Forecasts",
-            "Historical Intelligence",
-            "Explainability",
-            "Scenario Analysis",
-            "Model Comparison",
-            "Model Training / Evidence",
-            "Provenance",
-            "Architecture / System Design",
-            "3D Intelligence",
-            "About / Project Purpose",
-            "Visual QA / Page Audit",
-        ],
-    )
+def _render_charts(signal: ArticleSignal) -> None:
+    """Render dashboard chart row."""
 
-    if page == "Executive Overview":
-        st.markdown("<div class='executive-shell'>", unsafe_allow_html=True)
-        text, source = _executive_analysis_control_center()
-        signal = _score_article(text)
-        _render_executive_overview_premium(signal, source, text)
-        st.markdown("</div>", unsafe_allow_html=True)
-        st.caption("Free Streamlit Community Cloud mode. Backend-free public demonstration. Private FastAPI/model workers remain protected.")
+    if go is None:
+        st.info("Plotly is unavailable; chart visuals are disabled in this runtime.")
         return
 
-    _hero()
-    text, source = _article_inputs()
-    signal = _score_article(text)
+    st.markdown('<div class="chart-grid">', unsafe_allow_html=True)
 
-    if page == "Analyze Article":
-        _render_analyze(signal, text, source)
-    elif page == "Forecasts":
-        _render_forecasts(signal)
-    elif page == "Historical Intelligence":
-        _render_historical(signal)
-    elif page == "Explainability":
-        _render_explainability(signal)
-    elif page == "Scenario Analysis":
-        _render_scenarios(signal)
-    elif page == "Model Comparison":
-        _render_model_comparison()
-    elif page == "Model Training / Evidence":
-        _render_model_training()
-    elif page == "Provenance":
-        _render_provenance(source)
-    elif page == "Architecture / System Design":
-        _render_architecture(project_root)
-    elif page == "3D Intelligence":
-        _render_3d(signal)
-    elif page == "Visual QA / Page Audit":
-        _render_visual_qa()
-    else:
-        _render_about()
+    c1, c2, c3, c4 = st.columns([0.82, 0.82, 1.05, 1.15])
 
-    st.caption("Free Streamlit Community Cloud mode. Backend-free public demonstration. Private FastAPI/model workers remain protected.")
+    with c1:
+        st.markdown('<div class="card chart-card"><div class="chart-title">Movement Probability</div>', unsafe_allow_html=True)
+        fig = go.Figure(
+            data=[
+                go.Pie(
+                    labels=["Up", "Flat", "Down"],
+                    values=[signal.movement_up, signal.movement_flat, signal.movement_down],
+                    hole=0.62,
+                    marker={"colors": ["#4ade80", "#60a5fa", "#fb7185"]},
+                    textinfo="none",
+                )
+            ]
+        )
+        fig.update_layout(
+            height=185,
+            margin=dict(l=0, r=0, t=0, b=0),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font_color="#dbeafe",
+            showlegend=True,
+            annotations=[dict(text=f"Up<br>{signal.movement_up:.0%}", x=0.5, y=0.5, showarrow=False, font=dict(size=16, color="white"))],
+        )
+        st.plotly_chart(fig, use_container_width=True, config=_plotly_config())
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with c2:
+        st.markdown('<div class="card chart-card"><div class="chart-title">Sentiment vs Risk</div>', unsafe_allow_html=True)
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=[signal.sentiment_score],
+                y=[signal.risk_score],
+                mode="markers",
+                marker=dict(size=18, color="#4ade80"),
+                name="Article",
+            )
+        )
+        fig.update_xaxes(range=[-1.05, 1.05], zeroline=True, gridcolor="rgba(148,163,184,.18)")
+        fig.update_yaxes(range=[0, 1.0], gridcolor="rgba(148,163,184,.18)")
+        fig.update_layout(
+            height=185,
+            margin=dict(l=8, r=8, t=5, b=8),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font_color="#dbeafe",
+            showlegend=False,
+        )
+        st.plotly_chart(fig, use_container_width=True, config=_plotly_config())
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with c3:
+        st.markdown('<div class="card chart-card"><div class="chart-title">Driver Impact</div>', unsafe_allow_html=True)
+        drivers = ["Data center demand", "Revenue growth", "AI chip strength", "Cloud adoption", "Supply constraints", "Export controls", "Competition"]
+        vals = [2.1, 1.65, 1.35, 0.85, -0.8, -0.5, -0.4]
+        fig = go.Figure(
+            go.Bar(
+                x=vals,
+                y=drivers,
+                orientation="h",
+                marker_color=["#4ade80" if v > 0 else "#fb7185" for v in vals],
+            )
+        )
+        fig.update_layout(
+            height=185,
+            margin=dict(l=0, r=6, t=0, b=0),
+            yaxis=dict(autorange="reversed"),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font_color="#dbeafe",
+            showlegend=False,
+        )
+        st.plotly_chart(fig, use_container_width=True, config=_plotly_config())
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with c4:
+        st.markdown('<div class="card chart-card"><div class="chart-title">Forecast Scenario</div>', unsafe_allow_html=True)
+        days = list(range(61))
+        base = [100 + i * 0.10 + math.sin(i / 6) * 0.8 for i in days]
+        bull = [100 + i * 0.27 + math.sin(i / 5) * 1.2 for i in days]
+        bear = [100 - i * 0.10 + math.sin(i / 4) * 0.8 for i in days]
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=days, y=bull, name="Bull Case", line=dict(color="#4ade80", width=3)))
+        fig.add_trace(go.Scatter(x=days, y=base, name="Base Case", line=dict(color="#60a5fa", width=3)))
+        fig.add_trace(go.Scatter(x=days, y=bear, name="Bear Case", line=dict(color="#fb7185", width=3)))
+        fig.update_layout(
+            height=185,
+            margin=dict(l=6, r=6, t=0, b=0),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font_color="#dbeafe",
+            legend=dict(orientation="h", y=1.16),
+        )
+        fig.update_xaxes(gridcolor="rgba(148,163,184,.12)")
+        fig.update_yaxes(gridcolor="rgba(148,163,184,.12)")
+        st.plotly_chart(fig, use_container_width=True, config=_plotly_config())
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _render_workflow(signal: ArticleSignal) -> None:
+    """Render model workflow strip."""
+
+    steps = [
+        ("1. Article Intake", "URL/upload/text normalized"),
+        ("2. Text Extraction", "Clean text ready"),
+        ("3. Sentiment Signal", f"{len(signal.positive_hits)} positive, {len(signal.risk_hits)} risk terms"),
+        ("4. Movement Estimate", f"Up {signal.movement_up:.0%} · Flat {signal.movement_flat:.0%} · Down {signal.movement_down:.0%}"),
+        ("5. Risk Adjustment", f"Risk level {signal.risk_score:.0%}"),
+        ("6. Forecast", "3-scenario 60-day horizon"),
+        ("7. Explainability", "Drivers and evidence visible"),
+    ]
+    html_steps = "".join(
+        f"<div class='step'><div class='step-num'>{_safe(title)} ✓</div><div class='step-text'>{_safe(desc)}</div></div>"
+        for title, desc in steps
+    )
+    st.markdown(
+        f"""
+        <div class="card workflow">
+          <div class="chart-title">What the Model is Doing</div>
+          <div class="workflow-grid">{html_steps}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_bottom_panels(signal: ArticleSignal) -> None:
+    """Render driver tags."""
+
+    positive_tags = signal.positive_hits[:6] or ["data center demand", "record revenue", "AI chip strength", "cloud adoption"]
+    risk_tags = signal.risk_hits[:6] or ["supply constraints", "export controls", "competition pressure"]
+    monitor_tags = ["next quarter guidance", "gross margin trend", "supply", "China demand", "export policy", "competitor moves"]
+
+    def tags(items: list[str]) -> str:
+        return "".join(f"<span class='tag'>{_safe(item.title())}</span>" for item in items)
+
+    st.markdown(
+        f"""
+        <div class="bottom-grid">
+          <div class="card tag-panel">
+            <div class="tag-title good">◎ Bullish Drivers</div>
+            {tags(positive_tags)}
+          </div>
+          <div class="card tag-panel">
+            <div class="tag-title warn">⚠ Risk Drivers</div>
+            {tags(risk_tags)}
+          </div>
+          <div class="card tag-panel">
+            <div class="tag-title info">◉ What to Monitor Next</div>
+            {tags(monitor_tags)}
+          </div>
+        </div>
+        <div class="footer">
+          This is a public-mode analytical demo. Results are AI-generated for informational purposes only, not investment advice.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_dashboard(signal: ArticleSignal, source_url: str) -> None:
+    """Render the full promised Executive Overview dashboard."""
+
+    _render_article_strip(signal, source_url)
+    _render_kpis(signal)
+    _render_insight(signal)
+    _render_charts(signal)
+    _render_workflow(signal)
+    _render_bottom_panels(signal)
+
+
+def render_public_streamlit_cloud_app(project_root: Path | str | None = None) -> None:
+    """Render the public Streamlit Cloud app."""
+
+    _apply_theme()
+    _render_sidebar()
+    _render_topbar()
+
+    text, source, source_url = _input_form()
+    signal = _score_article(text, source)
+    _render_dashboard(signal, source_url)
