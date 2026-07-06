@@ -449,93 +449,104 @@ def _initialize_exec_state() -> None:
 
 
 def _executive_analysis_control_center() -> tuple[str, str]:
-    """Render visible article-entry controls and return analyzed text/source."""
+    """Collect article input with stable URL state and no silent sample fallback."""
 
-    st.markdown(
-        "<div class='control-title'>Analysis Control Center</div>",
-        unsafe_allow_html=True,
+    st.session_state.setdefault("executive_article_url", "")
+    st.session_state.setdefault("executive_article_text", "")
+
+    url_col, upload_col = st.columns([1.35, 1.0])
+
+    with url_col:
+        article_url = st.text_input(
+            "Article URL",
+            placeholder="https://example.com/company-earnings-news",
+            key="executive_article_url",
+        )
+
+    with upload_col:
+        uploaded_file = st.file_uploader(
+            "Upload article",
+            type=["txt", "md", "csv", "json", "pdf"],
+            key="executive_article_upload",
+        )
+
+    pasted_text = st.text_area(
+        "Paste article / headline / news text",
+        placeholder="Paste article text here. Leave empty when using an Article URL.",
+        height=112,
+        key="executive_article_text",
     )
 
-    _initialize_exec_state()
+    button_col_1, button_col_2, button_col_3, status_col = st.columns([0.9, 0.9, 0.7, 2.3])
 
-    with st.container():
+    with button_col_1:
+        analyze_clicked = st.button("Analyze", type="primary", width="stretch")
+    with button_col_2:
+        sample_clicked = st.button("Use sample", width="stretch")
+    with button_col_3:
+        clear_clicked = st.button("Clear", width="stretch")
+    with status_col:
         st.markdown(
-            "<div class='exec-control'><div class='exec-control-head'>"
-            "<div><div class='exec-title-row'>📈 Executive Overview</div>"
-            "<div class='exec-subrow'>Financial News → Sentiment → Movement → Forecast → Explainability</div>"
-            "<div class='control-note'>Enter a URL, upload an article, or paste text. Click Analyze to refresh the conclusion, charts, workflow, and drivers.</div></div>"
-            "<div class='exec-badges'><span>☁ Public Cloud Mode</span><span>🔗 Article URL Enabled</span>"
-            "<span>⇧ Upload Enabled</span><span>👁 Model Workflow Visible</span></div></div>",
+            "<div class='input-status-pill'>URL first · upload second · paste third · sample only on click</div>",
             unsafe_allow_html=True,
         )
 
-        c1, c2 = st.columns([1.35, 1.0])
-        with c1:
-            url = st.text_input("Article URL", placeholder="https://example.com/company-earnings-news", key="exec_article_url")
-        with c2:
-            uploaded = st.file_uploader("Upload article", type=["txt", "md", "csv", "json", "pdf"], key="exec_article_upload")
+    if clear_clicked:
+        st.session_state["executive_article_url"] = ""
+        st.session_state["executive_article_text"] = ""
+        st.info("Inputs cleared. Enter a URL, upload an article, paste text, or click Use sample.")
+        st.stop()
 
-        pasted = st.text_area(
-            "Paste article / headline / news text",
-            key="exec_article_text",
-            height=118,
-            help="This text is used when no uploaded file is present and URL fetch is unavailable.",
-        )
+    if sample_clicked:
+        st.success("Sample article loaded.")
+        return _BASE_EXAMPLE, "sample article"
 
-        b1, b2, b3, b4 = st.columns([.8, .8, .7, 2.2])
-        analyze = b1.button("Analyze", type="primary", use_container_width=True)
-        sample = b2.button("Use sample", use_container_width=True)
-        clear = b3.button("Clear", use_container_width=True)
-        b4.markdown(
-            "<div class='go-deeper'><span>updates conclusion</span><span>updates charts</span>"
-            "<span>updates drivers</span><span>updates workflow</span></div>",
-            unsafe_allow_html=True,
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
+    clean_url = (article_url or "").strip()
+    clean_pasted = (pasted_text or "").strip()
 
-    if sample:
-        st.session_state["exec_article_url"] = ""
-        st.session_state["exec_article_text"] = _BASE_EXAMPLE
-        st.session_state["exec_analyzed_text"] = _BASE_EXAMPLE
-        st.session_state["exec_analyzed_source"] = "sample article"
-        st.session_state["exec_last_action"] = "Sample article loaded"
-        st.rerun()
+    if clean_url:
+        if not analyze_clicked:
+            st.info("URL entered. Click Analyze to fetch and analyze it.")
+            st.stop()
 
-    if clear:
-        st.session_state["exec_article_url"] = ""
-        st.session_state["exec_article_text"] = ""
-        st.session_state["exec_analyzed_text"] = _BASE_EXAMPLE
-        st.session_state["exec_analyzed_source"] = "sample article"
-        st.session_state["exec_last_action"] = "Inputs cleared; sample restored"
-        st.rerun()
+        try:
+            fetched_text = _fetch_url_text(clean_url)
+            st.success("Article URL fetched and analyzed.")
+            return fetched_text, f"URL: {clean_url}"
+        except Exception as exc:
+            st.warning(
+                "Article URL could not be fetched from public Streamlit Cloud. "
+                f"Reason: {exc}. Paste or upload the article text instead."
+            )
+            if clean_pasted:
+                return clean_pasted, "pasted fallback after URL fetch failure"
+            st.stop()
 
-    if analyze:
-        source = "pasted text"
-        text = (pasted or "").strip()
-        upload_text = _read_upload(uploaded)
-        if upload_text.strip():
-            source = f"uploaded file: {uploaded.name}"
-            text = upload_text
-        elif url.strip():
-            try:
-                fetched = _fetch_url_text(url)
-                if fetched.strip():
-                    source = f"URL: {url.strip()}"
-                    text = fetched
-                else:
-                    source = "pasted text"
-            except Exception as exc:
-                st.warning(f"URL fetch failed in public mode: {exc}. Using pasted text instead.")
-                source = "pasted text after URL fetch failure"
-        if not text:
-            text = _BASE_EXAMPLE
-            source = "sample article"
-        st.session_state["exec_analyzed_text"] = text
-        st.session_state["exec_analyzed_source"] = source
-        st.session_state["exec_last_action"] = f"Analyzed from {source}"
-        st.rerun()
+    if uploaded_file is not None:
+        if not analyze_clicked:
+            st.info("File uploaded. Click Analyze to process it.")
+            st.stop()
 
-    return st.session_state["exec_analyzed_text"], st.session_state["exec_analyzed_source"]
+        try:
+            raw = uploaded_file.read()
+            uploaded_text = raw.decode("utf-8", errors="ignore").strip()
+        except Exception:
+            uploaded_text = ""
+
+        if uploaded_text:
+            return uploaded_text, f"uploaded file: {uploaded_file.name}"
+
+        st.warning("Uploaded file could not be read as text.")
+        st.stop()
+
+    if clean_pasted:
+        if not analyze_clicked:
+            st.info("Pasted text detected. Click Analyze to process it.")
+            st.stop()
+        return clean_pasted, "pasted article"
+
+    st.info("Enter an Article URL, upload an article, paste text, or click Use sample.")
+    st.stop()
 
 
 def _article_inputs() -> tuple[str, str]:
