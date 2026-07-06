@@ -318,34 +318,46 @@ def _infer_ticker(text: str) -> tuple[str, str]:
     return "NEWS", "Article"
 
 
-def _score_article(text: str) -> ArticleSignal:
+def _score_article(text: str | None) -> ArticleSignal:
     """Score text with transparent public heuristics that mimic the model workflow."""
 
-    clean = text.strip() or _BASE_EXAMPLE
+    if text is None:
+        text = ""
+    if not isinstance(text, str):
+        text = str(text)
+
+    clean = re.sub(r"\s+", " ", text).strip()
+    if not clean:
+        clean = _BASE_EXAMPLE
+
     tokens = _tokens(clean)
     positive = _hits(clean, _POSITIVE_TERMS)
     negative = _hits(clean, _NEGATIVE_TERMS)
     risk = _hits(clean, _RISK_TERMS)
     ticker, company = _infer_ticker(clean)
 
-    positive_weight = len(positive) * 1.12
-    negative_weight = len(negative) * 1.08
-    risk_weight = len(risk) * 0.70
+    positive_weight = len(positive) * 1.15
+    negative_weight = len(negative) * 1.10
+    risk_weight = len(risk) * 0.82
     length_dampener = min(1.0, max(0.42, len(tokens) / 85))
 
     raw_sentiment = positive_weight - negative_weight
     sentiment_score = max(-1.0, min(1.0, raw_sentiment / 7.0))
-    risk_score = max(0.05, min(0.95, (risk_weight + negative_weight * 0.35) / 7.5))
+    risk_score = max(0.05, min(0.95, (risk_weight + negative_weight * 0.4) / 8.0))
 
-    up = 0.34 + sentiment_score * 0.27 - risk_score * 0.06
-    down = 0.27 - sentiment_score * 0.19 + risk_score * 0.17
+    up = 0.34 + sentiment_score * 0.26 - risk_score * 0.07
+    down = 0.28 - sentiment_score * 0.20 + risk_score * 0.18
     flat = 1.0 - up - down
 
     values = [max(0.05, up), max(0.05, flat), max(0.05, down)]
     total = sum(values)
     movement_up, movement_flat, movement_down = [v / total for v in values]
 
-    confidence = min(0.94, max(0.54, 0.57 + abs(sentiment_score) * 0.22 + length_dampener * 0.11))
+    confidence = min(
+        0.92,
+        max(0.55, 0.58 + abs(sentiment_score) * 0.22 + length_dampener * 0.12),
+    )
+
     if movement_up > movement_down + 0.08:
         label = "Bullish / positive movement pressure"
     elif movement_down > movement_up + 0.08:
@@ -1148,6 +1160,64 @@ def _render_visual_qa() -> None:
     st.markdown("<div class='good'>Acceptance target: the live public app is not complete unless these pages are visible, article URL/upload/text work, and the viewer can see what the model-style workflow is doing.</div>", unsafe_allow_html=True)
 
 
+
+def _apply_graphite_cobalt_theme_override() -> None:
+    """Apply the cleaner graphite/cobalt public app theme override."""
+
+    st.markdown(
+        """
+        <style>
+        [data-testid="stAppViewContainer"] {
+            background:
+                radial-gradient(circle at 10% 12%, rgba(34, 211, 238, 0.08), transparent 30rem),
+                radial-gradient(circle at 90% 8%, rgba(129, 140, 248, 0.10), transparent 28rem),
+                linear-gradient(180deg, #030712 0%, #08111f 48%, #0b1425 100%) !important;
+        }
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #02050d 0%, #050d1a 52%, #07111f 100%) !important;
+            border-right: 1px solid rgba(125, 211, 252, 0.14) !important;
+        }
+        [data-testid="stHeader"] {
+            background: rgba(3, 7, 18, 0.72) !important;
+            border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+            backdrop-filter: blur(16px);
+        }
+        .exec-topbar,
+        .article-strip,
+        .exec-card,
+        .important-analysis,
+        .workflow-wrap,
+        .driver-panel {
+            background: linear-gradient(145deg, rgba(10,16,30,.94), rgba(14,22,40,.74)) !important;
+            border-color: rgba(96,165,250,.16) !important;
+            box-shadow: 0 22px 58px rgba(0,0,0,.24) !important;
+        }
+        .executive-insight {
+            background:
+              radial-gradient(circle at 96% 100%, rgba(34,197,94,.10), transparent 20rem),
+              linear-gradient(145deg, rgba(7,79,99,.46), rgba(10,16,30,.95)) !important;
+            border-color: rgba(34,211,238,.24) !important;
+        }
+        .stTextInput > div > div,
+        .stTextArea textarea,
+        .stFileUploader > div {
+            background: rgba(4, 12, 24, 0.86) !important;
+            border: 1px solid rgba(96,165,250,.22) !important;
+            border-radius: 18px !important;
+        }
+        .stButton > button {
+            border-radius: 16px !important;
+            border: 1px solid rgba(129,140,248,.28) !important;
+            background: linear-gradient(135deg, rgba(34,211,238,.20), rgba(129,140,248,.22)) !important;
+            color: white !important;
+            font-weight: 850 !important;
+            min-height: 3rem !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 def render_public_streamlit_cloud_app(project_root: Path) -> None:
     """Render the complete agreed public Streamlit dashboard."""
 
@@ -1158,6 +1228,7 @@ def render_public_streamlit_cloud_app(project_root: Path) -> None:
         initial_sidebar_state="expanded",
     )
     _apply_theme()
+    _apply_graphite_cobalt_theme_override()
     st.sidebar.markdown("### Ruturaj Mokashi\\n**Financial News Stock Intelligence**")
     page = st.sidebar.radio(
         "Pages",
