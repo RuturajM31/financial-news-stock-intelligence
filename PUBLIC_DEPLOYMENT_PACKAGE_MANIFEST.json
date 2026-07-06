@@ -1,0 +1,29 @@
+{
+  "branch": "project-foundation-streamlit-closure",
+  "created_at_utc": "2026-07-06T06:55:41.012748+00:00",
+  "external_app_created": false,
+  "free_deployment_target": "Streamlit Community Cloud",
+  "free_deployment_url_pattern": "https://*.streamlit.app",
+  "git_operations_performed": false,
+  "image_registry_changed": false,
+  "kubernetes_resources_changed": false,
+  "package": "Free Public Streamlit Deployment Strike Package 14.3",
+  "paid_services_required": false,
+  "precondition_commit": "2f9747a",
+  "precondition_sha256": {
+    ".github/dependabot.yml": "0158321d81583f7ec87138e722256d705ebb51d3f89ebe07bfbd2aef8e63aee6",
+    ".github/pull_request_template.md": "298b8c15c78a5f63eaba2d5ba355ad87fe838800c8717b43ad48376fc16cbaa0",
+    ".github/workflows/ci.yml": "ee8de5ef028d5e420ff1ce5fe367389d9bd1cf071c8085abb21cff99421ffbeb",
+    ".github/workflows/codeql.yml": "f569f79d7a43c33f946a67763351a23fbd4c3ba9ab87d54de0bfb9b56032e1d0",
+    "CI_CD_SECURITY_PACKAGE_MANIFEST.json": "ccad5751783944e52054797ae8330ae10e7e46925c3b95de3384a4a391f20008",
+    "SECURITY.md": "94234fd425139a4a5fd33973b042f595e83dbac7590b453a992f46f6ff25a1dc",
+    "docs/CI_CD_SECURITY_CONTRACT.md": "89e6501617b5573eda686463e078ec2f12d10b0852840aafb4c48483f111b22f",
+    "scripts/verify_ci_cd_security.py": "1976096860d142f04ea33f839a122f2e680eec2c6b62d2c91fec5f74db35fec7",
+    "tests/test_ci_cd_security.py": "a4d9c1dea86a41324f9ac1b626ca8870698485c062a688fc014f26b2674fba33"
+  },
+  "public_deployment_prepared": true,
+  "streamlit_branch": "project-foundation-streamlit-closure",
+  "streamlit_entrypoint": "app/streamlit_app.py",
+  "streamlit_repository": "RuturajM31/financial-news-stock-intelligence",
+  "version": "14.3"
+}
