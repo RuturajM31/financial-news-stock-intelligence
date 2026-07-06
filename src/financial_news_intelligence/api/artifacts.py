@@ -318,7 +318,16 @@ class ArtifactRegistry:
                 "The DistilBERT model directory is missing.",
                 "Restore the verified sentiment comparison report.",
             )
-        model_directory = Path(model_directory_value).expanduser().resolve()
+        configured_model_directory = os.getenv("FNI_SENTIMENT_MODEL_DIRECTORY")
+        if configured_model_directory:
+            # Container and orchestrated deployments use a relative, project-owned
+            # path because recorded training evidence contains the original local
+            # workstation path. _safe_path rejects absolute paths and traversal.
+            model_directory = _safe_path(
+                self.project_root, configured_model_directory.strip()
+            )
+        else:
+            model_directory = Path(model_directory_value).expanduser().resolve()
         if self.project_root not in model_directory.parents:
             raise ApiProblem(
                 503,
