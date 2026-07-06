@@ -1,0 +1,97 @@
+{
+  "registry_version": "1.0",
+  "sources": [
+    {
+      "id": "sec_edgar",
+      "name": "U.S. Securities and Exchange Commission",
+      "categories": [
+        "company_identifiers",
+        "filings",
+        "fundamentals"
+      ],
+      "domains": [
+        "sec.gov"
+      ],
+      "verification_status": "verified_primary",
+      "allowed_purposes": [
+        "training",
+        "investment_scenarios",
+        "reporting"
+      ],
+      "requires_cross_check": false
+    },
+    {
+      "id": "nyse",
+      "name": "New York Stock Exchange",
+      "categories": [
+        "trading_calendar",
+        "market_hours"
+      ],
+      "domains": [
+        "nyse.com"
+      ],
+      "verification_status": "verified_primary",
+      "allowed_purposes": [
+        "training",
+        "investment_scenarios",
+        "reporting"
+      ],
+      "requires_cross_check": false
+    },
+    {
+      "id": "nasdaq",
+      "name": "Nasdaq",
+      "categories": [
+        "trading_calendar",
+        "market_hours",
+        "market_reference"
+      ],
+      "domains": [
+        "nasdaq.com",
+        "nasdaqtrader.com"
+      ],
+      "verification_status": "verified_primary",
+      "allowed_purposes": [
+        "training",
+        "investment_scenarios",
+        "reporting"
+      ],
+      "requires_cross_check": false
+    },
+    {
+      "id": "official_investor_relations",
+      "name": "Official Company Investor Relations",
+      "categories": [
+        "company_news",
+        "earnings_releases"
+      ],
+      "domains": [],
+      "verification_status": "verified_primary",
+      "allowed_purposes": [
+        "training",
+        "investment_scenarios",
+        "reporting"
+      ],
+      "requires_cross_check": false,
+      "manual_domain_approval": true
+    },
+    {
+      "id": "stooq",
+      "name": "Stooq Market Data",
+      "categories": [
+        "historical_prices"
+      ],
+      "domains": [
+        "stooq.com",
+        "stooq.pl"
+      ],
+      "verification_status": "verified_secondary",
+      "allowed_purposes": [
+        "training",
+        "investment_scenarios",
+        "reporting"
+      ],
+      "requires_cross_check": true
+    }
+  ]
+}

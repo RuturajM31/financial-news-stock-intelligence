@@ -1,0 +1,66 @@
+# Operating-system files
+.DS_Store
+Thumbs.db
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Local Python environments
+.venv/
+.venv-*/
+venv/
+env/
+
+# Local editor configuration
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Secrets and local environment configuration
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Strike-package transaction data and local evidence
+.strike_backups/
+*.lock
+*.log
+
+# Temporary and manually retained source backups
+*.before_*
+*.bak
+*.backup
+*.orig
+
+# Downloaded, cached, private, and generated datasets
+data/cache/
+data/interim/
+data/private/
+data/processed/
+data/raw/
+
+# Large transformer training outputs
+artifacts/models/bert_smoke/
+artifacts/models/bert_sentiment/
+artifacts/models/bert_lora_sentiment/
+artifacts/models/distilbert_smoke/
+artifacts/models/distilbert_sentiment/
+
+# Packaging and build outputs
+build/
+dist/
+*.egg-info/

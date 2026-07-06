@@ -1,0 +1,27 @@
+{
+  "files": [
+    {
+      "path": "src/financial_news_intelligence/models/bert_training.py",
+      "sha256": "b9ada0776ec7266d5e5d81e8f20365024bd754aebac63dae1f2d326c773288da",
+      "size_bytes": 4860
+    },
+    {
+      "path": "tests/test_bert_training.py",
+      "sha256": "9f207d8a246bf1d0fd9de259487f92031f0b7fb6ad4f4dab605ad7bc028f9722",
+      "size_bytes": 7230
+    },
+    {
+      "path": "scripts/run_bert_test_package.sh",
+      "sha256": "ee8a41cbc3c907ed5965bdaa28f8636c374163cdda5855e6f57ebb7ff992a566",
+      "size_bytes": 2730
+    },
+    {
+      "path": "README_BERT_TEST_PACKAGE.md",
+      "sha256": "9ddcc4b0e0a37d32ff7b2df1f816d1bdfe7e76aacf11562dd9b97cf46b2a338a",
+      "size_bytes": 1663
+    }
+  ],
+  "generated_at_utc": "2026-07-03T10:26:01.182038+00:00",
+  "package_name": "bert_full_strike_payload",
+  "purpose": "Install and verify the compact BERT training wrapper"
+}

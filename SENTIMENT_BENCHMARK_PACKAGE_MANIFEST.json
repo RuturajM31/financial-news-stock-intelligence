@@ -1,0 +1,53 @@
+{
+  "content_file_count": 9,
+  "files": [
+    {
+      "path": "scripts/run_full_bert.py",
+      "sha256": "31ed97fafdb7e5777666b2437f4ac1b4f21a0e94a31df7a6932b292d6701c9b5",
+      "size_bytes": 32815
+    },
+    {
+      "path": "scripts/run_lora_training.py",
+      "sha256": "9a9ddbec6ff10f7066842a032c89d02a228e46312d81eb2f3b5ee2700621af8b",
+      "size_bytes": 19515
+    },
+    {
+      "path": "scripts/run_sentiment_benchmark_suite.sh",
+      "sha256": "596fca14eddd330d6c6803ac5dcaf1373dfb6104572d0c24f43bb7bc07c3f3c2",
+      "size_bytes": 5443
+    },
+    {
+      "path": "scripts/run_sentiment_comparison.py",
+      "sha256": "3b9712dd6c5cf368da53287e9c8a38e87ba66407e84f550f46e0b6771da12357",
+      "size_bytes": 16294
+    },
+    {
+      "path": "src/financial_news_intelligence/models/lora_training.py",
+      "sha256": "7d208105c099d8519d24430340987aeac5a5626d60bc24087e3e97fd978e0b00",
+      "size_bytes": 39239
+    },
+    {
+      "path": "src/financial_news_intelligence/models/sentiment_comparison.py",
+      "sha256": "5579884b87272b8de36c73d75b3a3e93c3afb509b5eccff92929864710774a49",
+      "size_bytes": 36692
+    },
+    {
+      "path": "tests/test_full_bert_runner.py",
+      "sha256": "d1d93f5dc9382a8dc46b5b94386210fc9d37b0008be0bb244725c6fa8d6fcdb1",
+      "size_bytes": 16178
+    },
+    {
+      "path": "tests/test_lora_training.py",
+      "sha256": "edba6ab6429516ee96d91ceb952d7070155fa96e3a5a919d103481f76caea9c9",
+      "size_bytes": 14818
+    },
+    {
+      "path": "tests/test_sentiment_comparison.py",
+      "sha256": "9b6a202e634744462485d88f8547eb170549516cadd7226145dca13ca7dd409d",
+      "size_bytes": 24124
+    }
+  ],
+  "package_name": "sentiment_benchmark_strike_package",
+  "package_version": "4.0.0",
+  "payload_file_count": 10
+}

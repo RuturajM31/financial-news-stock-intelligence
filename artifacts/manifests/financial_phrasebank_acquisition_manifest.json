@@ -1,0 +1,32 @@
+{
+  "acquired_at": "2026-07-03T06:42:51.068874+00:00",
+  "commercial_use_restricted": true,
+  "configuration": "sentences_75agree",
+  "dataset_name": "Financial PhraseBank",
+  "label_counts": {
+    "Bearish": 420,
+    "Bullish": 887,
+    "Neutral": 2146
+  },
+  "label_mapping": {
+    "negative": "Bearish",
+    "neutral": "Neutral",
+    "positive": "Bullish"
+  },
+  "license": "CC BY-NC-SA 3.0",
+  "limitations": [
+    "Sentence-level sentiment benchmark.",
+    "No publication timestamps.",
+    "No event identifiers.",
+    "No official dataset splits.",
+    "Not a stock-return prediction dataset."
+  ],
+  "processed_checksum_sha256": "612e74ee6b70bc1072e5d617f869ca50adecccc2777f2ac4d0f778fe62f3a916",
+  "processed_file_path": "/Users/ruturajmokashi/Projects/financial-news-stock-intelligence/data/processed/financial_phrasebank/financial_phrasebank_75agree.jsonl",
+  "raw_archive_path": "/Users/ruturajmokashi/Projects/financial-news-stock-intelligence/data/raw/financial_phrasebank/FinancialPhraseBank-v1.0_8d3fe0c36d5f.zip",
+  "raw_checksum_sha256": "0e1a06c4900fdae46091d031068601e3773ba067c7cecb5b0da1dcba5ce989a6",
+  "record_count": 3453,
+  "repository_id": "takala/financial_phrasebank",
+  "repository_revision": "8d3fe0c36d5feec6b3cc5e455b0fcb4820fb9964",
+  "source_file": "data/FinancialPhraseBank-v1.0.zip"
+}

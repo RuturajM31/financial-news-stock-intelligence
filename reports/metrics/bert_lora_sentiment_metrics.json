@@ -1,0 +1,98 @@
+{
+  "experiment_name": "BERT LoRA Financial Sentiment",
+  "test_evaluation": {
+    "confusion_matrix": [
+      [
+        58,
+        1,
+        4
+      ],
+      [
+        12,
+        275,
+        35
+      ],
+      [
+        11,
+        19,
+        103
+      ]
+    ],
+    "label_order": [
+      "Bearish",
+      "Neutral",
+      "Bullish"
+    ],
+    "per_class": {
+      "Bearish": {
+        "f1": 0.8055555555555556,
+        "precision": 0.7160493827160493,
+        "recall": 0.9206349206349206,
+        "support": 63
+      },
+      "Bullish": {
+        "f1": 0.749090909090909,
+        "precision": 0.7253521126760564,
+        "recall": 0.7744360902255639,
+        "support": 133
+      },
+      "Neutral": {
+        "f1": 0.8914100486223663,
+        "precision": 0.9322033898305084,
+        "recall": 0.8540372670807453,
+        "support": 322
+      }
+    }
+  },
+  "test_metrics": {
+    "test_accuracy": 0.8416988416988417,
+    "test_bearish_f1": 0.8055555555555556,
+    "test_bearish_precision": 0.7160493827160493,
+    "test_bearish_recall": 0.9206349206349206,
+    "test_bullish_f1": 0.749090909090909,
+    "test_bullish_precision": 0.7253521126760564,
+    "test_bullish_recall": 0.7744360902255639,
+    "test_loss": 0.4099622368812561,
+    "test_macro_f1": 0.8153521710896103,
+    "test_macro_precision": 0.791201628407538,
+    "test_macro_recall": 0.8497027593137433,
+    "test_neutral_f1": 0.8914100486223663,
+    "test_neutral_precision": 0.9322033898305084,
+    "test_neutral_recall": 0.8540372670807453,
+    "test_runtime": 32.2278,
+    "test_samples_per_second": 16.073,
+    "test_steps_per_second": 1.024,
+    "test_weighted_f1": 0.8444268852615692,
+    "test_weighted_precision": 0.8528039259120662,
+    "test_weighted_recall": 0.8416988416988416
+  },
+  "timing": {
+    "inference_milliseconds_per_record": 62.21583011583012,
+    "test_inference_seconds": 32.2278,
+    "test_records": 518,
+    "training_seconds": 1049.0185054119793
+  },
+  "validation_metrics": {
+    "epoch": 3.0,
+    "eval_accuracy": 0.8433268858800773,
+    "eval_bearish_f1": 0.7801418439716312,
+    "eval_bearish_precision": 0.7051282051282052,
+    "eval_bearish_recall": 0.873015873015873,
+    "eval_bullish_f1": 0.753731343283582,
+    "eval_bullish_precision": 0.7481481481481481,
+    "eval_bullish_recall": 0.7593984962406015,
+    "eval_loss": 0.4653669595718384,
+    "eval_macro_f1": 0.8099577290850711,
+    "eval_macro_precision": 0.7914429949517668,
+    "eval_macro_recall": 0.8348961708528851,
+    "eval_neutral_f1": 0.8959999999999999,
+    "eval_neutral_precision": 0.9210526315789473,
+    "eval_neutral_recall": 0.8722741433021807,
+    "eval_runtime": 30.8152,
+    "eval_samples_per_second": 16.777,
+    "eval_steps_per_second": 1.071,
+    "eval_weighted_f1": 0.8452827946362266,
+    "eval_weighted_precision": 0.8502604939335063,
+    "eval_weighted_recall": 0.8433268858800774
+  }
+}

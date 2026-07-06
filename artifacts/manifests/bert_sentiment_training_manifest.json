@@ -1,0 +1,154 @@
+{
+  "artifact_files": [
+    {
+      "path": "config.json",
+      "sha256": "c64a255d2067c574f9e134d25716d8ae55e40397e5d339a2de467c19bfb51e31",
+      "size_bytes": 844
+    },
+    {
+      "path": "model.safetensors",
+      "sha256": "22b1218e65b3f22358678e977f828b6340345c3146ee80a702d1091eb68e1a93",
+      "size_bytes": 437961724
+    },
+    {
+      "path": "special_tokens_map.json",
+      "sha256": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3",
+      "size_bytes": 125
+    },
+    {
+      "path": "tokenizer.json",
+      "sha256": "79ea220416a57ca8acdf069d71875d5d2ddadef66021aeb6c120a7c546c04344",
+      "size_bytes": 711494
+    },
+    {
+      "path": "tokenizer_config.json",
+      "sha256": "ca57a190797b4d53d209dfd812281e9245a4048076e2e1a2255bd9e6d9282626",
+      "size_bytes": 1191
+    },
+    {
+      "path": "training_args.bin",
+      "sha256": "3b3d8902a2f2e00815ddf91dfe5016cb931c301d3db7a46ce451fab5aba2c9c9",
+      "size_bytes": 5496
+    },
+    {
+      "path": "vocab.txt",
+      "sha256": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3",
+      "size_bytes": 231508
+    }
+  ],
+  "benchmark_role": "full_fine_tuning_comparison",
+  "class_weights": {
+    "Bearish": 2.735827684402466,
+    "Bullish": 1.2952227592468262,
+    "Neutral": 0.5369381308555603
+  },
+  "configuration": {
+    "benchmark_role": "full_fine_tuning_comparison",
+    "checkpoint_dir": "/Users/ruturajmokashi/Projects/financial-news-stock-intelligence/artifacts/models/bert_sentiment/checkpoints",
+    "evaluation_batch_size": 16,
+    "experiment_name": "BERT Financial Sentiment",
+    "final_model_dir": "/Users/ruturajmokashi/Projects/financial-news-stock-intelligence/artifacts/models/bert_sentiment/final_model",
+    "force_cpu": false,
+    "full_determinism": true,
+    "gradient_accumulation_steps": 2,
+    "learning_rate": 2e-05,
+    "logging_steps": 25,
+    "manifest_file": "/Users/ruturajmokashi/Projects/financial-news-stock-intelligence/artifacts/manifests/bert_sentiment_training_manifest.json",
+    "max_length": 128,
+    "maximum_gradient_norm": 1.0,
+    "metrics_file": "/Users/ruturajmokashi/Projects/financial-news-stock-intelligence/reports/metrics/bert_sentiment_metrics.json",
+    "model_family": "BERT",
+    "model_id": "google-bert/bert-base-uncased",
+    "model_revision": null,
+    "number_of_epochs": 3.0,
+    "overwrite_output_dir": false,
+    "random_seed": 42,
+    "run_name": "bert_financial_phrasebank_full",
+    "save_total_limit": 2,
+    "test_file": "/Users/ruturajmokashi/Projects/financial-news-stock-intelligence/data/processed/transformer/financial_phrasebank_test.jsonl",
+    "train_batch_size": 8,
+    "train_file": "/Users/ruturajmokashi/Projects/financial-news-stock-intelligence/data/processed/transformer/financial_phrasebank_train.jsonl",
+    "use_class_weights": true,
+    "validation_file": "/Users/ruturajmokashi/Projects/financial-news-stock-intelligence/data/processed/transformer/financial_phrasebank_validation.jsonl",
+    "warmup_ratio": 0.1,
+    "weight_decay": 0.01
+  },
+  "dataset_summary": {
+    "test": {
+      "Bearish": 63,
+      "Bullish": 133,
+      "Neutral": 322,
+      "records": 518
+    },
+    "train": {
+      "Bearish": 294,
+      "Bullish": 621,
+      "Neutral": 1498,
+      "records": 2413
+    },
+    "validation": {
+      "Bearish": 63,
+      "Bullish": 133,
+      "Neutral": 321,
+      "records": 517
+    }
+  },
+  "device": "cpu",
+  "experiment_name": "BERT Financial Sentiment",
+  "final_model_directory": "/Users/ruturajmokashi/Projects/financial-news-stock-intelligence/artifacts/models/bert_sentiment/final_model",
+  "labels": {
+    "Bearish": 0,
+    "Bullish": 2,
+    "Neutral": 1
+  },
+  "memory": {
+    "baseline_peak_rss_mib": 248.0078125,
+    "incremental_peak_rss_mib": 2596.97265625,
+    "measurement_method": "resource.getrusage(resource.RUSAGE_SELF).ru_maxrss",
+    "measurement_scope": "full_training_validation_and_test_process",
+    "peak_process_rss_mib": 2844.98046875,
+    "platform_unit_normalization": "bytes_on_macos; kibibytes_on_linux; normalized_to_mib"
+  },
+  "metrics_file": "/Users/ruturajmokashi/Projects/financial-news-stock-intelligence/reports/metrics/bert_sentiment_metrics.json",
+  "model_family": "BERT",
+  "model_id": "google-bert/bert-base-uncased",
+  "model_revision": "86b5e0934494bd15c9632b12f734a8a67f723594",
+  "parameter_counts": {
+    "estimated_fp32_parameter_memory_mb": 417.65,
+    "total_parameters": 109484547,
+    "trainable_parameters": 109484547
+  },
+  "software": {
+    "datasets": "3.2.0",
+    "huggingface_hub": "0.36.2",
+    "numpy": "1.26.4",
+    "platform": "macOS-11.7.11-x86_64-i386-64bit",
+    "python": "3.10.9 (main, Apr  2 2025, 20:16:57) [Clang 13.0.0 (clang-1300.0.29.30)]",
+    "torch": "2.2.2",
+    "transformers": "4.46.3"
+  },
+  "source_files": {
+    "test": {
+      "checksum_sha256": "96162091a6c5e9d2c0bbab61a6838e66572e15510445ff0b77ef6f9759ea05d8",
+      "path": "/Users/ruturajmokashi/Projects/financial-news-stock-intelligence/data/processed/transformer/financial_phrasebank_test.jsonl",
+      "records": 518
+    },
+    "train": {
+      "checksum_sha256": "2cdcbad407b9b78a38ad21d00bd0f7b2a37b1ef175244c954d5174fd7ecb6283",
+      "path": "/Users/ruturajmokashi/Projects/financial-news-stock-intelligence/data/processed/transformer/financial_phrasebank_train.jsonl",
+      "records": 2413
+    },
+    "validation": {
+      "checksum_sha256": "a99e2c4b9d03fa58f635189f244b554eeaa28cd0f1c6adaaf95b0b548e85d227",
+      "path": "/Users/ruturajmokashi/Projects/financial-news-stock-intelligence/data/processed/transformer/financial_phrasebank_validation.jsonl",
+      "records": 517
+    }
+  },
+  "status": "trained_and_evaluated",
+  "timing": {
+    "test_inference_seconds": 27.659453472995665,
+    "test_milliseconds_per_example": 53.39662832624646,
+    "training_seconds": 1647.0894507280027,
+    "validation_seconds": 29.413513676001457
+  }
+}

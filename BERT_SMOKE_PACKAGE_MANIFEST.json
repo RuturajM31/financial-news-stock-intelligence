@@ -1,0 +1,27 @@
+{
+  "files": [
+    {
+      "path": "README_BERT_SMOKE_PACKAGE.md",
+      "sha256": "d3c4494c9512618a600e0279fd2424032b087f7624dfb700fff76ee44166d262",
+      "size_bytes": 2920
+    },
+    {
+      "path": "scripts/run_bert_smoke.py",
+      "sha256": "d7c4aec3441395eaef82636965725859423385cc88d9adb033342cdf82fc3006",
+      "size_bytes": 26319
+    },
+    {
+      "path": "scripts/run_bert_smoke_test_package.sh",
+      "sha256": "c8004544724f173ec89e2f0dde8a8a789c71d0a0fa837a3894d4b6d59b0ca625",
+      "size_bytes": 4236
+    },
+    {
+      "path": "tests/test_bert_smoke_runner.py",
+      "sha256": "f20a0df7d267f073605460295be53b1ba2ae58c2e75001bc5757be39eef0a528",
+      "size_bytes": 12369
+    }
+  ],
+  "generated_at_utc": "2026-07-03T11:14:30.827530+00:00",
+  "package_name": "bert_smoke_training_payload_v2",
+  "purpose": "Controlled balanced BERT smoke runner with macOS Bash 3.2 compatibility"
+}

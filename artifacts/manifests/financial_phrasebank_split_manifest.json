@@ -1,0 +1,61 @@
+{
+  "configuration": "sentences_75agree",
+  "created_at": "2026-07-03T06:54:41.731590+00:00",
+  "dataset_checksum_sha256": "de0c9380a04548ef262d109deca17b8b2cd5afefb1b7282c1954ccd9381371fa",
+  "dataset_name": "Financial PhraseBank",
+  "duplicates_removed": 5,
+  "files": {
+    "test": {
+      "checksum_sha256": "96162091a6c5e9d2c0bbab61a6838e66572e15510445ff0b77ef6f9759ea05d8",
+      "file_name": "financial_phrasebank_test.jsonl",
+      "label_counts": {
+        "Bearish": 63,
+        "Bullish": 133,
+        "Neutral": 322
+      },
+      "record_count": 518
+    },
+    "train": {
+      "checksum_sha256": "2cdcbad407b9b78a38ad21d00bd0f7b2a37b1ef175244c954d5174fd7ecb6283",
+      "file_name": "financial_phrasebank_train.jsonl",
+      "label_counts": {
+        "Bearish": 294,
+        "Bullish": 621,
+        "Neutral": 1498
+      },
+      "record_count": 2413
+    },
+    "validation": {
+      "checksum_sha256": "a99e2c4b9d03fa58f635189f244b554eeaa28cd0f1c6adaaf95b0b548e85d227",
+      "file_name": "financial_phrasebank_validation.jsonl",
+      "label_counts": {
+        "Bearish": 63,
+        "Bullish": 133,
+        "Neutral": 321
+      },
+      "record_count": 517
+    }
+  },
+  "final_record_count": 3448,
+  "limitations": [
+    "No publication timestamps are available.",
+    "No event-level grouping is available.",
+    "The split is stratified and reproducible.",
+    "The dataset is restricted to sentiment modelling."
+  ],
+  "overall_label_counts": {
+    "Bearish": 420,
+    "Bullish": 887,
+    "Neutral": 2141
+  },
+  "random_seed": 42,
+  "ratios": {
+    "test": 0.15,
+    "train": 0.7,
+    "validation": 0.15
+  },
+  "source_checksum_sha256": "612e74ee6b70bc1072e5d617f869ca50adecccc2777f2ac4d0f778fe62f3a916",
+  "source_file": "/Users/ruturajmokashi/Projects/financial-news-stock-intelligence/data/processed/financial_phrasebank/financial_phrasebank_75agree.jsonl",
+  "source_record_count": 3453,
+  "split_strategy": "stratified_random"
+}
