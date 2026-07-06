@@ -21,6 +21,7 @@ REQUIRED_FILES = (
     "deployment/streamlit-community-cloud/DEPLOYMENT_CHECKLIST.md",
     "deployment/streamlit-community-cloud/secrets.example.toml",
     "PUBLIC_DEPLOYMENT_PACKAGE_MANIFEST.json",
+    "app/requirements.txt",
 )
 REQUIRED_EXISTING_APP_FILES = (
     "app/streamlit_app.py",
@@ -123,13 +124,55 @@ def verify_secret_hygiene(project_root: Path) -> None:
 
 def verify_manifest(project_root: Path) -> None:
     manifest = json.loads(read(project_root, "PUBLIC_DEPLOYMENT_PACKAGE_MANIFEST.json"))
-    require(manifest["package"] == "Free Public Streamlit Deployment Strike Package 14.3", "Unexpected manifest package name.")
+    require(manifest["package"] == "Free Public Streamlit Deployment Strike Package 14.4", "Unexpected manifest package name.")
     require(manifest["free_deployment_target"] == "Streamlit Community Cloud", "Unexpected free deployment target.")
     require(manifest["paid_services_required"] is False, "Manifest must reject paid services.")
     require(manifest["image_registry_changed"] is False, "Manifest must not change image registry.")
     require(manifest["kubernetes_resources_changed"] is False, "Manifest must not change Kubernetes resources.")
     require(manifest["git_operations_performed"] is False, "Manifest must not perform Git operations.")
     print("FREE PUBLIC DEPLOYMENT MANIFEST: PASSED")
+
+
+def parse_requirements(project_root: Path, relative: str) -> list[str]:
+    entries: list[str] = []
+    for raw_line in read(project_root, relative).splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        entries.append(line)
+    return entries
+
+
+def package_name(requirement: str) -> str:
+    return re.split(r"[<>=!~;\[]", requirement, maxsplit=1)[0].strip().lower().replace("_", "-")
+
+
+def verify_streamlit_cloud_requirements(project_root: Path) -> None:
+    requirements = parse_requirements(project_root, "app/requirements.txt")
+    names = {package_name(item) for item in requirements}
+    required = {"streamlit", "plotly", "numpy", "pandas", "pyarrow", "requests"}
+    missing = sorted(required - names)
+    require(not missing, "Streamlit Cloud app requirements missing: " + ", ".join(missing))
+    forbidden = {
+        "torch",
+        "scipy",
+        "transformers",
+        "datasets",
+        "accelerate",
+        "peft",
+        "sentence-transformers",
+        "bert-score",
+        "evaluate",
+        "fastapi",
+        "uvicorn",
+        "scikit-learn",
+    }
+    present_forbidden = sorted(forbidden & names)
+    require(not present_forbidden, "Streamlit Cloud app requirements include heavy/non-public-runtime packages: " + ", ".join(present_forbidden))
+    content = read(project_root, "deployment/streamlit-community-cloud/README.md") + "\n" + read(project_root, "docs/FREE_STREAMLIT_PUBLIC_DEPLOYMENT_CONTRACT.md")
+    require("app/requirements.txt" in content, "Deployment docs must name app/requirements.txt")
+    require("Python 3.10" in content, "Deployment docs must require Python 3.10")
+    print("STREAMLIT CLOUD DEPENDENCY ISOLATION: PASSED")
 
 
 def main() -> int:
@@ -141,6 +184,7 @@ def main() -> int:
     verify_inventory(project_root)
     verify_contract(project_root)
     verify_cloud_readme(project_root)
+    verify_streamlit_cloud_requirements(project_root)
     verify_no_paid_or_mutating_commands(project_root)
     verify_secret_hygiene(project_root)
     verify_manifest(project_root)

@@ -14,7 +14,7 @@ In Streamlit Community Cloud, create the app with these values:
 Repository: RuturajM31/financial-news-stock-intelligence
 Branch: project-foundation-streamlit-closure
 Main file path: app/streamlit_app.py
-Python version: Python 3.10 if available in Advanced settings
+Python version: Python 3.10 in Advanced settings
 App URL: choose a free streamlit.app subdomain
 ```
 
@@ -22,7 +22,7 @@ Community Cloud runs `streamlit run` from the repository root. Keep paths relati
 
 ## Dependency handling
 
-Community Cloud installs Python dependencies from a requirements file in the repository root or in the same directory as the app entrypoint. This project already has root requirements and validated Streamlit runtime requirements in source control.
+Community Cloud installs dependency files from the app entrypoint directory before the repository root. This package adds `app/requirements.txt` so Streamlit Cloud installs only the free public UI dependencies instead of the full local analytics/training stack from root `requirements.txt`.
 
 ## Secrets handling
 
@@ -36,3 +36,8 @@ Never commit `.streamlit/secrets.toml`. Use Streamlit Community Cloud's app sett
 - It does not run cluster apply commands or Helm release mutation commands.
 - It does not require a credit card.
 - It does not perform Git operations.
+
+
+## Fix for Python 3.14 dependency failure
+
+If Streamlit Cloud logs show Python 3.14 and errors for `torch`, `numpy`, or `scipy`, the app was created with the wrong Python/runtime dependency path. Delete the failed app and recreate it using Python 3.10 in Advanced settings, branch `project-foundation-streamlit-closure`, and main file `app/streamlit_app.py`.

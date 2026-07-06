@@ -25,6 +25,7 @@ def test_free_deployment_files_exist() -> None:
         "deployment/streamlit-community-cloud/secrets.example.toml",
         "scripts/verify_free_public_deployment.py",
         "PUBLIC_DEPLOYMENT_PACKAGE_MANIFEST.json",
+        "app/requirements.txt",
     ):
         target = ROOT / relative
         assert target.is_file(), relative
@@ -52,7 +53,7 @@ def test_readme_has_exact_manual_app_settings() -> None:
 
 def test_checklist_keeps_external_url_as_final_evidence() -> None:
     content = read("deployment/streamlit-community-cloud/DEPLOYMENT_CHECKLIST.md")
-    assert "Package 14.3 passed locally" in content
+    assert "Package 14.4 passed locally" in content
     assert "Git working tree is clean" in content
     assert "Deploy to a free `streamlit.app` subdomain" in content
     assert "Copy the final `https://*.streamlit.app` URL" in content
@@ -92,7 +93,7 @@ def test_secrets_example_contains_no_real_secret_material() -> None:
 
 def test_manifest_declares_free_only_manual_public_deployment() -> None:
     manifest = json.loads(read("PUBLIC_DEPLOYMENT_PACKAGE_MANIFEST.json"))
-    assert manifest["package"] == "Free Public Streamlit Deployment Strike Package 14.3"
+    assert manifest["package"] == "Free Public Streamlit Deployment Strike Package 14.4"
     assert manifest["free_deployment_target"] == "Streamlit Community Cloud"
     assert manifest["paid_services_required"] is False
     assert manifest["public_deployment_prepared"] is True
@@ -120,3 +121,42 @@ def test_verifier_passes_against_current_layout(tmp_path: Path) -> None:
     completed = subprocess.run(command, check=False, text=True, capture_output=True)
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert "FREE PUBLIC STREAMLIT DEPLOYMENT SOURCE VERIFICATION: PASSED" in completed.stdout
+
+
+
+def parse_requirements(relative: str) -> set[str]:
+    names: set[str] = set()
+    for raw_line in read(relative).splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        names.add(re.split(r"[<>=!~;\[]", line, maxsplit=1)[0].strip().lower().replace("_", "-"))
+    return names
+
+
+def test_app_requirements_override_root_heavy_stack_for_streamlit_cloud() -> None:
+    names = parse_requirements("app/requirements.txt")
+    assert {"streamlit", "plotly", "numpy", "pandas", "pyarrow", "requests"}.issubset(names)
+    forbidden = {
+        "torch",
+        "scipy",
+        "transformers",
+        "datasets",
+        "accelerate",
+        "peft",
+        "sentence-transformers",
+        "bert-score",
+        "evaluate",
+        "fastapi",
+        "uvicorn",
+        "scikit-learn",
+    }
+    assert names.isdisjoint(forbidden)
+
+
+def test_docs_explain_python_310_and_app_requirements_recovery() -> None:
+    docs = read("deployment/streamlit-community-cloud/README.md") + "\n" + read("docs/FREE_STREAMLIT_PUBLIC_DEPLOYMENT_CONTRACT.md")
+    assert "app/requirements.txt" in docs
+    assert "Python 3.10" in docs
+    assert "Python 3.14" in docs
+    assert "delete" in docs.lower() and "recreate" in docs.lower()

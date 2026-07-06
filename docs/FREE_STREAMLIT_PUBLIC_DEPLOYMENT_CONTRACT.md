@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Package 14.3 prepares the project for the free public deployment path using Streamlit Community Cloud. The package does not create paid cloud resources, publish Docker images, mutate Kubernetes resources, or perform Git operations.
+Package 14.4 prepares the project for the free public deployment path using Streamlit Community Cloud. The package does not create paid cloud resources, publish Docker images, mutate Kubernetes resources, or perform Git operations.
 
 ## Free deployment target
 
@@ -12,6 +12,16 @@ Package 14.3 prepares the project for the free public deployment path using Stre
 - Branch: `project-foundation-streamlit-closure`
 - Main file: `app/streamlit_app.py`
 - Python setting: select Python 3.10 in Streamlit Community Cloud advanced settings if offered, matching the validated local runtime family.
+
+
+
+## Streamlit Cloud dependency isolation
+
+Streamlit Community Cloud must use `app/requirements.txt` for the public UI. This file intentionally excludes the heavy local analytics and training stack in the repository root `requirements.txt`, including `torch`, `scipy`, `transformers`, `datasets`, `accelerate`, and related model-training packages. The public app entrypoint is `app/streamlit_app.py`, so the app-directory requirements file takes precedence over the root requirements file.
+
+## Python version requirement
+
+Select Python 3.10 in Streamlit Community Cloud Advanced settings before deploying. The root development requirements include binary packages that are not Python 3.14 compatible, and the public Streamlit requirements are pinned to the validated Python 3.10 runtime family. If a failed app was already created with Python 3.14, delete and recreate the app so the Python version is applied from creation time.
 
 ## Free-only rules
 

@@ -1,0 +1,16 @@
+# Streamlit Community Cloud entrypoint dependency file.
+# Community Cloud searches the app entrypoint directory before the repository root.
+# Keep heavy training/API packages out of this file so the free public UI can build
+# without installing torch, scipy, transformers, datasets, accelerate, peft, or FastAPI.
+# Select Python 3.10 in Streamlit Community Cloud Advanced settings for these pins.
+streamlit==1.58.0
+plotly==6.8.0
+numpy==1.26.4
+pandas==2.1.4
+pyarrow==14.0.2
+requests==2.32.3
+urllib3==2.2.3
+charset-normalizer==3.3.2
+chardet==5.2.0
+PyYAML==6.0.2
+reportlab==4.2.5
