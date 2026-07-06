@@ -1,0 +1,127 @@
+name: CI and Security
+
+on:
+  push:
+    branches:
+      - main
+      - project-foundation-streamlit-closure
+  pull_request:
+    branches:
+      - main
+      - project-foundation-streamlit-closure
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  focused-regression:
+    name: Focused project regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONPATH: src
+      FNI_API_KEY: ci-validation-token
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip check
+
+      - name: Compile source and tests
+        run: python -m compileall -q src app scripts tests
+
+      - name: Run focused regression suite
+        run: |
+          python -m pytest -q \
+            tests/test_fastapi_api.py \
+            tests/test_docker_production.py \
+            tests/test_docker_smoke_retry.py \
+            tests/test_kubernetes_helm.py \
+            tests/test_ci_cd_security.py
+
+      - name: Verify CI/CD security contract
+        run: python scripts/verify_ci_cd_security.py --project-root .
+
+  dependency-and-static-security:
+    name: Dependency and static security
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONPATH: src
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install security tools and project requirements
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pip-audit bandit
+          python -m pip install -r requirements.txt
+          python -m pip check
+
+      - name: Audit Python dependencies
+        run: python -m pip_audit -r requirements.txt --strict
+
+      - name: Run Bandit static security scan
+        run: python -m bandit -q -r src app scripts -x tests
+
+      - name: Verify deployment remains deferred
+        run: python scripts/verify_ci_cd_security.py --project-root .
+
+  deployment-contracts:
+    name: Docker and Kubernetes contract checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONPATH: src
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install verifier dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Verify Docker production source contract
+        run: python scripts/verify_docker_production.py --project-root .
+
+      - name: Verify Kubernetes and Helm source contract
+        run: python scripts/verify_kubernetes_helm.py --project-root .
+
+      - name: Verify CI/CD security source contract
+        run: python scripts/verify_ci_cd_security.py --project-root .
