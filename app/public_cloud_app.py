@@ -11,6 +11,7 @@ architecture pages.
 
 from __future__ import annotations
 
+import html
 import io
 import math
 import os
@@ -246,6 +247,8 @@ def _apply_theme() -> None:
         .exec-subtitle {font-size:.78rem; color:#cbd5e1; margin-top:.18rem;}
         .exec-spark {position:absolute; right:.65rem; bottom:.45rem; width:112px; opacity:.88;}
         .spark {width:112px; height:36px;}
+        .mini-bars {display:flex; align-items:flex-end; gap:4px; height:34px; width:112px; justify-content:flex-end;}
+        .mini-bars span {display:block; width:7px; border-radius:8px 8px 0 0; background:linear-gradient(180deg, var(--bar-color, #38bdf8), rgba(56,189,248,.08)); box-shadow:0 0 16px rgba(56,189,248,.20);}
         .insight-grid {display:grid; grid-template-columns: 1.22fr .88fr; gap:.75rem; margin:.65rem 0 .8rem;}
         .executive-insight {
             border:1px solid rgba(34,211,238,.42); border-radius:20px; padding:1rem 1.1rem;
@@ -607,41 +610,30 @@ def _company_logo_badge(signal: ArticleSignal) -> str:
 
 
 def _sparkline_svg(points: list[float], color: str = "#38bdf8") -> str:
-    """Return a tiny inline SVG sparkline for scorecards."""
+    """Return a CSS micro-bar chart for scorecards without unsafe SVG rendering."""
 
     if not points:
         points = [0.2, 0.35, 0.28, 0.58, 0.50, 0.72]
-    width, height = 118, 38
-    xs = [i * width / (len(points) - 1) for i in range(len(points))]
     min_v, max_v = min(points), max(points)
     span = max(max_v - min_v, 0.001)
-    ys = [height - ((p - min_v) / span * (height - 6) + 3) for p in points]
-    path = " ".join(f"{x:.1f},{y:.1f}" for x, y in zip(xs, ys))
-    return (
-        f"<svg class='spark' viewBox='0 0 {width} {height}' preserveAspectRatio='none'>"
-        f"<polyline points='{path}' fill='none' stroke='{color}' stroke-width='3' "
-        f"stroke-linecap='round' stroke-linejoin='round'/>"
-        f"</svg>"
-    )
-
+    bars = []
+    for point in points[-8:]:
+        height = 10 + int(((point - min_v) / span) * 24)
+        bars.append(f"<span style='height:{height}px; --bar-color:{color}'></span>")
+    return "<div class='mini-bars'>" + "".join(bars) + "</div>"
 
 def _executive_card(title: str, value: str, subtitle: str, icon: str, accent: str, spark: str = "") -> str:
-    """Return one premium scorecard as HTML."""
+    """Return one premium scorecard as non-indented HTML."""
 
-    return f"""
-    <div class="exec-card accent-{accent}">
-      <div class="exec-card-top">
-        <div class="exec-icon">{icon}</div>
-        <div>
-          <div class="exec-label">{title}</div>
-          <div class="exec-value">{value}</div>
-          <div class="exec-subtitle">{subtitle}</div>
-        </div>
-      </div>
-      <div class="exec-spark">{spark}</div>
-    </div>
-    """
-
+    return (
+        f"<div class='exec-card accent-{accent}'>"
+        f"<div class='exec-card-top'>"
+        f"<div class='exec-icon'>{html.escape(icon)}</div>"
+        f"<div><div class='exec-label'>{html.escape(title)}</div>"
+        f"<div class='exec-value'>{html.escape(value)}</div>"
+        f"<div class='exec-subtitle'>{html.escape(subtitle)}</div></div>"
+        f"</div><div class='exec-spark'>{spark}</div></div>"
+    )
 
 def _driver_waterfall(signal: ArticleSignal) -> None:
     """Render a premium horizontal driver-impact chart."""
@@ -796,35 +788,26 @@ def _workflow_strip(signal: ArticleSignal, source: str) -> None:
     cards = []
     for number, name, detail, status in steps:
         cards.append(
-            f"""
-            <div class="workflow-card">
-              <div class="workflow-status">{status}</div>
-              <div class="workflow-number">{number}</div>
-              <div class="workflow-title">{name}</div>
-              <div class="workflow-detail">{detail}</div>
-            </div>
-            """
+            f"<div class='workflow-card'><div class='workflow-status'>{status}</div>"
+            f"<div class='workflow-number'>{html.escape(number)}</div>"
+            f"<div class='workflow-title'>{html.escape(name)}</div>"
+            f"<div class='workflow-detail'>{html.escape(detail)}</div></div>"
         )
     st.markdown(
         "<div class='workflow-wrap'><div class='section-title'>What the Model is Doing</div>"
-        + "<div class='workflow-grid'>"
-        + "".join(cards)
-        + "</div></div>",
+        + "<div class='workflow-grid'>" + "".join(cards) + "</div></div>",
         unsafe_allow_html=True,
     )
 
-
 def _chip_panel(title: str, icon: str, chips: list[str], tone: str) -> str:
-    """Return one bottom executive chip panel."""
+    """Return one bottom executive chip panel as non-indented HTML."""
 
-    chip_html = "".join(f"<span class='driver-chip'>{chip}</span>" for chip in chips)
-    return f"""
-    <div class="driver-panel {tone}">
-      <div class="driver-title">{icon} {title}</div>
-      <div class="driver-chips">{chip_html}</div>
-    </div>
-    """
-
+    chip_html = "".join(f"<span class='driver-chip'>{html.escape(str(chip))}</span>" for chip in chips)
+    return (
+        f"<div class='driver-panel {tone}'>"
+        f"<div class='driver-title'>{html.escape(icon)} {html.escape(title)}</div>"
+        f"<div class='driver-chips'>{chip_html}</div></div>"
+    )
 
 def _executive_conclusion(signal: ArticleSignal) -> str:
     """Build the user-facing conclusion message."""
@@ -851,51 +834,26 @@ def _executive_conclusion(signal: ArticleSignal) -> str:
 def _render_executive_overview_premium(signal: ArticleSignal, source: str, text: str) -> None:
     """Render the premium Executive Overview command center."""
 
-    headline = re.sub(r"\s+", " ", text.strip())[:220] or "No article text supplied."
+    headline = html.escape(re.sub(r"\s+", " ", text.strip())[:220] or "No article text supplied.")
+    safe_source = html.escape(source)
     article_date = "Live public analysis"
 
     st.markdown(
-        """
-        <div class="exec-topbar">
-          <div>
-            <div class="exec-title-row">📈 Executive Overview</div>
-            <div class="exec-subrow">Financial News → Sentiment → Movement → Forecast → Explainability</div>
-          </div>
-          <div class="exec-badges">
-            <span>☁ Public Cloud Mode</span>
-            <span>🔗 Article URL Enabled</span>
-            <span>⇧ Upload Enabled</span>
-            <span>👁 Model Workflow Visible</span>
-          </div>
-        </div>
-        """,
+        "<div class='exec-topbar'>"
+        "<div><div class='exec-title-row'>📈 Executive Overview</div>"
+        "<div class='exec-subrow'>Financial News → Sentiment → Movement → Forecast → Explainability</div></div>"
+        "<div class='exec-badges'><span>☁ Public Cloud Mode</span><span>🔗 Article URL Enabled</span>"
+        "<span>⇧ Upload Enabled</span><span>👁 Model Workflow Visible</span></div></div>",
         unsafe_allow_html=True,
     )
 
     st.markdown(
-        f"""
-        <div class="article-strip">
-          <div class="article-identity">
-            {_company_logo_badge(signal)}
-            <div>
-              <div class="article-ticker">{signal.ticker}</div>
-              <div class="article-company">{signal.company}</div>
-            </div>
-          </div>
-          <div class="article-headline">
-            <div class="article-label">Article / Headline</div>
-            <div>{headline}</div>
-          </div>
-          <div class="article-meta">
-            <div class="article-label">Source</div>
-            <div>{source}</div>
-          </div>
-          <div class="article-meta">
-            <div class="article-label">Mode</div>
-            <div>{article_date}</div>
-          </div>
-        </div>
-        """,
+        f"<div class='article-strip'><div class='article-identity'>{_company_logo_badge(signal)}"
+        f"<div><div class='article-ticker'>{html.escape(signal.ticker)}</div>"
+        f"<div class='article-company'>{html.escape(signal.company)}</div></div></div>"
+        f"<div class='article-headline'><div class='article-label'>Article / Headline</div><div>{headline}</div></div>"
+        f"<div class='article-meta'><div class='article-label'>Source</div><div>{safe_source}</div></div>"
+        f"<div class='article-meta'><div class='article-label'>Mode</div><div>{article_date}</div></div></div>",
         unsafe_allow_html=True,
     )
 
@@ -912,7 +870,7 @@ def _render_executive_overview_premium(signal: ArticleSignal, source: str, text:
     ]
     st.markdown("<div class='exec-card-grid'>" + "".join(cards) + "</div>", unsafe_allow_html=True)
 
-    conclusion = _executive_conclusion(signal)
+    conclusion = html.escape(_executive_conclusion(signal))
     important = [
         f"Primary movement bias: {'Bullish' if signal.movement_up >= signal.movement_down else 'Bearish'}",
         f"Positive evidence terms detected: {len(signal.positive_hits)}",
@@ -920,32 +878,25 @@ def _render_executive_overview_premium(signal: ArticleSignal, source: str, text:
         f"Confidence level: {_safe_pct(signal.confidence)}",
         "Watch follow-up news for guidance, margins, demand, competition, and policy changes.",
     ]
-    bullets = "".join(f"<li>{item}</li>" for item in important)
-
+    bullets = "".join(f"<li>{html.escape(item)}</li>" for item in important)
     st.markdown(
-        f"""
-        <div class="insight-grid">
-          <div class="executive-insight">
-            <div class="insight-kicker">✦ Executive Insight</div>
-            <div class="insight-message">{conclusion}</div>
-          </div>
-          <div class="important-analysis">
-            <div class="section-title">◎ Most Important Analysis</div>
-            <ul>{bullets}</ul>
-          </div>
-        </div>
-        """,
+        "<div class='insight-grid'><div class='executive-insight'>"
+        "<div class='insight-kicker'>✦ Executive Insight</div>"
+        f"<div class='insight-message'>{conclusion}</div></div>"
+        "<div class='important-analysis'><div class='section-title'>◎ Most Important Analysis</div>"
+        f"<ul>{bullets}</ul></div></div>",
         unsafe_allow_html=True,
     )
 
-    c1, c2, c3, c4 = st.columns([.95, 1.05, 1.28, 1.55])
-    with c1:
+    chart_row_1 = st.columns([1, 1])
+    with chart_row_1[0]:
         _movement_donut(signal)
-    with c2:
+    with chart_row_1[1]:
         _sentiment_risk_quadrant(signal)
-    with c3:
+    chart_row_2 = st.columns([1, 1])
+    with chart_row_2[0]:
         _driver_waterfall(signal)
-    with c4:
+    with chart_row_2[1]:
         _executive_forecast(signal)
 
     _workflow_strip(signal, source)
@@ -953,7 +904,6 @@ def _render_executive_overview_premium(signal: ArticleSignal, source: str, text:
     bullish = signal.positive_hits[:6] or ["demand", "revenue", "growth", "market strength"]
     risks = signal.risk_hits[:6] or ["competition", "margin pressure", "macro risk"]
     monitor = ["next guidance", "gross margin", "demand trend", "volume confirmation", "competitor moves", "policy updates"]
-
     st.markdown(
         "<div class='driver-grid'>"
         + _chip_panel("Bullish Drivers", "●", bullish, "bullish-panel")
@@ -1211,6 +1161,30 @@ def _render_visual_qa() -> None:
         unsafe_allow_html=True,
     )
 
+def _executive_article_inputs() -> tuple[str, str]:
+    """Collect article input in a compact executive-control expander."""
+
+    with st.expander("Change article input / URL / upload", expanded=False):
+        url = st.text_input("Article URL", placeholder="https://example.com/company-earnings-news", key="exec_article_url")
+        uploaded = st.file_uploader("Upload article", type=["txt", "md", "csv", "json", "pdf"], key="exec_article_upload")
+        pasted = st.text_area("Paste article / headline / news text", value=_BASE_EXAMPLE, height=130, key="exec_article_text")
+
+    source = "pasted text"
+    text = pasted.strip() or _BASE_EXAMPLE
+    upload_text = _read_upload(uploaded)
+    if upload_text.strip():
+        source = f"uploaded file: {uploaded.name}"
+        text = upload_text
+    if url.strip():
+        try:
+            fetched = _fetch_url_text(url)
+            if fetched.strip():
+                source = f"URL: {url.strip()}"
+                text = fetched
+        except Exception as exc:
+            st.warning(f"URL fetch failed in public mode: {exc}. Using pasted/uploaded text instead.")
+    return text, source
+
 def render_public_streamlit_cloud_app(project_root: Path) -> None:
     """Render the complete agreed public Streamlit dashboard."""
 
@@ -1241,13 +1215,18 @@ def render_public_streamlit_cloud_app(project_root: Path) -> None:
         ],
     )
 
+    if page == "Executive Overview":
+        text, source = _executive_article_inputs()
+        signal = _score_article(text)
+        _render_executive_overview_premium(signal, source, text)
+        st.caption("Free Streamlit Community Cloud mode. Backend-free public demonstration. Private FastAPI/model workers remain protected.")
+        return
+
     _hero()
     text, source = _article_inputs()
     signal = _score_article(text)
 
-    if page == "Executive Overview":
-        _render_overview(signal, source)
-    elif page == "Analyze Article":
+    if page == "Analyze Article":
         _render_analyze(signal, text, source)
     elif page == "Forecasts":
         _render_forecasts(signal)
