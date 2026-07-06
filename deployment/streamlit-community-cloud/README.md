@@ -14,7 +14,7 @@ In Streamlit Community Cloud, create the app with these values:
 Repository: RuturajM31/financial-news-stock-intelligence
 Branch: project-foundation-streamlit-closure
 Main file path: app/streamlit_app.py
-Python version: Python 3.10 in Advanced settings
+Python version: Python 3.10 when selectable; Python 3.14-compatible app dependencies when Streamlit Cloud forces a newer runtime in Advanced settings
 App URL: choose a free streamlit.app subdomain
 ```
 
@@ -40,4 +40,7 @@ Never commit `.streamlit/secrets.toml`. Use Streamlit Community Cloud's app sett
 
 ## Fix for Python 3.14 dependency failure
 
-If Streamlit Cloud logs show Python 3.14 and errors for `torch`, `numpy`, or `scipy`, the app was created with the wrong Python/runtime dependency path. Delete the failed app and recreate it using Python 3.10 in Advanced settings, branch `project-foundation-streamlit-closure`, and main file `app/streamlit_app.py`.
+If Streamlit Cloud logs show Python 3.14 and errors for `torch`, `numpy`, or `scipy`, the app was created with the wrong Python/runtime dependency path. Delete the failed app and recreate it using Python 3.10 when selectable; Python 3.14-compatible app dependencies when Streamlit Cloud forces a newer runtime in Advanced settings, branch `project-foundation-streamlit-closure`, and main file `app/streamlit_app.py`.
+
+
+Package 14.7 note: `app/requirements.txt` uses Python-version-flexible public-UI dependencies so Streamlit Community Cloud can resolve wheels even when the platform defaults to Python 3.14. The heavy training/API stack remains isolated in the root requirements and Docker/Kubernetes paths.

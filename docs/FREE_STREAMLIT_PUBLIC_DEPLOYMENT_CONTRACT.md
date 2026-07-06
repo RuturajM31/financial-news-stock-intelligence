@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Package 14.4 prepares the project for the free public deployment path using Streamlit Community Cloud. The package does not create paid cloud resources, publish Docker images, mutate Kubernetes resources, or perform Git operations.
+Package 14.7 prepares the project for the free public deployment path using Streamlit Community Cloud. The package does not create paid cloud resources, publish Docker images, mutate Kubernetes resources, or perform Git operations.
 
 ## Free deployment target
 
@@ -11,7 +11,7 @@ Package 14.4 prepares the project for the free public deployment path using Stre
 - Repository source: GitHub
 - Branch: `project-foundation-streamlit-closure`
 - Main file: `app/streamlit_app.py`
-- Python setting: select Python 3.10 in Streamlit Community Cloud advanced settings if offered, matching the validated local runtime family.
+- Python setting: select Python 3.10 when selectable; Python 3.14-compatible app dependencies when Streamlit Cloud forces a newer runtime in Streamlit Community Cloud advanced settings if offered, matching the validated local runtime family.
 
 
 
@@ -21,7 +21,7 @@ Streamlit Community Cloud must use `app/requirements.txt` for the public UI. Thi
 
 ## Python version requirement
 
-Select Python 3.10 in Streamlit Community Cloud Advanced settings before deploying. The root development requirements include binary packages that are not Python 3.14 compatible, and the public Streamlit requirements are pinned to the validated Python 3.10 runtime family. If a failed app was already created with Python 3.14, delete and recreate the app so the Python version is applied from creation time.
+Select Python 3.10 when selectable; Python 3.14-compatible app dependencies when Streamlit Cloud forces a newer runtime in Streamlit Community Cloud Advanced settings before deploying. The root development requirements include binary packages that are not Python 3.14 compatible, and the public Streamlit requirements are pinned to the validated Python 3.10 when selectable; Python 3.14-compatible app dependencies when Streamlit Cloud forces a newer runtime runtime family. If a failed app was already created with Python 3.14, delete and recreate the app so the Python version is applied from creation time.
 
 ## Free-only rules
 
@@ -38,3 +38,6 @@ This package prepares deployment instructions and source verification. It cannot
 ## Closure gate
 
 The stage is closed when local package validation passes, changes are committed and pushed, the app is created on Streamlit Community Cloud using the free public app flow, and the resulting `https://*.streamlit.app` URL is verified.
+
+
+Package 14.7 note: `app/requirements.txt` uses Python-version-flexible public-UI dependencies so Streamlit Community Cloud can resolve wheels even when the platform defaults to Python 3.14. The heavy training/API stack remains isolated in the root requirements and Docker/Kubernetes paths.

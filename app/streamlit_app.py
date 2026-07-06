@@ -87,6 +87,15 @@ def _require_client(
 
 def main() -> None:
     """Render one complete Streamlit page rerun with fail-closed routing."""
+    from app.public_cloud_app import (
+        render_public_streamlit_cloud_app,
+        should_use_public_streamlit_cloud_app,
+    )
+
+    if should_use_public_streamlit_cloud_app(PROJECT_ROOT):
+        render_public_streamlit_cloud_app(PROJECT_ROOT)
+        return
+
     app_settings = get_app_settings(PROJECT_ROOT)
     brand = get_portfolio_brand()
 

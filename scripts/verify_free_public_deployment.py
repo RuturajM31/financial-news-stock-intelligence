@@ -22,6 +22,7 @@ REQUIRED_FILES = (
     "deployment/streamlit-community-cloud/secrets.example.toml",
     "PUBLIC_DEPLOYMENT_PACKAGE_MANIFEST.json",
     "app/requirements.txt",
+    "app/public_cloud_app.py",
 )
 REQUIRED_EXISTING_APP_FILES = (
     "app/streamlit_app.py",
@@ -124,7 +125,7 @@ def verify_secret_hygiene(project_root: Path) -> None:
 
 def verify_manifest(project_root: Path) -> None:
     manifest = json.loads(read(project_root, "PUBLIC_DEPLOYMENT_PACKAGE_MANIFEST.json"))
-    require(manifest["package"] == "Free Public Streamlit Deployment Strike Package 14.4", "Unexpected manifest package name.")
+    require(manifest["package"] == "Free Public Streamlit Deployment Strike Package 14.7", "Unexpected manifest package name.")
     require(manifest["free_deployment_target"] == "Streamlit Community Cloud", "Unexpected free deployment target.")
     require(manifest["paid_services_required"] is False, "Manifest must reject paid services.")
     require(manifest["image_registry_changed"] is False, "Manifest must not change image registry.")
@@ -150,6 +151,9 @@ def package_name(requirement: str) -> str:
 def verify_streamlit_cloud_requirements(project_root: Path) -> None:
     requirements = parse_requirements(project_root, "app/requirements.txt")
     names = {package_name(item) for item in requirements}
+    require(all(" " not in item.strip() for item in requirements), "Streamlit Cloud app requirements must contain one package per line.")
+    old_binary_pins = {item for item in requirements if item.startswith(("numpy==1.", "pandas==2.1", "pyarrow==14.", "scipy==", "torch=="))}
+    require(not old_binary_pins, "Streamlit Cloud app requirements contain Python-runtime-fragile binary pins: " + ", ".join(sorted(old_binary_pins)))
     required = {"streamlit", "plotly", "numpy", "pandas", "pyarrow", "requests"}
     missing = sorted(required - names)
     require(not missing, "Streamlit Cloud app requirements missing: " + ", ".join(missing))
@@ -171,9 +175,38 @@ def verify_streamlit_cloud_requirements(project_root: Path) -> None:
     require(not present_forbidden, "Streamlit Cloud app requirements include heavy/non-public-runtime packages: " + ", ".join(present_forbidden))
     content = read(project_root, "deployment/streamlit-community-cloud/README.md") + "\n" + read(project_root, "docs/FREE_STREAMLIT_PUBLIC_DEPLOYMENT_CONTRACT.md")
     require("app/requirements.txt" in content, "Deployment docs must name app/requirements.txt")
-    require("Python 3.10" in content, "Deployment docs must require Python 3.10")
+    require("Python 3.14-compatible" in content, "Deployment docs must describe Python 3.14-compatible dependency recovery")
     print("STREAMLIT CLOUD DEPENDENCY ISOLATION: PASSED")
 
+
+
+def verify_public_demo_mode(project_root: Path) -> None:
+    """Verify the public Streamlit Cloud fallback is installed safely."""
+
+    module = read(project_root, "app/public_cloud_app.py")
+    entrypoint = read(project_root, "app/streamlit_app.py")
+    for phrase in (
+        "def should_use_public_streamlit_cloud_app",
+        "/mount/src/",
+        "FNI_PUBLIC_STREAMLIT_MODE",
+        "def render_public_streamlit_cloud_app",
+        "st.set_page_config",
+        "Public mode is active",
+        "Interactive sentiment and movement demo",
+        "Top-end signal charts",
+        "Forecast panels",
+        "3D intelligence view",
+        "Premium public intelligence demo",
+        "Forecast and 3D visual closure",
+    ):
+        require(phrase in module, f"Public demo module missing phrase: {phrase}")
+    for phrase in (
+        "from app.public_cloud_app import",
+        "should_use_public_streamlit_cloud_app(PROJECT_ROOT)",
+        "render_public_streamlit_cloud_app(PROJECT_ROOT)",
+    ):
+        require(phrase in entrypoint, f"Streamlit entrypoint missing public demo bootstrap: {phrase}")
+    print("PUBLIC STREAMLIT CLOUD PREMIUM UI FALLBACK: PASSED")
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -185,6 +218,7 @@ def main() -> int:
     verify_contract(project_root)
     verify_cloud_readme(project_root)
     verify_streamlit_cloud_requirements(project_root)
+    verify_public_demo_mode(project_root)
     verify_no_paid_or_mutating_commands(project_root)
     verify_secret_hygiene(project_root)
     verify_manifest(project_root)
