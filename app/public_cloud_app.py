@@ -401,18 +401,60 @@ def _score_article(text: str | None) -> ArticleSignal:
 
 
 def _fetch_url_text(url: str) -> str:
-    """Fetch article-like text from a public URL without using paid services."""
+    """Fetch readable article-like text from a public URL."""
 
-    if not url.strip():
+    clean_url = (url or "").strip()
+    if not clean_url:
         return ""
-    headers = {"User-Agent": "FinancialNewsStockIntelligencePublicDemo/1.0"}
-    response = requests.get(url.strip(), headers=headers, timeout=8)
+
+    if not clean_url.startswith(("http://", "https://")):
+        raise ValueError("URL must start with http:// or https://")
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+
+    response = requests.get(clean_url, headers=headers, timeout=12)
     response.raise_for_status()
-    html_text = response.text
-    html_text = re.sub(r"(?is)<script.*?</script>|<style.*?</style>", " ", html_text)
-    text = re.sub(r"(?s)<[^>]+>", " ", html_text)
-    text = re.sub(r"\\s+", " ", text)
-    return text[:9000]
+
+    html = response.text or ""
+    if len(html.strip()) < 200:
+        raise ValueError("URL returned too little readable content.")
+
+    title_match = re.search(r"(?is)<title[^>]*>(.*?)</title>", html)
+    title = title_match.group(1) if title_match else ""
+
+    html = re.sub(r"(?is)<script.*?</script>|<style.*?</style>|<noscript.*?</noscript>", " ", html)
+    html = re.sub(r"(?is)<nav.*?</nav>|<footer.*?</footer>|<header.*?</header>|<aside.*?</aside>", " ", html)
+    text = re.sub(r"(?s)<[^>]+>", " ", html)
+
+    replacements = {
+        "&nbsp;": " ",
+        "&#160;": " ",
+        "&amp;": "&",
+        "&quot;": '"',
+        "&#39;": "'",
+        "&apos;": "'",
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+
+    text = re.sub(r"\s+", " ", text).strip()
+
+    if title:
+        text = re.sub(r"\s+", " ", title).strip() + ". " + text
+
+    text = text[:12000].strip()
+
+    if len(text) < 300:
+        raise ValueError("URL content could not be converted into enough article text.")
+
+    return text
 
 
 def _read_upload(uploaded_file) -> str:
@@ -449,7 +491,7 @@ def _initialize_exec_state() -> None:
 
 
 def _executive_analysis_control_center() -> tuple[str, str]:
-    """Collect article input with URL priority for the public Executive Overview."""
+    """Collect article input with strict URL-first routing."""
 
     url_col, upload_col = st.columns([1.35, 1.0])
 
@@ -458,24 +500,22 @@ def _executive_analysis_control_center() -> tuple[str, str]:
             "Article URL",
             value="",
             placeholder="https://example.com/company-earnings-news",
-            key="executive_article_url_v23",
+            key="executive_article_url_v24",
         )
 
     with upload_col:
         uploaded_file = st.file_uploader(
             "Upload article",
             type=["txt", "md", "csv", "json", "pdf"],
-            key="executive_article_upload_v23",
+            key="executive_article_upload_v24",
         )
 
     pasted_text = st.text_area(
         "Paste article / headline / news text",
         value="",
-        placeholder=(
-            "Paste article text here, or leave this empty when using an Article URL."
-        ),
+        placeholder="Paste article text here. Leave empty when using an Article URL.",
         height=112,
-        key="executive_article_text_v23",
+        key="executive_article_text_v24",
     )
 
     button_col_1, button_col_2, button_col_3, badge_col = st.columns([0.9, 0.9, 0.7, 2.3])
@@ -489,17 +529,16 @@ def _executive_analysis_control_center() -> tuple[str, str]:
     with badge_col:
         st.markdown(
             "<div class='control-badges'>"
-            "<span>updates conclusion</span>"
-            "<span>updates charts</span>"
-            "<span>updates drivers</span>"
-            "<span>updates workflow</span>"
+            "<span>URL priority</span>"
+            "<span>fetch status visible</span>"
+            "<span>no silent sample fallback</span>"
             "</div>",
             unsafe_allow_html=True,
         )
 
     if clear_clicked:
         st.info("Inputs cleared. Enter a URL, upload an article, or paste text.")
-        return "", "cleared"
+        st.stop()
 
     if sample_clicked:
         return _BASE_EXAMPLE, "sample article"
@@ -507,8 +546,6 @@ def _executive_analysis_control_center() -> tuple[str, str]:
     clean_url = (article_url or "").strip()
     clean_pasted = (pasted_text or "").strip()
 
-    # URL must win. This fixes the visible bug where the sample text was analyzed
-    # even after a URL was entered.
     if clean_url:
         try:
             fetched_text = _fetch_url_text(clean_url)
@@ -517,11 +554,11 @@ def _executive_analysis_control_center() -> tuple[str, str]:
         except Exception as exc:
             st.warning(
                 "Article URL could not be fetched from public Streamlit Cloud. "
-                f"Reason: {exc}. Paste or upload the article text below."
+                f"Reason: {exc}. Paste or upload the article text instead."
             )
             if clean_pasted:
                 return clean_pasted, "pasted fallback after URL fetch failure"
-            return "", "URL fetch failed"
+            st.stop()
 
     if uploaded_file is not None:
         try:
@@ -533,6 +570,7 @@ def _executive_analysis_control_center() -> tuple[str, str]:
         if uploaded_text:
             return uploaded_text, f"uploaded file: {uploaded_file.name}"
         st.warning("Uploaded file could not be read as text.")
+        st.stop()
 
     if clean_pasted:
         return clean_pasted, "pasted article"
@@ -1409,6 +1447,109 @@ def _apply_executive_header_v20_polish() -> None:
             .exec-badges {
                 grid-template-columns: 1fr !important;
             }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _apply_obsidian_aurora_theme_v24() -> None:
+    """Apply the Obsidian Aurora public dashboard theme."""
+
+    st.markdown(
+        """
+        <style>
+        [data-testid="stAppViewContainer"] {
+            background:
+                radial-gradient(circle at 8% 6%, rgba(168, 85, 247, 0.18), transparent 30rem),
+                radial-gradient(circle at 92% 10%, rgba(20, 184, 166, 0.16), transparent 32rem),
+                radial-gradient(circle at 50% 105%, rgba(245, 158, 11, 0.09), transparent 34rem),
+                linear-gradient(180deg, #030208 0%, #070411 46%, #020617 100%) !important;
+        }
+
+        [data-testid="stSidebar"] {
+            background:
+                radial-gradient(circle at 0% 0%, rgba(168,85,247,.14), transparent 18rem),
+                linear-gradient(180deg, #020106 0%, #050312 55%, #020617 100%) !important;
+            border-right: 1px solid rgba(168, 85, 247, 0.28) !important;
+        }
+
+        [data-testid="stHeader"] {
+            background: rgba(3, 2, 8, 0.86) !important;
+            border-bottom: 1px solid rgba(45, 212, 191, 0.12) !important;
+            backdrop-filter: blur(18px);
+        }
+
+        .exec-topbar,
+        .v21-header,
+        .article-strip,
+        .exec-card,
+        .executive-insight,
+        .important-analysis,
+        .workflow-wrap,
+        .driver-panel,
+        .chart-card,
+        .metric-card {
+            background:
+                radial-gradient(circle at 100% 0%, rgba(45, 212, 191, 0.10), transparent 18rem),
+                linear-gradient(145deg, rgba(10, 7, 22, 0.96), rgba(14, 10, 30, 0.84)) !important;
+            border: 1px solid rgba(168, 85, 247, 0.24) !important;
+            box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255,255,255,.035) !important;
+        }
+
+        .exec-title-row,
+        .v21-title,
+        h1, h2, h3 {
+            color: #f8fafc !important;
+            text-shadow: 0 0 22px rgba(168, 85, 247, .16);
+        }
+
+        .control-title,
+        .v21-kicker,
+        .exec-subrow,
+        .v21-subtitle {
+            color: #c4b5fd !important;
+        }
+
+        .stTextInput > div > div,
+        .stTextArea textarea,
+        .stFileUploader > div {
+            background: rgba(3, 2, 8, 0.88) !important;
+            border: 1px solid rgba(45, 212, 191, 0.34) !important;
+            border-radius: 18px !important;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.035), 0 0 0 1px rgba(168,85,247,.05) !important;
+        }
+
+        .stButton > button {
+            border-radius: 18px !important;
+            border: 1px solid rgba(45, 212, 191, 0.34) !important;
+            background:
+                linear-gradient(135deg, rgba(168, 85, 247, 0.96), rgba(20, 184, 166, 0.92)) !important;
+            color: white !important;
+            font-weight: 950 !important;
+            min-height: 3rem !important;
+            box-shadow: 0 16px 38px rgba(20, 184, 166, 0.14) !important;
+        }
+
+        .control-badges span,
+        .exec-badges span,
+        .v21-badge {
+            border-color: rgba(45, 212, 191, 0.32) !important;
+            background:
+                linear-gradient(135deg, rgba(6, 78, 59, 0.48), rgba(88, 28, 135, 0.40)) !important;
+            color: #ecfeff !important;
+        }
+
+        .executive-insight {
+            background:
+                radial-gradient(circle at 100% 100%, rgba(245,158,11,.13), transparent 18rem),
+                linear-gradient(145deg, rgba(8, 47, 73, .50), rgba(10, 7, 22, .96)) !important;
+            border-color: rgba(245, 158, 11, 0.28) !important;
+        }
+
+        label, p, span, div {
+            text-rendering: geometricPrecision;
         }
         </style>
         """,
