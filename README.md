@@ -20,7 +20,9 @@
 </p>
 
 <p align="center">
-  [![CI/CD](https://github.com/RuturajM31/financial-news-stock-intelligence/actions/workflows/ci.yml/badge.svg?branch=project-foundation-streamlit-closure)](https://github.com/RuturajM31/financial-news-stock-intelligence/actions/workflows/ci.yml)
+  <a href="https://github.com/RuturajM31/financial-news-stock-intelligence/actions/workflows/ci.yml">
+    <img alt="CI/CD" src="https://github.com/RuturajM31/financial-news-stock-intelligence/actions/workflows/ci.yml/badge.svg?branch=project-foundation-streamlit-closure">
+  </a>
 </p>
 
 <p align="center">
