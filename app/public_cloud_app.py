@@ -1226,6 +1226,1064 @@ def _render_dashboard(signal: ArticleSignal, source_url: str) -> None:
     _render_bottom_panels(signal)
 
 
+def _render_forecasts_page() -> None:
+    """Render the Forecasts page as a URL-first, date-based, explainable forecast cockpit."""
+
+    import html
+    import math
+    import re
+    from datetime import date, timedelta
+    from urllib.parse import urlparse
+
+    def _clamp(value: float, low: float, high: float) -> float:
+        """Keep public-demo scores within a safe visual range."""
+        return max(low, min(high, value))
+
+    def _format_date(value: date) -> str:
+        """Format forecast dates in a compact dashboard-friendly form."""
+        return value.strftime("%b %-d") if "%" in "%-d" else value.strftime("%b %d")
+
+    def _find_cues(text: str, cue_patterns: list[tuple[str, str, float]]) -> list[dict[str, str | float]]:
+        """Find financial cue phrases in user input and return matched evidence rows."""
+        lowered = text.lower()
+        found: list[dict[str, str | float]] = []
+        seen: set[str] = set()
+
+        for pattern, label, weight in cue_patterns:
+            if re.search(pattern, lowered, flags=re.IGNORECASE) and label not in seen:
+                found.append({"label": label, "weight": weight})
+                seen.add(label)
+
+        return found
+
+    def _detect_target(text: str, user_target: str) -> tuple[str, str]:
+        """Detect whether the forecast is broad-market, sector, ticker, or general news."""
+        lowered = text.lower()
+        entities: list[str] = []
+
+        if re.search(r"\bdow\b|\bdjia\b", lowered):
+            entities.append("Dow")
+        if re.search(r"\bnasdaq\b|\bqqq\b", lowered):
+            entities.append("Nasdaq")
+        if re.search(r"\bs&p\b|\bsp500\b|\bspx\b|\bspy\b", lowered):
+            entities.append("S&P 500")
+        if re.search(r"\bchip\b|\bchips\b|\bsemiconductor\b|\bsemiconductors\b|\bnvidia\b|\bnvda\b|\bamd\b|\bintel\b", lowered):
+            entities.append("Chips / semiconductors")
+        if re.search(r"\btreasury\b|\brates\b|\bfed\b|\binflation\b", lowered):
+            entities.append("Macro / rates")
+
+        ticker_matches = re.findall(r"\$?[A-Z]{2,5}\b", text)
+        ticker_matches = [x.replace("$", "") for x in ticker_matches if x not in {"LIVE", "CEO", "CFO", "EPS", "THE"}]
+        for ticker in ticker_matches[:4]:
+            if ticker not in entities and ticker not in {"DOW"}:
+                entities.append(ticker)
+
+        if user_target.strip():
+            return "User-selected target", user_target.strip()
+
+        if "Dow" in entities or "Nasdaq" in entities or "S&P 500" in entities:
+            if "Chips / semiconductors" in entities:
+                return "Broad market + sector forecast", ", ".join(entities)
+            return "Broad market / index forecast", ", ".join(entities)
+
+        if "Chips / semiconductors" in entities:
+            return "Sector / theme forecast", ", ".join(entities)
+
+        if ticker_matches:
+            return "Ticker / company forecast", ", ".join(entities) if entities else ", ".join(ticker_matches[:4])
+
+        return "General financial-news forecast", "No specific ticker or index detected"
+
+    def _extract_article_from_url(url: str) -> tuple[str, str, str]:
+        """Try to extract article title and body from a URL; return status, headline, body."""
+        clean_url = url.strip()
+        if not clean_url:
+            return "No URL provided.", "", ""
+
+        parsed = urlparse(clean_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            return "Invalid URL. Paste a full URL starting with http:// or https://.", "", ""
+
+        try:
+            import requests
+            from bs4 import BeautifulSoup
+
+            response = requests.get(
+                clean_url,
+                timeout=8,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Macintosh; Intel Mac OS X) "
+                        "AppleWebKit/537.36 Chrome/120 Safari/537.36"
+                    )
+                },
+            )
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.text, "html.parser")
+            for tag in soup(["script", "style", "noscript", "svg", "form", "nav", "footer", "header"]):
+                tag.decompose()
+
+            title = ""
+            if soup.find("h1"):
+                title = soup.find("h1").get_text(" ", strip=True)
+            if not title and soup.title:
+                title = soup.title.get_text(" ", strip=True)
+
+            paragraphs = [
+                p_tag.get_text(" ", strip=True)
+                for p_tag in soup.find_all("p")
+                if len(p_tag.get_text(" ", strip=True).split()) >= 8
+            ]
+            body = "\n\n".join(paragraphs[:12]).strip()
+
+            if not body:
+                return "URL loaded, but article text could not be extracted. Paste article text manually.", title, ""
+
+            return "URL article text extracted.", title, body
+
+        except Exception as exc:
+            return f"URL extraction failed. Paste article text manually. Reason: {exc}", "", ""
+
+    bullish_patterns = [
+        (r"\bjumps?\b", "Jumps / strong upward move", 1.35),
+        (r"\brises?\b|\brose\b", "Rises / positive market move", 1.15),
+        (r"\brebounds?\b|\brebounded\b", "Rebound language", 1.20),
+        (r"\brall(y|ies|ied)\b", "Rally language", 1.25),
+        (r"\bgains?\b|\bgained\b", "Gain language", 1.05),
+        (r"\bcloses?\s+above\b|\bfirst\s+close\s+above\b", "Close above key level", 1.40),
+        (r"\brecord\s+(close|high)\b|\ball[- ]time high\b", "Record high / record close", 1.45),
+        (r"\bchips?\s+rebound\b|\bsemiconductors?\s+rebound\b", "Chip / semiconductor rebound", 1.35),
+        (r"\bbeat(s|ing)?\b|\bbeats?\s+estimates\b", "Beat estimates", 1.45),
+        (r"\braises?\s+guidance\b|\braised\s+guidance\b", "Raised guidance", 1.50),
+        (r"\bupgrade(d|s)?\b|\banalyst\s+upgrade\b", "Analyst upgrade tone", 1.30),
+        (r"\bstrong\s+demand\b|\bdemand\s+strength\b", "Strong demand signal", 1.20),
+        (r"\bpositive\s+momentum\b|\bupside\b|\boptimism\b", "Positive momentum / upside tone", 1.05),
+    ]
+
+    bearish_patterns = [
+        (r"\bdrops?\b|\bfalls?\b|\bfell\b", "Drops / downward move", 1.25),
+        (r"\bslides?\b|\bslid\b|\btumbles?\b", "Slide / tumble language", 1.30),
+        (r"\bsell[- ]?off\b", "Selloff language", 1.45),
+        (r"\bmiss(es|ed)?\b|\bmisses?\s+estimates\b", "Missed estimates", 1.45),
+        (r"\bcuts?\s+guidance\b|\bcut\s+guidance\b", "Cut guidance", 1.55),
+        (r"\bdowngrade(d|s)?\b|\banalyst\s+downgrade\b", "Analyst downgrade tone", 1.35),
+        (r"\bweak\b|\bweakness\b|\bslowdown\b", "Weakness / slowdown", 1.15),
+        (r"\bmargin\s+pressure\b|\bprofit\s+warning\b", "Margin pressure / warning", 1.35),
+    ]
+
+    risk_patterns = [
+        (r"\brisk(s)?\b", "Explicit risk language", 1.05),
+        (r"\buncertain(ty)?\b|\buncertainties\b", "Uncertainty language", 1.15),
+        (r"\bvolatil(e|ity)\b", "Volatility language", 1.25),
+        (r"\bregulatory\b|\bregulation\b|\blawsuit\b|\bprobe\b", "Regulatory / legal risk", 1.35),
+        (r"\binflation\b|\brates?\b|\bfed\b|\brecession\b", "Macro / rates risk", 1.25),
+        (r"\bdebt\b|\bliquidity\b|\bcredit\b", "Balance sheet / credit risk", 1.20),
+    ]
+
+    sample_headline = "Dow jumps 150 points for first close above 53,000; Nasdaq rises as chips rebound"
+    sample_body = (
+        "Stocks maintained positive momentum after a strong week on Wall Street. "
+        "The S&P 500 gained 0.72%, while the Nasdaq Composite advanced 1.12% as chip stocks rebounded. "
+        "Investors pointed to stronger technology momentum, improving risk appetite, and broad-market strength, "
+        "while macro uncertainty remained limited."
+    )
+
+    if "forecast_url" not in st.session_state:
+        st.session_state.forecast_url = ""
+    if "forecast_headline" not in st.session_state:
+        st.session_state.forecast_headline = ""
+    if "forecast_body" not in st.session_state:
+        st.session_state.forecast_body = ""
+    if "forecast_target" not in st.session_state:
+        st.session_state.forecast_target = ""
+    if "forecast_status" not in st.session_state:
+        st.session_state.forecast_status = "Enter a URL or paste text, then generate a forecast."
+
+    st.markdown(
+        """
+        <style>
+          .fc-hero {
+            display: grid;
+            grid-template-columns: 1.06fr .94fr;
+            gap: 1rem;
+            padding: 1.35rem;
+            border-radius: 24px;
+            border: 1px solid rgba(34,211,238,.34);
+            background:
+              radial-gradient(circle at 8% 8%, rgba(34,211,238,.20), transparent 22rem),
+              radial-gradient(circle at 75% 10%, rgba(139,92,246,.22), transparent 24rem),
+              radial-gradient(circle at 90% 92%, rgba(34,197,94,.13), transparent 22rem),
+              linear-gradient(145deg, rgba(8,47,73,.72), rgba(8,13,28,.96));
+            box-shadow: 0 30px 90px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.07);
+            margin-bottom: .9rem;
+          }
+          .fc-kicker {
+            color: #67e8f9;
+            font-size: .70rem;
+            font-weight: 950;
+            letter-spacing: .13em;
+            text-transform: uppercase;
+          }
+          .fc-title {
+            color: white;
+            font-size: 2.6rem;
+            line-height: 1;
+            font-weight: 950;
+            letter-spacing: -.06em;
+            margin: .42rem 0 .55rem 0;
+          }
+          .fc-subtitle {
+            color: #dbeafe;
+            font-size: 1rem;
+            line-height: 1.55;
+            max-width: 860px;
+          }
+          .fc-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .48rem;
+            margin-top: .9rem;
+          }
+          .fc-chip {
+            padding: .43rem .68rem;
+            border-radius: 999px;
+            font-size: .72rem;
+            font-weight: 850;
+            color: #bfdbfe;
+            border: 1px solid rgba(96,165,250,.25);
+            background: rgba(15,23,42,.65);
+          }
+          .fc-engine {
+            padding: 1rem;
+            border-radius: 20px;
+            border: 1px solid rgba(148,163,184,.18);
+            background:
+              radial-gradient(circle at 55% 0%, rgba(59,130,246,.16), transparent 16rem),
+              linear-gradient(160deg, rgba(15,23,42,.92), rgba(2,6,23,.96));
+          }
+          .fc-flow-step {
+            display: grid;
+            grid-template-columns: 34px 1fr;
+            gap: .65rem;
+            align-items: center;
+            padding: .54rem;
+            margin-bottom: .45rem;
+            border-radius: 13px;
+            border: 1px solid rgba(96,165,250,.18);
+            background: rgba(15,23,42,.70);
+          }
+          .fc-flow-num {
+            width: 34px;
+            height: 34px;
+            display: grid;
+            place-items: center;
+            border-radius: 11px;
+            color: #67e8f9;
+            background: rgba(14,165,233,.13);
+            border: 1px solid rgba(34,211,238,.25);
+            font-weight: 950;
+          }
+          .fc-flow-step strong {
+            display: block;
+            color: white;
+            font-size: .82rem;
+          }
+          .fc-flow-step span {
+            display: block;
+            color: #94a3b8;
+            font-size: .70rem;
+            margin-top: .08rem;
+          }
+          .fc-panel {
+            margin: .95rem 0;
+            padding: 1.1rem;
+            border-radius: 22px;
+            border: 1px solid rgba(34,211,238,.24);
+            background:
+              radial-gradient(circle at 6% 0%, rgba(34,211,238,.11), transparent 18rem),
+              radial-gradient(circle at 94% 30%, rgba(139,92,246,.13), transparent 20rem),
+              linear-gradient(145deg, rgba(15,23,42,.88), rgba(8,13,28,.96));
+            box-shadow: 0 22px 60px rgba(0,0,0,.25);
+          }
+          .fc-section-title {
+            color: white;
+            font-size: 1.25rem;
+            font-weight: 950;
+            letter-spacing: -.04em;
+            margin: .2rem 0 .35rem 0;
+          }
+          .fc-copy {
+            color: #cbd5e1;
+            font-size: .84rem;
+            line-height: 1.48;
+            margin: 0;
+          }
+          .fc-metrics {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: .68rem;
+            margin: .85rem 0 .9rem 0;
+          }
+          .fc-metric {
+            padding: 1rem;
+            border-radius: 18px;
+            border: 1px solid rgba(148,163,184,.16);
+            background:
+              radial-gradient(circle at 100% 0%, rgba(59,130,246,.12), transparent 12rem),
+              rgba(15,23,42,.82);
+          }
+          .fc-metric strong {
+            color: white;
+            font-size: 1.45rem;
+            font-weight: 950;
+            letter-spacing: -.05em;
+            display: block;
+          }
+          .fc-metric span {
+            color: #cbd5e1;
+            font-size: .74rem;
+            font-weight: 760;
+          }
+          .fc-grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: .75rem;
+            margin-top: .8rem;
+          }
+          .fc-grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: .75rem;
+            margin-top: .8rem;
+          }
+          .fc-grid-4 {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: .68rem;
+            margin-top: .8rem;
+          }
+          .fc-card {
+            padding: .95rem;
+            border-radius: 17px;
+            border: 1px solid rgba(148,163,184,.16);
+            background:
+              radial-gradient(circle at 100% 0%, rgba(59,130,246,.10), transparent 10rem),
+              rgba(15,23,42,.74);
+            min-height: 125px;
+          }
+          .fc-card strong {
+            color: white;
+            display: block;
+            font-size: .96rem;
+            margin-bottom: .32rem;
+          }
+          .fc-card span, .fc-card li {
+            color: #cbd5e1;
+            font-size: .75rem;
+            line-height: 1.38;
+          }
+          .fc-card ul {
+            margin: .2rem 0 0 1rem;
+            padding: 0;
+          }
+          .fc-formula {
+            margin-top: .8rem;
+            padding: .9rem;
+            border-radius: 16px;
+            border: 1px solid rgba(34,211,238,.22);
+            background: rgba(2,6,23,.46);
+            color: #e0f2fe;
+            font-size: .84rem;
+            font-weight: 850;
+            line-height: 1.5;
+          }
+          .fc-explain {
+            margin: .45rem 0 .9rem 0;
+            padding: .9rem 1rem;
+            border-radius: 16px;
+            border: 1px solid rgba(148,163,184,.15);
+            background: rgba(15,23,42,.66);
+            color: #cbd5e1;
+            font-size: .81rem;
+            line-height: 1.48;
+          }
+          .fc-explain strong {
+            color: white;
+          }
+          .fc-good { color: #86efac !important; }
+          .fc-warn { color: #fbbf24 !important; }
+          .fc-bad { color: #fca5a5 !important; }
+          .fc-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 .45rem;
+            margin-top: .75rem;
+          }
+          .fc-table th {
+            color: #94a3b8;
+            font-size: .72rem;
+            text-align: left;
+            padding: .35rem .55rem;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+          }
+          .fc-table td {
+            color: #e5e7eb;
+            font-size: .80rem;
+            padding: .65rem .55rem;
+            background: rgba(15,23,42,.72);
+            border-top: 1px solid rgba(148,163,184,.13);
+            border-bottom: 1px solid rgba(148,163,184,.13);
+          }
+          .fc-table td:first-child {
+            border-left: 1px solid rgba(148,163,184,.13);
+            border-radius: 12px 0 0 12px;
+            font-weight: 900;
+          }
+          .fc-table td:last-child {
+            border-right: 1px solid rgba(148,163,184,.13);
+            border-radius: 0 12px 12px 0;
+          }
+          @media (max-width: 1100px) {
+            .fc-hero, .fc-metrics, .fc-grid-2, .fc-grid-3, .fc-grid-4 {
+              grid-template-columns: 1fr;
+            }
+            .fc-title { font-size: 2.05rem; }
+          }
+        </style>
+
+        <section class="fc-hero">
+          <div>
+            <div class="fc-kicker">Forecast Intelligence Cockpit</div>
+            <div class="fc-title">Date-Based News<br/>Movement Forecasts</div>
+            <div class="fc-subtitle">
+              Enter a financial news URL or paste article text. The page detects market cues, target context,
+              input quality, risk pressure, and driver strength before generating dated Bull, Base, and Bear scenarios.
+            </div>
+            <div class="fc-chip-row">
+              <span class="fc-chip">Article URL input</span>
+              <span class="fc-chip">Paste fallback</span>
+              <span class="fc-chip">Forecast dates</span>
+              <span class="fc-chip">Up / Flat / Down</span>
+              <span class="fc-chip">Scenario probabilities</span>
+              <span class="fc-chip">Analyst explanation</span>
+            </div>
+          </div>
+
+          <div class="fc-engine">
+            <div class="fc-kicker">Financial News Forecast Engine</div>
+            <div class="fc-flow-step"><div class="fc-flow-num">01</div><div><strong>Source</strong><span>Article URL, headline, body, optional ticker</span></div></div>
+            <div class="fc-flow-step"><div class="fc-flow-num">02</div><div><strong>Signals</strong><span>Bullish, bearish, risk, target, sector, index</span></div></div>
+            <div class="fc-flow-step"><div class="fc-flow-num">03</div><div><strong>Forecast calendar</strong><span>1D, 7D, 14D, 30D dated movement paths</span></div></div>
+            <div class="fc-flow-step"><div class="fc-flow-num">04</div><div><strong>Probabilities</strong><span>Up, Flat, Down and Bull/Base/Bear scenario mix</span></div></div>
+            <div class="fc-flow-step"><div class="fc-flow-num">05</div><div><strong>Explanation</strong><span>Detected drivers and analyst-readable summary</span></div></div>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <section class="fc-panel">
+          <div class="fc-kicker">Forecast Input</div>
+          <div class="fc-section-title">Enter a URL first, or paste article text manually</div>
+          <p class="fc-copy">
+            URL extraction may fail on some news sites because of paywalls, bot protection, or blocked article markup.
+            If that happens, paste the headline and article body manually. The forecast will still work.
+          </p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    input_left, input_right = st.columns([1.18, .82])
+
+    with input_left:
+        url_value = st.text_input(
+            "Article URL",
+            value=st.session_state.forecast_url,
+            placeholder="https://...",
+            key="forecast_url_input",
+        )
+
+        target_hint = st.text_input(
+            "Optional ticker / asset / market target",
+            value=st.session_state.forecast_target,
+            placeholder="Examples: NVDA, AAPL, Nasdaq, Dow, Semiconductors, Broad market",
+            key="forecast_target_input",
+        )
+
+        headline = st.text_input(
+            "Article headline",
+            value=st.session_state.forecast_headline,
+            placeholder="Paste the financial-news headline here",
+            key="forecast_headline_input",
+        )
+
+        article_body = st.text_area(
+            "Article body or summary",
+            value=st.session_state.forecast_body,
+            height=155,
+            placeholder="Paste article body or summary here for stronger forecast quality.",
+            key="forecast_body_input",
+        )
+
+    with input_right:
+        horizon_days = st.slider("Forecast horizon, days", min_value=7, max_value=60, value=30, step=1)
+        manual_adjustment = st.slider("Manual analyst adjustment", min_value=-20, max_value=20, value=0, step=1)
+        show_3d = st.checkbox("Show optional 3D forecast surface", value=False)
+
+        fetch_clicked = st.button("Extract URL text", type="secondary", use_container_width=True)
+        sample_clicked = st.button("Load sample article", type="secondary", use_container_width=True)
+        generate_clicked = st.button("Generate forecast", type="primary", use_container_width=True)
+
+    if fetch_clicked:
+        status, fetched_headline, fetched_body = _extract_article_from_url(url_value)
+        st.session_state.forecast_url = url_value
+        st.session_state.forecast_status = status
+        if fetched_headline:
+            st.session_state.forecast_headline = fetched_headline
+        if fetched_body:
+            st.session_state.forecast_body = fetched_body
+        st.rerun()
+
+    if sample_clicked:
+        st.session_state.forecast_url = ""
+        st.session_state.forecast_headline = sample_headline
+        st.session_state.forecast_body = sample_body
+        st.session_state.forecast_target = "Broad market"
+        st.session_state.forecast_status = "Sample article loaded."
+        st.rerun()
+
+    st.session_state.forecast_url = url_value
+    st.session_state.forecast_headline = headline
+    st.session_state.forecast_body = article_body
+    st.session_state.forecast_target = target_hint
+
+    full_text = f"{headline}\n{article_body}".strip()
+    word_count = len(re.findall(r"\b\w+\b", full_text))
+
+    bullish_cues = _find_cues(full_text, bullish_patterns)
+    bearish_cues = _find_cues(full_text, bearish_patterns)
+    risk_cues = _find_cues(full_text, risk_patterns)
+    target_type, detected_entities = _detect_target(full_text, target_hint)
+
+    pos_score = sum(float(c["weight"]) for c in bullish_cues)
+    neg_score = sum(float(c["weight"]) for c in bearish_cues)
+    risk_score = sum(float(c["weight"]) for c in risk_cues)
+
+    if not full_text:
+        input_quality = 20
+        input_quality_label = "Missing"
+    elif word_count < 25:
+        input_quality = 42 + min(10, len(bullish_cues) + len(bearish_cues) + len(risk_cues))
+        input_quality_label = "Headline-only / limited"
+    elif word_count < 120:
+        input_quality = 58 + min(12, len(bullish_cues) * 2 + len(bearish_cues) * 2 + len(risk_cues))
+        input_quality_label = "Moderate"
+    else:
+        input_quality = 76 + min(14, len(bullish_cues) + len(bearish_cues) + len(risk_cues))
+        input_quality_label = "Strong"
+
+    input_quality = round(_clamp(input_quality, 20, 92))
+
+    sentiment_signal = _clamp(50 + pos_score * 9.0 - neg_score * 9.8 + manual_adjustment * .45, 8, 92)
+    risk_pressure = _clamp(32 + risk_score * 10.5 + neg_score * 3.5 - pos_score * 1.4, 12, 90)
+    movement_pressure = _clamp(50 + (sentiment_signal - 50) * .68 - (risk_pressure - 45) * .25, 8, 92)
+    driver_strength = _clamp(38 + (pos_score + neg_score + risk_score) * 6.5 + min(18, word_count / 9), 22, 92)
+
+    if not full_text:
+        sentiment_signal, risk_pressure, movement_pressure, driver_strength = 50, 45, 50, 35
+
+    forecast_pressure = (
+        (sentiment_signal - 50) * 0.033
+        + (movement_pressure - 50) * 0.038
+        + (driver_strength - 50) * 0.020
+        - (risk_pressure - 45) * 0.035
+        + manual_adjustment * 0.025
+    )
+
+    quality_factor = 0.72 + input_quality / 330
+    base_end = round(_clamp(forecast_pressure * (horizon_days / 30.0) * quality_factor, -7.5, 7.5), 2)
+    bull_end = round(_clamp(base_end + 1.20 + driver_strength / 42.0, -5.0, 10.0), 2)
+    downside_gap = 1.45 + risk_pressure / 30.0 + (100 - input_quality) / 95.0
+    bear_end = round(_clamp(base_end - downside_gap, -10.0, 4.0), 2)
+    if bear_end > -0.2:
+        bear_end = round(-0.2 - (100 - input_quality) / 115.0, 2)
+
+    confidence = round(
+        _clamp(
+            34 + input_quality * .42 + driver_strength * .12 - risk_pressure * .12 + min(8, len(bullish_cues) + len(bearish_cues) + len(risk_cues)),
+            35,
+            88,
+        )
+    )
+
+    up_prob = round(_clamp(35 + (sentiment_signal - 50) * .55 + (movement_pressure - 50) * .35 - (risk_pressure - 45) * .22, 5, 88))
+    down_prob = round(_clamp(25 + (risk_pressure - 45) * .35 + (50 - sentiment_signal) * .38 + neg_score * 5, 4, 85))
+    flat_prob = max(4, 100 - up_prob - down_prob)
+    total_prob = up_prob + flat_prob + down_prob
+    up_prob = round(up_prob * 100 / total_prob)
+    flat_prob = round(flat_prob * 100 / total_prob)
+    down_prob = 100 - up_prob - flat_prob
+
+    bull_prob = round(_clamp(up_prob * .72 + confidence * .18, 8, 78))
+    bear_prob = round(_clamp(down_prob * .80 + risk_pressure * .10, 6, 72))
+    base_prob = max(5, 100 - bull_prob - bear_prob)
+    total_scenario = bull_prob + base_prob + bear_prob
+    bull_prob = round(bull_prob * 100 / total_scenario)
+    base_prob = round(base_prob * 100 / total_scenario)
+    bear_prob = 100 - bull_prob - base_prob
+
+    forecast_start = date.today()
+    forecast_end = forecast_start + timedelta(days=horizon_days)
+    bucket_days = sorted(set([1, 7, 14, min(30, horizon_days), horizon_days]))
+    bucket_days = [d for d in bucket_days if d <= horizon_days]
+
+    def _path_value(end_value: float, day_number: int) -> float:
+        return round(end_value * (day_number / horizon_days) + 0.12 * math.sin(day_number / max(5, horizon_days / 3.8)), 2)
+
+    forecast_rows = []
+    for day_number in bucket_days:
+        row_date = forecast_start + timedelta(days=day_number)
+        forecast_rows.append(
+            {
+                "label": f"{day_number}D",
+                "date": _format_date(row_date),
+                "bull": _path_value(bull_end, day_number),
+                "base": _path_value(base_end, day_number),
+                "bear": round(bear_end * (day_number / horizon_days) - 0.10 * math.sin(day_number / max(5, horizon_days / 3.8)), 2),
+                "confidence": round(_clamp(confidence - day_number * .45, 25, confidence)),
+            }
+        )
+
+    sentiment_label = "Bullish" if sentiment_signal >= 62 else "Bearish" if sentiment_signal <= 42 else "Mixed"
+    risk_label = "High" if risk_pressure >= 65 else "Low" if risk_pressure <= 40 else "Moderate"
+    direction_label = "Bullish" if up_prob > max(flat_prob, down_prob) else "Bearish" if down_prob > max(up_prob, flat_prob) else "Mixed / flat"
+
+    def _cue_list_html(cues: list[dict[str, str | float]], empty_text: str) -> str:
+        if not cues:
+            return f"<span>{html.escape(empty_text)}</span>"
+        items = "".join(f"<li>{html.escape(str(c['label']))}</li>" for c in cues[:6])
+        return f"<ul>{items}</ul>"
+
+    status_text = html.escape(st.session_state.forecast_status)
+    escaped_target_type = html.escape(target_type)
+    escaped_entities = html.escape(detected_entities)
+    escaped_quality = html.escape(input_quality_label)
+
+    source_label = "Article URL" if url_value.strip() else "Pasted text / manual input"
+
+    st.markdown(
+        f"""
+        <section class="fc-panel">
+          <div class="fc-kicker">Forecast Source</div>
+          <div class="fc-section-title">Forecast generated from selected article signal</div>
+          <div class="fc-grid-4">
+            <div class="fc-card"><strong>Source</strong><span>{html.escape(source_label)}</span></div>
+            <div class="fc-card"><strong>Generated</strong><span>{html.escape(_format_date(forecast_start))}</span></div>
+            <div class="fc-card"><strong>Horizon end</strong><span>{html.escape(_format_date(forecast_end))}</span></div>
+            <div class="fc-card"><strong>Status</strong><span>{status_text}</span></div>
+          </div>
+          <div class="fc-grid-4">
+            <div class="fc-card"><strong>Target type</strong><span>{escaped_target_type}</span></div>
+            <div class="fc-card"><strong>Detected entities</strong><span>{escaped_entities}</span></div>
+            <div class="fc-card"><strong>Input quality</strong><span>{escaped_quality} · {word_count} words</span></div>
+            <div class="fc-card"><strong>Forecast type</strong><span>News-conditioned movement scenario</span></div>
+          </div>
+        </section>
+
+        <section class="fc-panel">
+          <div class="fc-kicker">Detected Signals</div>
+          <div class="fc-section-title">What the forecast engine found in the input</div>
+          <div class="fc-grid-3">
+            <div class="fc-card">
+              <strong class="fc-good">Bullish cues</strong>
+              {_cue_list_html(bullish_cues, "No clear bullish cues detected.")}
+            </div>
+            <div class="fc-card">
+              <strong class="fc-bad">Bearish cues</strong>
+              {_cue_list_html(bearish_cues, "No clear bearish cues detected.")}
+            </div>
+            <div class="fc-card">
+              <strong class="fc-warn">Risk cues</strong>
+              {_cue_list_html(risk_cues, "No clear risk cues detected.")}
+            </div>
+          </div>
+          <div class="fc-formula">
+            Forecast pressure = sentiment signal + movement pressure + driver strength - risk pressure ± analyst adjustment.
+            Confidence decays over time and is reduced when the input is headline-only or limited.
+          </div>
+        </section>
+
+        <div class="fc-metrics">
+          <div class="fc-metric"><strong>{direction_label}</strong><span>Direction forecast</span></div>
+          <div class="fc-metric"><strong>{up_prob}%</strong><span>Up probability</span></div>
+          <div class="fc-metric"><strong>{flat_prob}%</strong><span>Flat probability</span></div>
+          <div class="fc-metric"><strong>{down_prob}%</strong><span>Down probability</span></div>
+          <div class="fc-metric"><strong>{confidence}%</strong><span>Confidence today</span></div>
+        </div>
+
+        <div class="fc-metrics">
+          <div class="fc-metric"><strong>{bull_end:+.1f}%</strong><span>Bull scenario by {html.escape(_format_date(forecast_end))}</span></div>
+          <div class="fc-metric"><strong>{base_end:+.1f}%</strong><span>Base scenario by {html.escape(_format_date(forecast_end))}</span></div>
+          <div class="fc-metric"><strong>{bear_end:+.1f}%</strong><span>Bear scenario by {html.escape(_format_date(forecast_end))}</span></div>
+          <div class="fc-metric"><strong>{bull_prob}/{base_prob}/{bear_prob}</strong><span>Bull/Base/Bear probability mix</span></div>
+          <div class="fc-metric"><strong>{risk_label}</strong><span>Risk pressure</span></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    table_rows = ""
+    for row in forecast_rows:
+        table_rows += (
+            "<tr>"
+            f"<td>{html.escape(row['label'])}</td>"
+            f"<td>{html.escape(row['date'])}</td>"
+            f"<td>{row['bull']:+.1f}%</td>"
+            f"<td>{row['base']:+.1f}%</td>"
+            f"<td>{row['bear']:+.1f}%</td>"
+            f"<td>{row['confidence']}%</td>"
+            "</tr>"
+        )
+
+    st.markdown(
+        f"""
+        <section class="fc-panel">
+          <div class="fc-kicker">Forecast Calendar</div>
+          <div class="fc-section-title">Dated Bull / Base / Bear movement outlook</div>
+          <p class="fc-copy">
+            This table makes the forecast time-based. Each row shows the expected scenario movement by a calendar date.
+          </p>
+          <table class="fc-table">
+            <thead>
+              <tr>
+                <th>Horizon</th>
+                <th>Date</th>
+                <th>Bull</th>
+                <th>Base</th>
+                <th>Bear</th>
+                <th>Confidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {table_rows}
+            </tbody>
+          </table>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    try:
+        import plotly.graph_objects as go
+
+        signal_fig = go.Figure(
+            go.Bar(
+                x=[sentiment_signal, movement_pressure, risk_pressure, driver_strength, input_quality],
+                y=["Sentiment", "Movement", "Risk", "Driver strength", "Input quality"],
+                orientation="h",
+                hovertemplate="<b>%{y}</b><br>Score: %{x:.0f}/100<extra></extra>",
+            )
+        )
+        signal_fig.update_layout(
+            title="Input Signal Breakdown",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,.35)",
+            height=340,
+            margin=dict(l=0, r=0, t=55, b=0),
+            xaxis=dict(title="Signal score", range=[0, 100]),
+            yaxis_title="",
+        )
+        st.plotly_chart(signal_fig, use_container_width=True, config={"displayModeBar": False})
+
+        days = list(range(0, horizon_days + 1))
+        labels = [_format_date(forecast_start + timedelta(days=d)) for d in days]
+        curve_speed = max(5, horizon_days / 3.8)
+
+        base = [round(base_end * (d / horizon_days) + 0.14 * math.sin(d / curve_speed), 2) for d in days]
+        bull = [round(bull_end * (d / horizon_days) + 0.20 * math.sin(d / curve_speed), 2) for d in days]
+        bear = [round(bear_end * (d / horizon_days) - 0.15 * math.sin(d / curve_speed), 2) for d in days]
+
+        uncertainty_width = max(0.55, (100 - confidence) / 18)
+        upper = [round(v + uncertainty_width * (0.30 + d / horizon_days), 2) for d, v in zip(days, base)]
+        lower = [round(v - uncertainty_width * (0.30 + d / horizon_days), 2) for d, v in zip(days, base)]
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=labels, y=upper, mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"))
+        fig.add_trace(
+            go.Scatter(
+                x=labels,
+                y=lower,
+                mode="lines",
+                fill="tonexty",
+                fillcolor="rgba(34,211,238,.13)",
+                line=dict(width=0),
+                name="Confidence band",
+                hoverinfo="skip",
+            )
+        )
+        fig.add_trace(go.Scatter(x=labels, y=bull, mode="lines", name="Bull scenario", line=dict(width=4)))
+        fig.add_trace(go.Scatter(x=labels, y=base, mode="lines", name="Base scenario", line=dict(width=5)))
+        fig.add_trace(go.Scatter(x=labels, y=bear, mode="lines", name="Bear scenario", line=dict(width=4)))
+
+        fig.update_layout(
+            title=f"Dated Forecast Fan Chart · {_format_date(forecast_start)} to {_format_date(forecast_end)}",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,.35)",
+            height=520,
+            margin=dict(l=0, r=0, t=55, b=0),
+            xaxis_title="Forecast date",
+            yaxis_title="Projected movement %",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        )
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+        st.markdown(
+            """
+            <div class="fc-explain">
+              <strong>How to read this chart:</strong>
+              the x-axis now uses forecast dates. The Bull line shows upside if detected positive cues continue.
+              The Base line shows the central dated path. The Bear line shows downside risk. The shaded band widens
+              as uncertainty increases across the horizon.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        col_prob, col_decay = st.columns(2)
+
+        with col_prob:
+            prob_fig = go.Figure(
+                go.Bar(
+                    x=["Bull", "Base", "Bear"],
+                    y=[bull_prob, base_prob, bear_prob],
+                    hovertemplate="<b>%{x}</b><br>Scenario probability: %{y}%<extra></extra>",
+                )
+            )
+            prob_fig.update_layout(
+                title="Scenario Probability Forecast",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=380,
+                margin=dict(l=0, r=0, t=55, b=0),
+                yaxis=dict(title="Probability %", range=[0, 100]),
+                xaxis_title="Scenario",
+            )
+            st.plotly_chart(prob_fig, use_container_width=True, config={"displayModeBar": False})
+
+        with col_decay:
+            decay_days = [row["label"] for row in forecast_rows]
+            decay_values = [row["confidence"] for row in forecast_rows]
+            decay_fig = go.Figure(
+                go.Scatter(
+                    x=decay_days,
+                    y=decay_values,
+                    mode="lines+markers",
+                    hovertemplate="<b>%{x}</b><br>Confidence: %{y}%<extra></extra>",
+                )
+            )
+            decay_fig.update_layout(
+                title="Confidence Decay Forecast",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=380,
+                margin=dict(l=0, r=0, t=55, b=0),
+                yaxis=dict(title="Confidence %", range=[0, 100]),
+                xaxis_title="Forecast horizon",
+            )
+            st.plotly_chart(decay_fig, use_container_width=True, config={"displayModeBar": False})
+
+        st.markdown(
+            """
+            <div class="fc-explain">
+              <strong>How to read these charts:</strong>
+              scenario probability shows whether Bull, Base, or Bear is the dominant case.
+              Confidence decay shows that forecast certainty normally falls as the horizon moves farther away.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if show_3d:
+            pressure_axis = [-3, -2, -1, 0, 1, 2, 3]
+            horizon_axis = [0, round(horizon_days * .17), round(horizon_days * .34), round(horizon_days * .5), round(horizon_days * .67), round(horizon_days * .84), horizon_days]
+            z = []
+            for pval in pressure_axis:
+                row = []
+                for h in horizon_axis:
+                    value = (base_end * (h / horizon_days)) + pval * 0.50 + (h / horizon_days) * pval * 0.32
+                    row.append(round(value, 2))
+                z.append(row)
+
+            surface = go.Figure(
+                data=[
+                    go.Surface(
+                        x=horizon_axis,
+                        y=pressure_axis,
+                        z=z,
+                        opacity=.92,
+                        contours={"z": {"show": True, "usecolormap": True, "highlightcolor": "white", "project_z": True}},
+                    )
+                ]
+            )
+            surface.update_layout(
+                title="Optional 3D Forecast Surface · Horizon × Market Pressure × Movement",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=480,
+                margin=dict(l=0, r=0, t=55, b=0),
+                scene=dict(
+                    xaxis_title="Horizon",
+                    yaxis_title="Market pressure",
+                    zaxis_title="Movement %",
+                    camera=dict(eye=dict(x=1.55, y=1.45, z=1.08)),
+                ),
+            )
+            st.plotly_chart(surface, use_container_width=True, config={"displayModeBar": False})
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            risk_reward = go.Figure()
+            risk_reward.add_shape(type="line", x0=0, x1=10, y0=5, y1=5, line=dict(width=1, dash="dash"))
+            risk_reward.add_shape(type="line", x0=5, x1=5, y0=0, y1=10, line=dict(width=1, dash="dash"))
+
+            bull_risk = _clamp(risk_pressure / 20, 1, 9)
+            bull_reward = _clamp(5.2 + bull_end / 1.25, 1, 9.5)
+            base_risk = _clamp(risk_pressure / 15, 1, 9)
+            base_reward = _clamp(5 + base_end / 1.25, 1, 9.5)
+            bear_risk = _clamp(4.5 + risk_pressure / 14, 1, 9.5)
+            bear_reward = _clamp(5 + bear_end / 1.45, 1, 9.5)
+
+            risk_reward.add_trace(
+                go.Scatter(
+                    x=[bull_risk, base_risk, bear_risk],
+                    y=[bull_reward, base_reward, bear_reward],
+                    mode="markers+text",
+                    text=["Bull", "Base", "Bear"],
+                    textposition="top center",
+                    marker=dict(size=[20, 18, 20], line=dict(width=2, color="rgba(255,255,255,.35)")),
+                    hovertemplate="<b>%{text}</b><br>Risk: %{x:.1f}<br>Reward: %{y:.1f}<extra></extra>",
+                )
+            )
+            risk_reward.update_layout(
+                title="Risk / Reward Scenario Matrix",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=430,
+                margin=dict(l=0, r=0, t=55, b=0),
+                xaxis=dict(title="Risk", range=[0, 10]),
+                yaxis=dict(title="Reward", range=[0, 10]),
+                showlegend=False,
+            )
+            st.plotly_chart(risk_reward, use_container_width=True, config={"displayModeBar": False})
+
+        with col2:
+            impact_rows = [
+                ("Bullish cue pressure", round(pos_score * 0.42, 2)),
+                ("Bearish cue pressure", round(-neg_score * 0.46, 2)),
+                ("Risk language pressure", round(-risk_score * 0.42, 2)),
+                ("Input quality support", round((input_quality - 50) / 45, 2)),
+                ("Analyst adjustment", round(manual_adjustment / 20, 2)),
+            ]
+            driver_fig = go.Figure(
+                go.Bar(
+                    x=[row[1] for row in impact_rows],
+                    y=[row[0] for row in impact_rows],
+                    orientation="h",
+                    hovertemplate="<b>%{y}</b><br>Forecast contribution: %{x}<extra></extra>",
+                )
+            )
+            driver_fig.update_layout(
+                title="Forecast Driver Impact",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=430,
+                margin=dict(l=0, r=0, t=55, b=0),
+                xaxis_title="Forecast contribution",
+                yaxis_title="",
+            )
+            st.plotly_chart(driver_fig, use_container_width=True, config={"displayModeBar": False})
+
+        st.markdown(
+            """
+            <div class="fc-explain">
+              <strong>How to read these charts:</strong>
+              the risk/reward matrix compares upside and downside across scenarios.
+              The driver chart explains which detected signals lifted or lowered the forecast.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    except Exception as exc:
+        st.warning(f"Forecast charts could not render. Reason: {exc}")
+
+    if base_end >= 1.0:
+        base_text = "moderate upside"
+    elif base_end <= -1.0:
+        base_text = "downside pressure"
+    else:
+        base_text = "balanced movement"
+
+    st.markdown(
+        f"""
+        <section class="fc-panel">
+          <div class="fc-kicker">Scenario Interpretation</div>
+          <div class="fc-grid-3">
+            <div class="fc-card">
+              <strong class="fc-good">Bull Scenario · {bull_end:+.1f}% by {html.escape(_format_date(forecast_end))}</strong>
+              <span>Upside case if detected positive cues continue and risk pressure stays contained.</span>
+            </div>
+            <div class="fc-card">
+              <strong>Base Scenario · {base_end:+.1f}% by {html.escape(_format_date(forecast_end))}</strong>
+              <span>Central case for the selected input. Current profile indicates {base_text} with {risk_label.lower()} risk pressure.</span>
+            </div>
+            <div class="fc-card">
+              <strong class="fc-bad">Bear Scenario · {bear_end:+.1f}% by {html.escape(_format_date(forecast_end))}</strong>
+              <span>Downside case if the move fades, risk language increases, or market pressure reverses.</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="fc-panel">
+          <div class="fc-kicker">Forecast Method</div>
+          <div class="fc-section-title">Active engine: Financial News Stock Intelligence Scenario Forecast Layer</div>
+          <p class="fc-copy">
+            This page forecasts news-driven movement pressure. It is not mainly a historical price time-series app.
+            ARIMA, Prophet, and LSTM are useful forecasting concepts, but they are not claimed as active public-demo
+            engines here. The active page connects article language, sentiment pressure, movement pressure, risk terms,
+            input quality, dates, scenario probabilities, and explainability into Bull, Base, and Bear forecasts.
+          </p>
+        </section>
+
+        <section class="fc-panel">
+          <div class="fc-kicker">Analyst Explanation</div>
+          <div class="fc-section-title">Forecast summary</div>
+          <p class="fc-copy">
+            Selected target context: {html.escape(target_type)} ({html.escape(detected_entities)}).
+            Direction forecast is {html.escape(direction_label.lower())}, with Up / Flat / Down probabilities of
+            {up_prob}% / {flat_prob}% / {down_prob}%. The dated forecast runs from {html.escape(_format_date(forecast_start))}
+            to {html.escape(_format_date(forecast_end))}. Sentiment is {html.escape(sentiment_label.lower())},
+            risk pressure is {html.escape(risk_label.lower())}, input quality is {html.escape(input_quality_label.lower())},
+            and the base case shows {base_text}. Read this as a scenario forecast, not investment advice.
+          </p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
 def _render_public_placeholder_page(page_title: str) -> None:
     """Render a real routed public page outside Executive Overview."""
 
@@ -2557,6 +3615,10 @@ def render_public_streamlit_cloud_app(project_root: Path | str | None = None) ->
 
     if selected_page == "Analyze Article":
         _render_analyze_article_page()
+        return
+
+    if selected_page == "Forecasts":
+        _render_forecasts_page()
         return
 
     _render_public_placeholder_page(selected_page)
