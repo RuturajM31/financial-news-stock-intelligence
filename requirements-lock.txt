@@ -117,7 +117,7 @@ sacrebleu==2.4.3
 safetensors==0.8.0
 scikit-learn==1.5.0
 scipy==1.11.4
-sentence-transformers==3.3.1
+sentence-transformers==5.6.0
 sentencepiece==0.2.0
 six==1.17.0
 smmap==5.0.3
