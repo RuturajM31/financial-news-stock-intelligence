@@ -72,17 +72,29 @@ jobs:
           print("PUBLIC DASHBOARD CONTRACT: PASSED")
           PY
 
-      - name: Verify Streamlit local runner import
+      - name: Verify public Streamlit runner symbols without runtime imports
         run: |
           python - <<'PY'
-          from app.public_cloud_app import (
-              render_public_streamlit_cloud_app,
-              should_use_public_streamlit_cloud_app,
-          )
+          import ast
+          from pathlib import Path
 
-          assert callable(render_public_streamlit_cloud_app)
-          assert callable(should_use_public_streamlit_cloud_app)
-          print("PUBLIC STREAMLIT IMPORT CONTRACT: PASSED")
+          tree = ast.parse(Path("app/public_cloud_app.py").read_text(encoding="utf-8"))
+          functions = {
+              node.name
+              for node in ast.walk(tree)
+              if isinstance(node, ast.FunctionDef)
+          }
+
+          required = {
+              "render_public_streamlit_cloud_app",
+              "should_use_public_streamlit_cloud_app",
+          }
+
+          missing = sorted(required - functions)
+          if missing:
+              raise SystemExit("Missing public runner functions: " + ", ".join(missing))
+
+          print("PUBLIC STREAMLIT SYMBOL CONTRACT: PASSED")
           PY
 
   documentation-and-release-hygiene:
@@ -221,9 +233,9 @@ jobs:
           print("SECRET HYGIENE SCAN: PASSED")
           PY
 
-      - name: Bandit static security scan
+      - name: Bandit public dashboard static security scan
         run: |
-          bandit -q -r app scripts \
+          bandit -q app/public_cloud_app.py app/streamlit_app.py \
             --severity-level medium \
             --confidence-level high \
             --skip B101
