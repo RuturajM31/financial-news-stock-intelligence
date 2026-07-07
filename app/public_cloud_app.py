@@ -748,23 +748,23 @@ def _apply_theme() -> None:
     )
 
 
-def _render_sidebar() -> None:
-    """Render polished fixed sidebar."""
+def _render_sidebar() -> str:
+    """Render real clickable Streamlit sidebar navigation."""
 
-    nav_items = [
-        ("⌂", "Executive Overview"),
-        ("◉", "Analyze Article"),
-        ("▥", "Forecasts"),
-        ("✤", "Historical Intelligence"),
-        ("◇", "Explainability"),
-        ("✧", "Scenario Analysis"),
-        ("◎", "Model Comparison"),
-        ("▣", "Model Training / Evidence"),
-        ("?", "Provenance"),
-        ("⌘", "Architecture / System Design"),
-        ("◌", "3D Intelligence"),
-        ("i", "About / Project Purpose"),
-        ("⚙", "Visual QA / Page Audit"),
+    pages = [
+        "Executive Overview",
+        "Analyze Article",
+        "Forecasts",
+        "Historical Intelligence",
+        "Explainability",
+        "Scenario Analysis",
+        "Model Comparison",
+        "Model Training / Evidence",
+        "Provenance",
+        "Architecture / System Design",
+        "3D Intelligence",
+        "About / Project Purpose",
+        "Visual QA / Page Audit",
     ]
 
     st.sidebar.markdown(
@@ -783,12 +783,13 @@ def _render_sidebar() -> None:
         unsafe_allow_html=True,
     )
 
-    for idx, (icon, label) in enumerate(nav_items):
-        cls = "nav-item active" if idx == 0 else "nav-item"
-        st.sidebar.markdown(
-            f"<div class='{cls}'><span>{_safe(icon)}</span><span>{_safe(label)}</span></div>",
-            unsafe_allow_html=True,
-        )
+    selected_page = st.sidebar.radio(
+        "Pages",
+        pages,
+        index=0,
+        key="public_dashboard_page",
+        label_visibility="collapsed",
+    )
 
     st.sidebar.markdown(
         """
@@ -805,18 +806,35 @@ def _render_sidebar() -> None:
         unsafe_allow_html=True,
     )
 
+    return selected_page
 
-def _render_topbar() -> None:
-    """Render compact Executive Overview header."""
+def _render_topbar(page_title: str = "Executive Overview") -> None:
+    """Render compact public dashboard header."""
+
+    subtitle = {
+        "Executive Overview": "Financial News → Sentiment → Movement → Forecast → Explainability",
+        "Analyze Article": "URL, upload, paste text, and sample analysis controls",
+        "Forecasts": "Bull, base, and bear movement scenarios",
+        "Historical Intelligence": "Comparable events and market reaction context",
+        "Explainability": "Drivers, signals, phrases, and model workflow",
+        "Scenario Analysis": "What-if risk and opportunity analysis",
+        "Model Comparison": "Model selection story and performance tradeoffs",
+        "Model Training / Evidence": "Training, metrics, and champion model evidence",
+        "Provenance": "Source checks, verification trail, and disclaimers",
+        "Architecture / System Design": "Streamlit, FastAPI, artifacts, Docker, Kubernetes, and CI",
+        "3D Intelligence": "Interactive intelligence visuals or graceful fallback",
+        "About / Project Purpose": "Why this portfolio project matters",
+        "Visual QA / Page Audit": "Public dashboard page coverage and QA status",
+    }.get(page_title, "Financial News Stock Intelligence")
 
     st.markdown(
-        """
+        f"""
         <div class="topbar">
           <div class="title-wrap">
             <div class="title-icon">↗</div>
             <div>
-              <div class="page-title">Executive Overview</div>
-              <div class="page-subtitle">Financial News → Sentiment → Movement → Forecast → Explainability</div>
+              <div class="page-title">{_safe(page_title)}</div>
+              <div class="page-subtitle">{_safe(subtitle)}</div>
             </div>
           </div>
           <div class="chip-row">
@@ -829,7 +847,6 @@ def _render_topbar() -> None:
         """,
         unsafe_allow_html=True,
     )
-
 
 def _input_form() -> tuple[str, str, str]:
     """Collect input from URL, upload, paste, or sample."""
@@ -1209,13 +1226,69 @@ def _render_dashboard(signal: ArticleSignal, source_url: str) -> None:
     _render_bottom_panels(signal)
 
 
+def _render_public_placeholder_page(page_title: str) -> None:
+    """Render a real routed public page outside Executive Overview."""
+
+    page_copy = {
+        "Analyze Article": ("Analyze Article", "Article URL, upload, paste, and sample analysis workflow.", ["URL priority", "Upload fallback", "Paste fallback"]),
+        "Forecasts": ("Forecasts", "Bull, base, and bear forward-looking movement scenarios.", ["Bull scenario", "Base scenario", "Bear scenario"]),
+        "Historical Intelligence": ("Historical Intelligence", "Comparable financial-news events and reaction context.", ["Similar events", "Market reactions", "Comparable moves"]),
+        "Explainability": ("Explainability", "Important words, sentiment drivers, movement drivers, and risk phrases.", ["Sentiment drivers", "Movement drivers", "Risk drivers"]),
+        "Scenario Analysis": ("Scenario Analysis", "What-if risk and opportunity panels.", ["Upside case", "Base case", "Downside case"]),
+        "Model Comparison": ("Model Comparison", "Model performance and champion selection story.", ["BERT", "DistilBERT", "Movement model"]),
+        "Model Training / Evidence": ("Model Training / Evidence", "Training evidence, metrics, and validation story.", ["Training metrics", "Champion model", "Evidence trail"]),
+        "Provenance": ("Provenance / Verification", "Source checks, disclaimers, and verification trail.", ["Source checks", "Public demo boundary", "Not investment advice"]),
+        "Architecture / System Design": ("Architecture / System Design", "How Streamlit, FastAPI, models, artifacts, Docker, Kubernetes, and CI fit together.", ["Streamlit", "FastAPI", "CI/CD"]),
+        "3D Intelligence": ("3D Intelligence", "3D intelligence visual area or graceful fallback.", ["Sentiment axis", "Risk axis", "Movement axis"]),
+        "About / Project Purpose": ("About Ruturaj / Portfolio", "Why this project matters as a data, ML, AI, and MLOps portfolio project.", ["ML product", "Business intelligence", "Deployment engineering"]),
+        "Visual QA / Page Audit": ("Visual QA / Page Audit", "Page coverage and public UI verification.", ["Real navigation", "Visible pages", "QA status"]),
+    }
+
+    heading, body, bullets = page_copy.get(
+        page_title,
+        (page_title, "This public page is routed and visible.", ["Visible", "Clickable", "Public-safe"]),
+    )
+
+    cards = "".join(
+        f"""
+        <div class="card" style="padding:1rem;">
+          <div class="tiny-label">PUBLIC PAGE CHECK</div>
+          <div class="strong">{_safe(item)}</div>
+          <div class="muted">Visible in the routed Streamlit dashboard.</div>
+        </div>
+        """
+        for item in bullets
+    )
+
+    st.markdown(
+        f"""
+        <div class="card insight" style="padding:1.15rem;margin-bottom:.75rem;">
+          <div class="tiny-label">PUBLIC DASHBOARD SECTION</div>
+          <h2 style="margin:.35rem 0;color:white;">{_safe(heading)}</h2>
+          <p style="color:#cbd5e1;margin-bottom:0;">{_safe(body)}</p>
+        </div>
+        <div class="kpi-grid">{cards}</div>
+        <div class="card" style="padding:1rem;margin-top:.75rem;">
+          <div class="tiny-label">STATUS</div>
+          <div class="strong">This is now a real clickable page, not a fake sidebar label.</div>
+          <p class="muted">Next polish step: replace this placeholder with deeper page-specific charts and panels.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_public_streamlit_cloud_app(project_root: Path | str | None = None) -> None:
-    """Render the public Streamlit Cloud app."""
+    """Render the public Streamlit Cloud app with real page routing."""
 
     _apply_theme()
-    _render_sidebar()
-    _render_topbar()
+    selected_page = _render_sidebar()
+    _render_topbar(selected_page)
 
-    text, source, source_url = _input_form()
-    signal = _score_article(text, source)
-    _render_dashboard(signal, source_url)
+    if selected_page == "Executive Overview":
+        text, source, source_url = _input_form()
+        signal = _score_article(text, source)
+        _render_dashboard(signal, source_url)
+        return
+
+    _render_public_placeholder_page(selected_page)
