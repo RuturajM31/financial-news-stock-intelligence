@@ -2284,6 +2284,858 @@ def _render_forecasts_page() -> None:
         unsafe_allow_html=True,
     )
 
+def _render_historical_intelligence_page() -> None:
+    """Render Historical Intelligence with article input and logically matched comparable events."""
+
+    import html
+    import re
+    import statistics
+    from urllib.parse import urlparse
+
+    def _find_cues(text: str, cue_patterns: list[tuple[str, str, float]]) -> list[dict[str, str | float]]:
+        lowered = text.lower()
+        found: list[dict[str, str | float]] = []
+        seen: set[str] = set()
+
+        for pattern, label, weight in cue_patterns:
+            if re.search(pattern, lowered, flags=re.IGNORECASE) and label not in seen:
+                found.append({"label": label, "weight": weight})
+                seen.add(label)
+
+        return found
+
+    def _extract_article_from_url(url: str) -> tuple[str, str, str]:
+        clean_url = url.strip()
+        if not clean_url:
+            return "No URL provided.", "", ""
+
+        parsed = urlparse(clean_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            return "Invalid URL. Paste a full URL starting with http:// or https://.", "", ""
+
+        try:
+            import requests
+            from bs4 import BeautifulSoup
+
+            response = requests.get(
+                clean_url,
+                timeout=8,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Macintosh; Intel Mac OS X) "
+                        "AppleWebKit/537.36 Chrome/120 Safari/537.36"
+                    )
+                },
+            )
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.text, "html.parser")
+            for tag in soup(["script", "style", "noscript", "svg", "form", "nav", "footer", "header"]):
+                tag.decompose()
+
+            title = ""
+            if soup.find("h1"):
+                title = soup.find("h1").get_text(" ", strip=True)
+            if not title and soup.title:
+                title = soup.title.get_text(" ", strip=True)
+
+            paragraphs = [
+                p_tag.get_text(" ", strip=True)
+                for p_tag in soup.find_all("p")
+                if len(p_tag.get_text(" ", strip=True).split()) >= 8
+            ]
+            body = "\n\n".join(paragraphs[:12]).strip()
+
+            if not body:
+                return "URL loaded, but article text could not be extracted. Paste article text manually.", title, ""
+
+            return "URL article text extracted.", title, body
+
+        except Exception as exc:
+            return f"URL extraction failed. Paste article text manually. Reason: {exc}", "", ""
+
+    def _detect_target(text: str, user_target: str) -> tuple[str, str]:
+        lowered = text.lower()
+        entities: list[str] = []
+
+        if re.search(r"\bdow\b|\bdjia\b", lowered):
+            entities.append("Dow")
+        if re.search(r"\bnasdaq\b|\bqqq\b", lowered):
+            entities.append("Nasdaq")
+        if re.search(r"\bs&p\b|\bsp500\b|\bspx\b|\bspy\b", lowered):
+            entities.append("S&P 500")
+        if re.search(r"\bchip\b|\bchips\b|\bsemiconductor\b|\bsemiconductors\b|\bnvidia\b|\bnvda\b|\bamd\b|\bintel\b", lowered):
+            entities.append("Chips / semiconductors")
+        if re.search(r"\brates?\b|\bfed\b|\binflation\b|\btreasury\b", lowered):
+            entities.append("Macro / rates")
+        if re.search(r"\bcredit\b|\bdebt\b|\bdowngrade\b|\bregulatory\b|\blawsuit\b", lowered):
+            entities.append("Credit / regulatory risk")
+
+        ticker_matches = re.findall(r"\$?[A-Z]{2,5}\b", text)
+        ticker_matches = [x.replace("$", "") for x in ticker_matches if x not in {"LIVE", "CEO", "CFO", "EPS", "THE"}]
+        for ticker in ticker_matches[:4]:
+            if ticker not in entities and ticker not in {"DOW"}:
+                entities.append(ticker)
+
+        if user_target.strip():
+            return "User-selected target", user_target.strip()
+
+        if "Dow" in entities or "Nasdaq" in entities or "S&P 500" in entities:
+            if "Chips / semiconductors" in entities:
+                return "Broad market + sector", ", ".join(entities)
+            return "Broad market / index", ", ".join(entities)
+
+        if "Chips / semiconductors" in entities:
+            return "Sector / theme", ", ".join(entities)
+
+        if ticker_matches:
+            return "Ticker / company", ", ".join(entities) if entities else ", ".join(ticker_matches[:4])
+
+        return "General financial news", "No specific ticker or index detected"
+
+    def _detect_event_family(text: str) -> str:
+        lowered = text.lower()
+
+        if re.search(r"\bchip\b|\bchips\b|\bsemiconductor\b|\bsemiconductors\b|\bnvidia\b|\bnvda\b|\bamd\b|\bintel\b", lowered) and re.search(r"\brebound\b|\brise\b|\brises\b|\brally\b|\bgain\b|\bjump\b", lowered):
+            return "Semiconductor rebound"
+
+        if re.search(r"\bbeat(s|ing)?\b|\bbeats?\s+estimates\b|\bearnings\s+beat\b|\bstrong\s+earnings\b", lowered):
+            return "Earnings beat"
+
+        if re.search(r"\braises?\s+guidance\b|\braised\s+guidance\b|\bguidance\s+raise\b|\boutlook\s+raised\b", lowered):
+            return "Guidance raise"
+
+        if re.search(r"\bregulatory\b|\blawsuit\b|\bprobe\b|\bcredit\b|\bdebt\b|\bdowngrade\b|\bliquidity\b", lowered):
+            return "Regulatory / credit risk"
+
+        if re.search(r"\bfed\b|\brates?\b|\binflation\b|\brecession\b|\btreasury\b|\bmacro\b", lowered):
+            return "Macro shock"
+
+        if re.search(r"\bdow\b|\bnasdaq\b|\bs&p\b|\bsp500\b|\bmarket\b", lowered) and re.search(r"\bjumps?\b|\brises?\b|\bgains?\b|\brall(y|ies|ied)\b|\bcloses?\s+above\b", lowered):
+            return "Broad market rally"
+
+        return "Broad market rally"
+
+    bullish_patterns = [
+        (r"\bjumps?\b", "Jumps / strong upward move", 1.35),
+        (r"\brises?\b|\brose\b", "Rises / positive market move", 1.15),
+        (r"\brebounds?\b|\brebounded\b", "Rebound language", 1.20),
+        (r"\brall(y|ies|ied)\b", "Rally language", 1.25),
+        (r"\bgains?\b|\bgained\b", "Gain language", 1.05),
+        (r"\bcloses?\s+above\b|\bfirst\s+close\s+above\b", "Close above key level", 1.40),
+        (r"\brecord\s+(close|high)\b|\ball[- ]time high\b", "Record high / record close", 1.45),
+        (r"\bchips?\s+rebound\b|\bsemiconductors?\s+rebound\b", "Chip / semiconductor rebound", 1.35),
+        (r"\bbeat(s|ing)?\b|\bbeats?\s+estimates\b", "Beat estimates", 1.45),
+        (r"\braises?\s+guidance\b|\braised\s+guidance\b", "Raised guidance", 1.50),
+        (r"\bupgrade(d|s)?\b|\banalyst\s+upgrade\b", "Analyst upgrade tone", 1.30),
+        (r"\bpositive\s+momentum\b|\bupside\b|\boptimism\b", "Positive momentum / upside tone", 1.05),
+    ]
+
+    bearish_patterns = [
+        (r"\bdrops?\b|\bfalls?\b|\bfell\b", "Drops / downward move", 1.25),
+        (r"\bslides?\b|\bslid\b|\btumbles?\b", "Slide / tumble language", 1.30),
+        (r"\bsell[- ]?off\b", "Selloff language", 1.45),
+        (r"\bmiss(es|ed)?\b|\bmisses?\s+estimates\b", "Missed estimates", 1.45),
+        (r"\bcuts?\s+guidance\b|\bcut\s+guidance\b", "Cut guidance", 1.55),
+        (r"\bdowngrade(d|s)?\b|\banalyst\s+downgrade\b", "Analyst downgrade tone", 1.35),
+        (r"\bweak\b|\bweakness\b|\bslowdown\b", "Weakness / slowdown", 1.15),
+    ]
+
+    risk_patterns = [
+        (r"\brisk(s)?\b", "Explicit risk language", 1.05),
+        (r"\buncertain(ty)?\b|\buncertainties\b", "Uncertainty language", 1.15),
+        (r"\bvolatil(e|ity)\b", "Volatility language", 1.25),
+        (r"\bregulatory\b|\bregulation\b|\blawsuit\b|\bprobe\b", "Regulatory / legal risk", 1.35),
+        (r"\binflation\b|\brates?\b|\bfed\b|\brecession\b", "Macro / rates risk", 1.25),
+        (r"\bdebt\b|\bliquidity\b|\bcredit\b", "Balance sheet / credit risk", 1.20),
+    ]
+
+    comparable_events = [
+        {"date":"2024-05-23","event":"Chip rally","target":"NVDA / SOX","family":"Semiconductor rebound","similarity":93,"d1":2.1,"d3":4.4,"d7":6.4,"d14":9.1,"d30":12.8,"risk":28,"vol":6.2,"regime":"Risk-on tech rally"},
+        {"date":"2024-04-19","event":"Chip selloff fade","target":"SOX / Nasdaq","family":"Semiconductor rebound","similarity":84,"d1":0.9,"d3":1.4,"d7":2.2,"d14":-0.4,"d30":1.1,"risk":61,"vol":8.8,"regime":"Volatile tech"},
+        {"date":"2023-03-29","event":"Semiconductor rebound","target":"SOX","family":"Semiconductor rebound","similarity":78,"d1":1.1,"d3":2.2,"d7":3.5,"d14":4.4,"d30":6.1,"risk":42,"vol":6.9,"regime":"Tech recovery"},
+        {"date":"2022-07-27","event":"Chip demand rebound","target":"AMD / SOX","family":"Semiconductor rebound","similarity":72,"d1":1.4,"d3":1.9,"d7":2.8,"d14":3.1,"d30":2.0,"risk":55,"vol":8.1,"regime":"Macro-sensitive tech"},
+
+        {"date":"2023-11-14","event":"Inflation relief rally","target":"Nasdaq","family":"Broad market rally","similarity":88,"d1":1.8,"d3":3.2,"d7":4.3,"d14":5.1,"d30":7.2,"risk":34,"vol":5.1,"regime":"Rates easing"},
+        {"date":"2022-08-10","event":"Macro relief rally","target":"S&P 500","family":"Broad market rally","similarity":79,"d1":2.0,"d3":2.7,"d7":3.1,"d14":1.4,"d30":-1.2,"risk":54,"vol":8.3,"regime":"High macro risk"},
+        {"date":"2020-11-09","event":"Market rotation rally","target":"Dow","family":"Broad market rally","similarity":73,"d1":2.9,"d3":1.2,"d7":1.8,"d14":3.4,"d30":4.6,"risk":46,"vol":9.4,"regime":"Rotation"},
+        {"date":"2021-03-01","event":"Risk appetite rebound","target":"S&P 500","family":"Broad market rally","similarity":70,"d1":1.6,"d3":2.0,"d7":2.7,"d14":3.1,"d30":3.8,"risk":44,"vol":6.8,"regime":"Risk-on"},
+
+        {"date":"2024-02-22","event":"AI earnings beat","target":"Semiconductors","family":"Earnings beat","similarity":86,"d1":1.6,"d3":2.8,"d7":5.2,"d14":7.6,"d30":11.4,"risk":32,"vol":7.1,"regime":"AI momentum"},
+        {"date":"2021-10-14","event":"Earnings rebound","target":"Nasdaq","family":"Earnings beat","similarity":76,"d1":1.5,"d3":2.1,"d7":3.6,"d14":4.2,"d30":5.9,"risk":40,"vol":5.9,"regime":"Risk-on"},
+        {"date":"2023-07-26","event":"Mega-cap earnings beat","target":"Mega-cap tech","family":"Earnings beat","similarity":74,"d1":1.2,"d3":1.9,"d7":3.0,"d14":4.1,"d30":5.4,"risk":39,"vol":6.1,"regime":"Earnings season"},
+
+        {"date":"2023-05-25","event":"Guidance raise","target":"Mega-cap tech","family":"Guidance raise","similarity":82,"d1":2.7,"d3":3.5,"d7":4.9,"d14":6.0,"d30":8.5,"risk":30,"vol":6.5,"regime":"Earnings season"},
+        {"date":"2024-01-31","event":"Outlook raised","target":"Cloud software","family":"Guidance raise","similarity":75,"d1":1.8,"d3":2.4,"d7":3.9,"d14":4.6,"d30":6.3,"risk":35,"vol":6.0,"regime":"Growth recovery"},
+        {"date":"2022-02-03","event":"Strong demand guidance","target":"Consumer tech","family":"Guidance raise","similarity":68,"d1":1.1,"d3":1.7,"d7":2.4,"d14":2.0,"d30":1.6,"risk":52,"vol":7.7,"regime":"Rate pressure"},
+
+        {"date":"2022-10-13","event":"Inflation whipsaw","target":"S&P 500","family":"Macro shock","similarity":68,"d1":2.6,"d3":-0.8,"d7":-1.4,"d14":1.2,"d30":3.0,"risk":72,"vol":11.5,"regime":"High volatility"},
+        {"date":"2021-03-09","event":"Rate pressure rebound","target":"Nasdaq","family":"Macro shock","similarity":65,"d1":3.7,"d3":2.0,"d7":-0.7,"d14":0.8,"d30":2.4,"risk":67,"vol":10.1,"regime":"Rate-sensitive"},
+        {"date":"2023-03-13","event":"Banking stress shock","target":"S&P 500","family":"Macro shock","similarity":63,"d1":-0.2,"d3":-1.1,"d7":-0.9,"d14":1.0,"d30":2.7,"risk":80,"vol":12.3,"regime":"Financial stress"},
+
+        {"date":"2023-08-02","event":"Downgrade risk reaction","target":"S&P 500","family":"Regulatory / credit risk","similarity":72,"d1":-1.4,"d3":-2.1,"d7":-2.8,"d14":-1.9,"d30":-0.6,"risk":78,"vol":9.6,"regime":"Credit risk"},
+        {"date":"2024-03-18","event":"Regulatory pressure","target":"Mega-cap tech","family":"Regulatory / credit risk","similarity":70,"d1":-0.8,"d3":-1.3,"d7":-2.2,"d14":-2.8,"d30":-1.5,"risk":82,"vol":8.7,"regime":"Policy risk"},
+        {"date":"2022-09-13","event":"Credit spread stress","target":"S&P 500","family":"Regulatory / credit risk","similarity":66,"d1":-1.9,"d3":-2.8,"d7":-3.4,"d14":-2.1,"d30":-0.8,"risk":85,"vol":10.5,"regime":"Credit stress"},
+    ]
+
+    sample_headline = "Dow jumps 150 points for first close above 53,000; Nasdaq rises as chips rebound"
+    sample_body = (
+        "Stocks maintained positive momentum after a strong week on Wall Street. "
+        "The S&P 500 gained 0.72%, while the Nasdaq Composite advanced 1.12% as chip stocks rebounded. "
+        "Investors pointed to stronger technology momentum, improving risk appetite, and broad-market strength."
+    )
+
+    if "hi_url" not in st.session_state:
+        st.session_state.hi_url = ""
+    if "hi_headline" not in st.session_state:
+        st.session_state.hi_headline = sample_headline
+    if "hi_body" not in st.session_state:
+        st.session_state.hi_body = sample_body
+    if "hi_target" not in st.session_state:
+        st.session_state.hi_target = "Broad market"
+    if "hi_status" not in st.session_state:
+        st.session_state.hi_status = "Sample article loaded for public demo. Paste your own article or URL."
+
+    st.markdown(
+        """
+        <style>
+          .hi-hero {
+            display:grid;
+            grid-template-columns:1.08fr .92fr;
+            gap:1rem;
+            padding:1.35rem;
+            border-radius:24px;
+            border:1px solid rgba(34,211,238,.34);
+            background:
+              radial-gradient(circle at 8% 8%, rgba(34,211,238,.20), transparent 22rem),
+              radial-gradient(circle at 76% 8%, rgba(139,92,246,.22), transparent 24rem),
+              linear-gradient(145deg, rgba(8,47,73,.72), rgba(8,13,28,.96));
+            box-shadow:0 30px 90px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.07);
+            margin-bottom:.9rem;
+          }
+          .hi-kicker {
+            color:#67e8f9;
+            font-size:.70rem;
+            font-weight:950;
+            letter-spacing:.13em;
+            text-transform:uppercase;
+          }
+          .hi-title {
+            color:white;
+            font-size:2.6rem;
+            line-height:1;
+            font-weight:950;
+            letter-spacing:-.06em;
+            margin:.42rem 0 .55rem 0;
+          }
+          .hi-subtitle {
+            color:#dbeafe;
+            font-size:1rem;
+            line-height:1.55;
+          }
+          .hi-chip-row {
+            display:flex;
+            flex-wrap:wrap;
+            gap:.48rem;
+            margin-top:.9rem;
+          }
+          .hi-chip {
+            padding:.43rem .68rem;
+            border-radius:999px;
+            font-size:.72rem;
+            font-weight:850;
+            color:#bfdbfe;
+            border:1px solid rgba(96,165,250,.25);
+            background:rgba(15,23,42,.65);
+          }
+          .hi-engine {
+            padding:1rem;
+            border-radius:20px;
+            border:1px solid rgba(148,163,184,.18);
+            background:linear-gradient(160deg, rgba(15,23,42,.92), rgba(2,6,23,.96));
+          }
+          .hi-step {
+            display:grid;
+            grid-template-columns:34px 1fr;
+            gap:.65rem;
+            align-items:center;
+            padding:.54rem;
+            margin-bottom:.45rem;
+            border-radius:13px;
+            border:1px solid rgba(96,165,250,.18);
+            background:rgba(15,23,42,.70);
+          }
+          .hi-num {
+            width:34px;
+            height:34px;
+            display:grid;
+            place-items:center;
+            border-radius:11px;
+            color:#67e8f9;
+            background:rgba(14,165,233,.13);
+            border:1px solid rgba(34,211,238,.25);
+            font-weight:950;
+          }
+          .hi-step strong {
+            display:block;
+            color:white;
+            font-size:.82rem;
+          }
+          .hi-step span {
+            display:block;
+            color:#94a3b8;
+            font-size:.70rem;
+            margin-top:.08rem;
+          }
+          .hi-panel {
+            margin:.95rem 0;
+            padding:1.1rem;
+            border-radius:22px;
+            border:1px solid rgba(34,211,238,.24);
+            background:
+              radial-gradient(circle at 6% 0%, rgba(34,211,238,.11), transparent 18rem),
+              radial-gradient(circle at 94% 30%, rgba(139,92,246,.13), transparent 20rem),
+              linear-gradient(145deg, rgba(15,23,42,.88), rgba(8,13,28,.96));
+            box-shadow:0 22px 60px rgba(0,0,0,.25);
+          }
+          .hi-section-title {
+            color:white;
+            font-size:1.25rem;
+            font-weight:950;
+            letter-spacing:-.04em;
+            margin:.2rem 0 .35rem 0;
+          }
+          .hi-copy {
+            color:#cbd5e1;
+            font-size:.84rem;
+            line-height:1.48;
+            margin:0;
+          }
+          .hi-metrics {
+            display:grid;
+            grid-template-columns:repeat(5,minmax(0,1fr));
+            gap:.68rem;
+            margin:.85rem 0 .9rem 0;
+          }
+          .hi-metric {
+            padding:1rem;
+            border-radius:18px;
+            border:1px solid rgba(148,163,184,.16);
+            background:rgba(15,23,42,.82);
+          }
+          .hi-metric strong {
+            color:white;
+            font-size:1.45rem;
+            font-weight:950;
+            display:block;
+          }
+          .hi-metric span {
+            color:#cbd5e1;
+            font-size:.74rem;
+            font-weight:760;
+          }
+          .hi-grid-3 {
+            display:grid;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .hi-grid-4 {
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .hi-card {
+            padding:.95rem;
+            border-radius:17px;
+            border:1px solid rgba(148,163,184,.16);
+            background:rgba(15,23,42,.74);
+          }
+          .hi-card strong {
+            color:white;
+            display:block;
+            font-size:.96rem;
+            margin-bottom:.32rem;
+          }
+          .hi-card span, .hi-card li {
+            color:#cbd5e1;
+            font-size:.75rem;
+            line-height:1.38;
+          }
+          .hi-card ul {
+            margin:.2rem 0 0 1rem;
+            padding:0;
+          }
+          .hi-table {
+            width:100%;
+            border-collapse:separate;
+            border-spacing:0 .45rem;
+            margin-top:.75rem;
+          }
+          .hi-table th {
+            color:#94a3b8;
+            font-size:.70rem;
+            text-align:left;
+            padding:.35rem .5rem;
+            text-transform:uppercase;
+            letter-spacing:.08em;
+          }
+          .hi-table td {
+            color:#e5e7eb;
+            font-size:.78rem;
+            padding:.62rem .5rem;
+            background:rgba(15,23,42,.72);
+            border-top:1px solid rgba(148,163,184,.13);
+            border-bottom:1px solid rgba(148,163,184,.13);
+          }
+          .hi-table td:first-child {
+            border-left:1px solid rgba(148,163,184,.13);
+            border-radius:12px 0 0 12px;
+            font-weight:900;
+          }
+          .hi-table td:last-child {
+            border-right:1px solid rgba(148,163,184,.13);
+            border-radius:0 12px 12px 0;
+          }
+          .hi-explain {
+            margin:.45rem 0 .9rem 0;
+            padding:.9rem 1rem;
+            border-radius:16px;
+            border:1px solid rgba(148,163,184,.15);
+            background:rgba(15,23,42,.66);
+            color:#cbd5e1;
+            font-size:.81rem;
+            line-height:1.48;
+          }
+          .hi-explain strong { color:white; }
+          .hi-good { color:#86efac !important; }
+          .hi-warn { color:#fbbf24 !important; }
+          .hi-bad { color:#fca5a5 !important; }
+          @media (max-width:1100px) {
+            .hi-hero,.hi-metrics,.hi-grid-3,.hi-grid-4 { grid-template-columns:1fr; }
+            .hi-title { font-size:2.05rem; }
+          }
+        </style>
+
+        <section class="hi-hero">
+          <div>
+            <div class="hi-kicker">Historical Intelligence Cockpit</div>
+            <div class="hi-title">Article-Driven<br/>Comparable Events</div>
+            <div class="hi-subtitle">
+              Enter a financial news URL or paste article text. The page detects the event family,
+              target context, tone, risk cues, and then compares the article against historically similar market events.
+            </div>
+            <div class="hi-chip-row">
+              <span class="hi-chip">Article URL</span>
+              <span class="hi-chip">Paste fallback</span>
+              <span class="hi-chip">Auto event detection</span>
+              <span class="hi-chip">Similar events</span>
+              <span class="hi-chip">Market reactions</span>
+              <span class="hi-chip">Historical explanation</span>
+            </div>
+          </div>
+
+          <div class="hi-engine">
+            <div class="hi-kicker">Comparable Event Engine</div>
+            <div class="hi-step"><div class="hi-num">01</div><div><strong>Read article</strong><span>URL, headline, body, optional target</span></div></div>
+            <div class="hi-step"><div class="hi-num">02</div><div><strong>Detect event family</strong><span>Semis, market rally, earnings, macro, credit risk</span></div></div>
+            <div class="hi-step"><div class="hi-num">03</div><div><strong>Match comparable events</strong><span>Only same-family or explicitly selected event group</span></div></div>
+            <div class="hi-step"><div class="hi-num">04</div><div><strong>Measure reaction windows</strong><span>1D, 3D, 7D, 14D, 30D movement</span></div></div>
+            <div class="hi-step"><div class="hi-num">05</div><div><strong>Explain context</strong><span>Why these events matched and what history suggests</span></div></div>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <section class="hi-panel">
+          <div class="hi-kicker">Historical Input</div>
+          <div class="hi-section-title">Enter article source and generate comparable-event history</div>
+          <p class="hi-copy">
+            URL extraction may fail on blocked or paywalled sites. If that happens, paste the headline and article body manually.
+            Public demo mode uses curated comparable-event examples and does not claim live historical database retrieval yet.
+          </p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    input_left, input_right = st.columns([1.18, .82])
+
+    with input_left:
+        url_value = st.text_input("Article URL", value=st.session_state.hi_url, placeholder="https://...")
+        target_hint = st.text_input(
+            "Optional ticker / index / sector",
+            value=st.session_state.hi_target,
+            placeholder="Examples: NVDA, Nasdaq, Dow, S&P 500, Semiconductors, Broad market",
+        )
+        headline = st.text_input("Article headline", value=st.session_state.hi_headline)
+        article_body = st.text_area("Article body or summary", value=st.session_state.hi_body, height=145)
+
+    with input_right:
+        event_choice = st.selectbox(
+            "Event matching mode",
+            [
+                "Auto-detect from article",
+                "Semiconductor rebound",
+                "Broad market rally",
+                "Earnings beat",
+                "Guidance raise",
+                "Macro shock",
+                "Regulatory / credit risk",
+                "All comparable events",
+            ],
+            index=0,
+        )
+        min_similarity = st.slider("Minimum similarity", min_value=50, max_value=95, value=60, step=1)
+        current_path = st.selectbox("Current forecast path", ["Moderately bullish", "Neutral / mixed", "Bearish risk"], index=0)
+
+        fetch_clicked = st.button("Extract URL text", type="secondary", use_container_width=True)
+        sample_clicked = st.button("Load sample article", type="secondary", use_container_width=True)
+        generate_clicked = st.button("Generate historical match", type="primary", use_container_width=True)
+
+    if fetch_clicked:
+        status, fetched_headline, fetched_body = _extract_article_from_url(url_value)
+        st.session_state.hi_url = url_value
+        st.session_state.hi_status = status
+        if fetched_headline:
+            st.session_state.hi_headline = fetched_headline
+        if fetched_body:
+            st.session_state.hi_body = fetched_body
+        st.rerun()
+
+    if sample_clicked:
+        st.session_state.hi_url = ""
+        st.session_state.hi_headline = sample_headline
+        st.session_state.hi_body = sample_body
+        st.session_state.hi_target = "Broad market"
+        st.session_state.hi_status = "Sample article loaded for public demo."
+        st.rerun()
+
+    st.session_state.hi_url = url_value
+    st.session_state.hi_headline = headline
+    st.session_state.hi_body = article_body
+    st.session_state.hi_target = target_hint
+
+    full_text = f"{headline}\n{article_body}".strip()
+    word_count = len(re.findall(r"\b\w+\b", full_text))
+
+    bullish_cues = _find_cues(full_text, bullish_patterns)
+    bearish_cues = _find_cues(full_text, bearish_patterns)
+    risk_cues = _find_cues(full_text, risk_patterns)
+
+    detected_family = _detect_event_family(full_text)
+    selected_family = detected_family if event_choice == "Auto-detect from article" else event_choice
+    target_type, detected_entities = _detect_target(full_text, target_hint)
+
+    if not full_text:
+        input_quality = "Missing"
+    elif word_count < 25:
+        input_quality = "Headline-only / limited"
+    elif word_count < 120:
+        input_quality = "Moderate"
+    else:
+        input_quality = "Strong"
+
+    def _cue_list_html(cues: list[dict[str, str | float]], empty_text: str) -> str:
+        if not cues:
+            return f"<span>{html.escape(empty_text)}</span>"
+        items = "".join(f"<li>{html.escape(str(c['label']))}</li>" for c in cues[:6])
+        return f"<ul>{items}</ul>"
+
+    st.markdown(
+        f"""
+        <section class="hi-panel">
+          <div class="hi-kicker">Current Article Signal</div>
+          <div class="hi-section-title">What the historical engine detected</div>
+          <div class="hi-grid-4">
+            <div class="hi-card"><strong>Detected event family</strong><span>{html.escape(detected_family)}</span></div>
+            <div class="hi-card"><strong>Selected match group</strong><span>{html.escape(selected_family)}</span></div>
+            <div class="hi-card"><strong>Target context</strong><span>{html.escape(target_type)} · {html.escape(detected_entities)}</span></div>
+            <div class="hi-card"><strong>Input quality</strong><span>{html.escape(input_quality)} · {word_count} words</span></div>
+          </div>
+          <div class="hi-grid-3">
+            <div class="hi-card"><strong class="hi-good">Bullish cues</strong>{_cue_list_html(bullish_cues, "No clear bullish cues detected.")}</div>
+            <div class="hi-card"><strong class="hi-bad">Bearish cues</strong>{_cue_list_html(bearish_cues, "No clear bearish cues detected.")}</div>
+            <div class="hi-card"><strong class="hi-warn">Risk cues</strong>{_cue_list_html(risk_cues, "No clear risk cues detected.")}</div>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if selected_family == "All comparable events":
+        filtered = [row for row in comparable_events if row["similarity"] >= min_similarity]
+    else:
+        filtered = [row for row in comparable_events if row["family"] == selected_family and row["similarity"] >= min_similarity]
+
+    if not filtered:
+        st.markdown(
+            f"""
+            <section class="hi-panel">
+              <div class="hi-kicker">No Strong Comparable Events Found</div>
+              <div class="hi-section-title">No same-family events match the current threshold</div>
+              <p class="hi-copy">
+                Selected match group: {html.escape(selected_family)}. Minimum similarity: {min_similarity}%.
+                Lower the similarity threshold or choose “All comparable events” to broaden the search.
+                The page does not silently replace missing results with unrelated events.
+              </p>
+            </section>
+            """,
+            unsafe_allow_html=True,
+        )
+        return
+
+    count = len(filtered)
+    avg_7d = round(statistics.mean(row["d7"] for row in filtered), 2)
+    avg_30d = round(statistics.mean(row["d30"] for row in filtered), 2)
+    best_7d = round(max(row["d7"] for row in filtered), 2)
+    worst_7d = round(min(row["d7"] for row in filtered), 2)
+    avg_similarity = round(statistics.mean(row["similarity"] for row in filtered))
+    positive_rate = round(sum(1 for row in filtered if row["d7"] > 0) * 100 / count)
+
+    st.markdown(
+        f"""
+        <div class="hi-metrics">
+          <div class="hi-metric"><strong>{count}</strong><span>same-family comparable events</span></div>
+          <div class="hi-metric"><strong>{avg_7d:+.1f}%</strong><span>average 7D reaction</span></div>
+          <div class="hi-metric"><strong>{best_7d:+.1f}%</strong><span>best 7D move</span></div>
+          <div class="hi-metric"><strong>{worst_7d:+.1f}%</strong><span>worst 7D move</span></div>
+          <div class="hi-metric"><strong>{positive_rate}%</strong><span>positive 7D rate</span></div>
+        </div>
+
+        <section class="hi-panel">
+          <div class="hi-kicker">Why These Events Matched</div>
+          <div class="hi-grid-4">
+            <div class="hi-card"><strong>Event family match</strong><span>{html.escape(selected_family)}</span></div>
+            <div class="hi-card"><strong>Average similarity</strong><span>{avg_similarity}% comparable-event match confidence</span></div>
+            <div class="hi-card"><strong>Average 30D reaction</strong><span>{avg_30d:+.1f}% after similar events</span></div>
+            <div class="hi-card"><strong>Current forecast path</strong><span>{html.escape(current_path)} reference path</span></div>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    try:
+        import plotly.graph_objects as go
+
+        windows = ["Day 0", "1D", "3D", "7D", "14D", "30D"]
+        avg_line = [0, statistics.mean(row["d1"] for row in filtered), statistics.mean(row["d3"] for row in filtered), statistics.mean(row["d7"] for row in filtered), statistics.mean(row["d14"] for row in filtered), statistics.mean(row["d30"] for row in filtered)]
+        best_line = [0, max(row["d1"] for row in filtered), max(row["d3"] for row in filtered), max(row["d7"] for row in filtered), max(row["d14"] for row in filtered), max(row["d30"] for row in filtered)]
+        worst_line = [0, min(row["d1"] for row in filtered), min(row["d3"] for row in filtered), min(row["d7"] for row in filtered), min(row["d14"] for row in filtered), min(row["d30"] for row in filtered)]
+
+        if current_path == "Moderately bullish":
+            current_line = [0, .8, 1.5, 2.6, 3.4, 4.2]
+        elif current_path == "Bearish risk":
+            current_line = [0, -.4, -1.0, -1.8, -2.4, -3.2]
+        else:
+            current_line = [0, .2, .3, .5, .7, .9]
+
+        timeline = go.Figure()
+        timeline.add_trace(go.Scatter(x=windows, y=best_line, mode="lines+markers", name="Best comparable reaction", line=dict(width=3)))
+        timeline.add_trace(go.Scatter(x=windows, y=avg_line, mode="lines+markers", name="Average comparable reaction", line=dict(width=5)))
+        timeline.add_trace(go.Scatter(x=windows, y=worst_line, mode="lines+markers", name="Worst comparable reaction", line=dict(width=3)))
+        timeline.add_trace(go.Scatter(x=windows, y=current_line, mode="lines+markers", name="Current forecast reference", line=dict(width=4, dash="dash")))
+        timeline.update_layout(
+            title="Historical Reaction Timeline · Same-Family Comparable Events",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,.35)",
+            height=460,
+            margin=dict(l=0, r=0, t=55, b=0),
+            xaxis_title="Reaction window",
+            yaxis_title="Movement %",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        )
+        st.plotly_chart(timeline, use_container_width=True, config={"displayModeBar": False})
+
+        st.markdown(
+            """
+            <div class="hi-explain">
+              <strong>How to read this chart:</strong>
+              the average line shows the typical same-family reaction after similar events. Best and worst lines show historical range.
+              The dashed line compares the current forecast path against those historical outcomes.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            scatter = go.Figure()
+            scatter.add_trace(
+                go.Scatter(
+                    x=[row["similarity"] for row in filtered],
+                    y=[row["d7"] for row in filtered],
+                    mode="markers",
+                    marker=dict(
+                        size=[max(10, row["vol"] * 2.0) for row in filtered],
+                        opacity=.88,
+                        line=dict(width=1, color="rgba(255,255,255,.35)"),
+                    ),
+                    text=[row["event"] for row in filtered],
+                    customdata=[row["regime"] for row in filtered],
+                    hovertemplate="<b>%{text}</b><br>Similarity: %{x}%<br>7D reaction: %{y}%<br>Regime: %{customdata}<extra></extra>",
+                )
+            )
+            scatter.update_layout(
+                title="Similar Event Scatter Map",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=400,
+                margin=dict(l=0, r=0, t=55, b=0),
+                xaxis=dict(title="Similarity score", range=[45, 100]),
+                yaxis_title="7D reaction %",
+                showlegend=False,
+            )
+            st.plotly_chart(scatter, use_container_width=True, config={"displayModeBar": False})
+
+        with col2:
+            distribution = go.Figure()
+            distribution.add_trace(go.Histogram(x=[row["d7"] for row in filtered], nbinsx=8))
+            distribution.update_layout(
+                title="Historical 7D Return Distribution",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=400,
+                margin=dict(l=0, r=0, t=55, b=0),
+                xaxis_title="7D movement %",
+                yaxis_title="Comparable event count",
+            )
+            st.plotly_chart(distribution, use_container_width=True, config={"displayModeBar": False})
+
+        col3, col4 = st.columns(2)
+
+        with col3:
+            match_breakdown = go.Figure(
+                go.Bar(
+                    x=[34, 23, 18, 14, 11],
+                    y=["Event family", "Sentiment tone", "Target / sector", "Risk profile", "Market regime"],
+                    orientation="h",
+                )
+            )
+            match_breakdown.update_layout(
+                title="Comparable Match Breakdown",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=380,
+                margin=dict(l=0, r=0, t=55, b=0),
+                xaxis_title="Contribution %",
+                yaxis_title="",
+            )
+            st.plotly_chart(match_breakdown, use_container_width=True, config={"displayModeBar": False})
+
+        with col4:
+            risk_return = go.Figure()
+            risk_return.add_trace(
+                go.Scatter(
+                    x=[row["risk"] for row in filtered],
+                    y=[row["d30"] for row in filtered],
+                    mode="markers",
+                    marker=dict(
+                        size=[max(10, row["similarity"] / 4.5) for row in filtered],
+                        opacity=.88,
+                        line=dict(width=1, color="rgba(255,255,255,.35)"),
+                    ),
+                    text=[row["target"] for row in filtered],
+                    hovertemplate="<b>%{text}</b><br>Risk pressure: %{x}<br>30D reaction: %{y}%<extra></extra>",
+                )
+            )
+            risk_return.update_layout(
+                title="Risk Pressure vs 30D Reaction",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=380,
+                margin=dict(l=0, r=0, t=55, b=0),
+                xaxis=dict(title="Risk pressure", range=[20, 90]),
+                yaxis_title="30D movement %",
+                showlegend=False,
+            )
+            st.plotly_chart(risk_return, use_container_width=True, config={"displayModeBar": False})
+
+    except Exception as exc:
+        st.warning(f"Historical Intelligence charts could not render. Reason: {exc}")
+
+    table_rows = ""
+    for row in sorted(filtered, key=lambda item: item["similarity"], reverse=True):
+        table_rows += (
+            "<tr>"
+            f"<td>{html.escape(row['date'])}</td>"
+            f"<td>{html.escape(row['event'])}</td>"
+            f"<td>{html.escape(row['target'])}</td>"
+            f"<td>{row['similarity']}%</td>"
+            f"<td>{row['d1']:+.1f}%</td>"
+            f"<td>{row['d7']:+.1f}%</td>"
+            f"<td>{row['d30']:+.1f}%</td>"
+            f"<td>{html.escape(row['regime'])}</td>"
+            "</tr>"
+        )
+
+    if avg_7d > 1.0 and positive_rate >= 60:
+        historical_read = "historically supportive"
+        guidance = "Similar same-family events usually produced positive short-term follow-through."
+    elif avg_7d < -1.0:
+        historical_read = "historically cautious"
+        guidance = "Similar same-family events often produced weak or negative short-term reactions."
+    else:
+        historical_read = "historically mixed"
+        guidance = "Similar same-family events produced uneven reactions, so the current signal should be treated carefully."
+
+    st.markdown(
+        f"""
+        <section class="hi-panel">
+          <div class="hi-kicker">Comparable Events Table</div>
+          <div class="hi-section-title">Historical cases selected by same-family similarity and context</div>
+          <table class="hi-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Event</th>
+                <th>Target</th>
+                <th>Similarity</th>
+                <th>1D</th>
+                <th>7D</th>
+                <th>30D</th>
+                <th>Regime</th>
+              </tr>
+            </thead>
+            <tbody>{table_rows}</tbody>
+          </table>
+        </section>
+
+        <section class="hi-panel">
+          <div class="hi-kicker">Regime Context</div>
+          <div class="hi-grid-4">
+            <div class="hi-card"><strong>Market regime</strong><span>Same-family public demo sample set</span></div>
+            <div class="hi-card"><strong>Volatility context</strong><span>Average comparable volatility: {statistics.mean(row["vol"] for row in filtered):.1f}</span></div>
+            <div class="hi-card"><strong>Risk pressure</strong><span>Average risk pressure: {statistics.mean(row["risk"] for row in filtered):.0f}/100</span></div>
+            <div class="hi-card"><strong>Historical read</strong><span>{html.escape(historical_read.title())}</span></div>
+          </div>
+        </section>
+
+        <section class="hi-panel">
+          <div class="hi-kicker">Historical Analyst Explanation</div>
+          <div class="hi-section-title">What history suggests</div>
+          <p class="hi-copy">
+            {html.escape(guidance)} The selected comparable-event set has an average 7-day reaction of {avg_7d:+.1f}%
+            and a positive 7-day historical rate of {positive_rate}%. The best cases show continuation, while weaker
+            cases fade when macro risk, credit risk, or volatility returns. This page does not directly predict the future;
+            it shows how the current article’s detected event family behaved historically.
+          </p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
 def _render_public_placeholder_page(page_title: str) -> None:
     """Render a real routed public page outside Executive Overview."""
 
@@ -3619,6 +4471,10 @@ def render_public_streamlit_cloud_app(project_root: Path | str | None = None) ->
 
     if selected_page == "Forecasts":
         _render_forecasts_page()
+        return
+
+    if selected_page == "Historical Intelligence":
+        _render_historical_intelligence_page()
         return
 
     _render_public_placeholder_page(selected_page)
