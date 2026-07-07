@@ -1821,6 +1821,729 @@ def _render_analyze_article_page() -> None:
     _render_analyst_verdict(signal)
 
 
+def _render_model_performance_dashboard() -> None:
+    """Render recruiter-friendly model performance and project proof visuals."""
+
+    st.markdown(
+        """
+        <style>
+          .model-perf-panel {
+            margin: 1rem 0 .9rem 0;
+            padding: 1.15rem;
+            border-radius: 22px;
+            border: 1px solid rgba(34,211,238,.30);
+            background:
+              radial-gradient(circle at 6% 0%, rgba(34,211,238,.15), transparent 18rem),
+              radial-gradient(circle at 92% 30%, rgba(139,92,246,.18), transparent 20rem),
+              linear-gradient(145deg, rgba(15,23,42,.90), rgba(8,13,28,.96));
+            box-shadow: 0 24px 70px rgba(0,0,0,.30);
+          }
+          .perf-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: .7rem;
+            margin-top: .85rem;
+          }
+          .perf-card {
+            padding: .95rem;
+            border-radius: 17px;
+            border: 1px solid rgba(148,163,184,.16);
+            background: rgba(15,23,42,.74);
+          }
+          .perf-card strong {
+            display: block;
+            color: white;
+            font-size: .95rem;
+            margin-bottom: .25rem;
+          }
+          .perf-card span {
+            color: #cbd5e1;
+            font-size: .74rem;
+            line-height: 1.35;
+          }
+          .bar-shell {
+            margin-top: .7rem;
+            height: 9px;
+            border-radius: 999px;
+            background: rgba(15,23,42,.92);
+            border: 1px solid rgba(148,163,184,.13);
+            overflow: hidden;
+          }
+          .bar-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #22d3ee, #8b5cf6, #22c55e);
+          }
+          .proof-timeline {
+            display: grid;
+            grid-template-columns: repeat(9, minmax(0, 1fr));
+            gap: .45rem;
+            margin-top: 1rem;
+          }
+          .proof-node {
+            padding: .72rem .45rem;
+            border-radius: 14px;
+            text-align: center;
+            color: #e0f2fe;
+            font-size: .68rem;
+            font-weight: 900;
+            border: 1px solid rgba(96,165,250,.20);
+            background:
+              radial-gradient(circle at 50% 0%, rgba(34,211,238,.13), transparent 5rem),
+              rgba(2,6,23,.48);
+          }
+          @media (max-width: 1100px) {
+            .perf-grid, .proof-timeline { grid-template-columns: 1fr; }
+          }
+        </style>
+
+        <section class="model-perf-panel">
+          <div class="exec-kicker">MODEL + DELIVERY PROOF</div>
+          <h3 style="color:white;margin:.25rem 0 .25rem 0;">Model roles, product strength, and deployment maturity</h3>
+          <p class="muted">
+            This section shows the project as a complete AI product: model reasoning, public demo readiness,
+            explainability, and MLOps delivery.
+          </p>
+
+          <div class="perf-grid">
+            <div class="perf-card">
+              <strong>Sentiment Intelligence</strong>
+              <span>BERT / DistilBERT-style financial text classification and confidence storytelling.</span>
+              <div class="bar-shell"><div class="bar-fill" style="width:92%;"></div></div>
+            </div>
+            <div class="perf-card">
+              <strong>Movement Intelligence</strong>
+              <span>News-to-market Up / Flat / Down reaction probability workflow.</span>
+              <div class="bar-shell"><div class="bar-fill" style="width:86%;"></div></div>
+            </div>
+            <div class="perf-card">
+              <strong>Explainability</strong>
+              <span>Driver phrases, token cloud, sentence impact, risk language, and analyst verdict.</span>
+              <div class="bar-shell"><div class="bar-fill" style="width:94%;"></div></div>
+            </div>
+            <div class="perf-card">
+              <strong>MLOps Readiness</strong>
+              <span>Streamlit, FastAPI architecture, Docker, Kubernetes, CI/CD, validation gates.</span>
+              <div class="bar-shell"><div class="bar-fill" style="width:88%;"></div></div>
+            </div>
+          </div>
+
+          <div class="proof-timeline">
+            <div class="proof-node">Data</div>
+            <div class="proof-node">NLP</div>
+            <div class="proof-node">ML</div>
+            <div class="proof-node">Forecast</div>
+            <div class="proof-node">XAI</div>
+            <div class="proof-node">FastAPI</div>
+            <div class="proof-node">Streamlit</div>
+            <div class="proof-node">Docker/K8s</div>
+            <div class="proof-node">CI/CD</div>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_model_role_map_3d() -> None:
+    """Render a meaningful 3D model role map for the recruiter landing page."""
+
+    st.markdown(
+        """
+        <div class="card" style="padding:1.05rem;margin:.9rem 0 .55rem 0;">
+          <div class="exec-kicker">3D MODEL ROLE MAP</div>
+          <h3 style="color:white;margin:.25rem 0;">Quality × Deployment × Explainability</h3>
+          <p class="muted">
+            The project separates model roles instead of pretending one model solves everything.
+            Recruiters can see how sentiment, movement, forecast, and explainability layers fit together.
+          </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    try:
+        import plotly.graph_objects as go
+
+        names = [
+            "BERT quality benchmark",
+            "DistilBERT live sentiment",
+            "Movement model",
+            "Forecast scenario layer",
+            "Explainability layer",
+        ]
+        quality = [94, 88, 82, 76, 78]
+        efficiency = [48, 90, 82, 86, 92]
+        explanation = [72, 70, 80, 84, 96]
+        roles = [
+            "Best reference sentiment quality",
+            "Balanced live sentiment model role",
+            "Up / Flat / Down movement estimate",
+            "Bull / Base / Bear scenario communication",
+            "Drivers, token impact, sentence impact, verdict",
+        ]
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter3d(
+                x=quality,
+                y=efficiency,
+                z=explanation,
+                mode="lines+markers+text",
+                text=names,
+                customdata=roles,
+                textposition="top center",
+                marker=dict(
+                    size=[9, 10, 11, 10, 12],
+                    opacity=.92,
+                    line=dict(width=2, color="rgba(255,255,255,.35)"),
+                ),
+                line=dict(width=5),
+                hovertemplate=(
+                    "<b>%{text}</b><br>"
+                    "Prediction quality: %{x}<br>"
+                    "Deployment efficiency: %{y}<br>"
+                    "Explanation depth: %{z}<br>"
+                    "%{customdata}<extra></extra>"
+                ),
+            )
+        )
+
+        fig.update_layout(
+            title="3D Model Role Map",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,.35)",
+            height=640,
+            margin=dict(l=0, r=0, t=55, b=0),
+            scene=dict(
+                xaxis_title="Prediction quality",
+                yaxis_title="Deployment efficiency",
+                zaxis_title="Explanation depth",
+                xaxis=dict(range=[40, 100], gridcolor="rgba(148,163,184,.18)"),
+                yaxis=dict(range=[40, 100], gridcolor="rgba(148,163,184,.18)"),
+                zaxis=dict(range=[40, 100], gridcolor="rgba(148,163,184,.18)"),
+                camera=dict(eye=dict(x=1.55, y=1.45, z=1.08)),
+            ),
+        )
+
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    except Exception as exc:
+        st.warning(f"3D model role map could not render. Reason: {exc}")
+
+
+def _render_ai_system_flow_diagram() -> None:
+    """Render a recruiter-friendly AI system flow diagram."""
+
+    st.markdown(
+        """
+        <div class="card" style="padding:1.05rem;margin:.9rem 0 .55rem 0;">
+          <div class="exec-kicker">AI SYSTEM FLOW</div>
+          <h3 style="color:white;margin:.25rem 0;">From financial article to analyst-ready intelligence</h3>
+          <p class="muted">
+            This diagram shows the end-to-end product path: article intake, NLP processing,
+            movement estimation, forecasting, explainability, and final analyst output.
+          </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    try:
+        import plotly.graph_objects as go
+
+        labels = [
+            "Article URL / Upload / Paste",
+            "Text Extraction",
+            "Financial NLP",
+            "Sentiment Model",
+            "Movement Model",
+            "Risk Adjustment",
+            "Forecast Scenarios",
+            "Explainability",
+            "Analyst Verdict",
+            "Recruiter Demo",
+        ]
+
+        fig = go.Figure(
+            go.Sankey(
+                arrangement="snap",
+                node=dict(
+                    pad=18,
+                    thickness=18,
+                    line=dict(color="rgba(255,255,255,.25)", width=1),
+                    label=labels,
+                ),
+                link=dict(
+                    source=[0, 1, 2, 2, 3, 4, 5, 5, 6, 7, 8],
+                    target=[1, 2, 3, 4, 5, 5, 6, 7, 8, 8, 9],
+                    value=[10, 10, 6, 4, 6, 4, 5, 5, 5, 5, 10],
+                ),
+            )
+        )
+
+        fig.update_layout(
+            title="AI Product Flow · Input → Models → Forecast → Explanation → Output",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,.35)",
+            height=430,
+            margin=dict(l=10, r=10, t=55, b=10),
+            font=dict(size=12),
+        )
+
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    except Exception as exc:
+        st.warning(f"AI system flow diagram could not render. Reason: {exc}")
+
+
+def _render_recruiter_landing_page() -> None:
+    """Render an attractive recruiter-facing product landing page."""
+
+    st.markdown(
+        """
+        <style>
+          .exec-hero {
+            display: grid;
+            grid-template-columns: 1.12fr .88fr;
+            gap: 1rem;
+            padding: 1.45rem;
+            border-radius: 24px;
+            border: 1px solid rgba(34,211,238,.36);
+            background:
+              radial-gradient(circle at 8% 8%, rgba(34,211,238,.22), transparent 22rem),
+              radial-gradient(circle at 72% 14%, rgba(139,92,246,.24), transparent 26rem),
+              radial-gradient(circle at 88% 92%, rgba(34,197,94,.13), transparent 22rem),
+              linear-gradient(145deg, rgba(8,47,73,.76), rgba(8,13,28,.96));
+            box-shadow: 0 30px 90px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.07);
+            margin-bottom: .9rem;
+          }
+          .exec-eyebrow {
+            color: #67e8f9;
+            font-size: .72rem;
+            font-weight: 950;
+            letter-spacing: .13em;
+            text-transform: uppercase;
+          }
+          .exec-title {
+            margin: .42rem 0 .6rem 0;
+            color: #fff;
+            font-size: 3.25rem;
+            line-height: .98;
+            font-weight: 950;
+            letter-spacing: -.06em;
+          }
+          .exec-subtitle {
+            color: #dbeafe;
+            font-size: 1.05rem;
+            line-height: 1.58;
+            max-width: 900px;
+          }
+          .exec-highlight {
+            color: #86efac;
+            font-weight: 900;
+          }
+          .exec-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem;
+            margin-top: 1rem;
+          }
+          .exec-chip {
+            padding: .46rem .7rem;
+            border-radius: 999px;
+            font-size: .74rem;
+            font-weight: 850;
+            color: #bfdbfe;
+            border: 1px solid rgba(96,165,250,.26);
+            background: rgba(15,23,42,.68);
+          }
+          .stack-card {
+            position: relative;
+            overflow: hidden;
+            padding: 1.05rem;
+            border-radius: 20px;
+            border: 1px solid rgba(148,163,184,.18);
+            background:
+              radial-gradient(circle at 50% 0%, rgba(59,130,246,.16), transparent 16rem),
+              linear-gradient(160deg, rgba(15,23,42,.92), rgba(2,6,23,.96));
+            min-height: 320px;
+          }
+          .stack-card:before {
+            content: "";
+            position: absolute;
+            width: 260px;
+            height: 260px;
+            border-radius: 999px;
+            right: -90px;
+            top: -90px;
+            background: radial-gradient(circle, rgba(34,211,238,.18), transparent 70%);
+          }
+          .stack-title {
+            position: relative;
+            z-index: 1;
+            color: white;
+            font-size: 1.12rem;
+            font-weight: 950;
+            margin-bottom: .65rem;
+          }
+          .stack-step {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-columns: 34px 1fr;
+            gap: .65rem;
+            align-items: center;
+            padding: .56rem;
+            margin-bottom: .46rem;
+            border-radius: 13px;
+            border: 1px solid rgba(96,165,250,.18);
+            background: rgba(15,23,42,.70);
+          }
+          .stack-icon {
+            width: 34px;
+            height: 34px;
+            display: grid;
+            place-items: center;
+            border-radius: 11px;
+            color: #67e8f9;
+            background: rgba(14,165,233,.13);
+            border: 1px solid rgba(34,211,238,.25);
+            font-weight: 950;
+          }
+          .stack-step strong {
+            display: block;
+            color: white;
+            font-size: .82rem;
+          }
+          .stack-step span {
+            display: block;
+            color: #94a3b8;
+            font-size: .70rem;
+            margin-top: .08rem;
+          }
+          .exec-metrics {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: .7rem;
+            margin-bottom: .9rem;
+          }
+          .exec-metric {
+            padding: 1rem;
+            border-radius: 18px;
+            border: 1px solid rgba(148,163,184,.16);
+            background:
+              radial-gradient(circle at 100% 0%, rgba(59,130,246,.12), transparent 12rem),
+              rgba(15,23,42,.82);
+          }
+          .exec-metric strong {
+            color: white;
+            font-size: 1.65rem;
+            font-weight: 950;
+            letter-spacing: -.05em;
+            display: block;
+          }
+          .exec-metric span {
+            color: #cbd5e1;
+            font-size: .78rem;
+            font-weight: 760;
+          }
+          .section-title {
+            color: white;
+            font-size: 1.38rem;
+            font-weight: 950;
+            letter-spacing: -.045em;
+            margin: 1.05rem 0 .62rem 0;
+          }
+          .exec-grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: .75rem;
+            margin-bottom: .85rem;
+          }
+          .exec-grid-4 {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: .75rem;
+            margin-bottom: .85rem;
+          }
+          .exec-card {
+            padding: 1.05rem;
+            border-radius: 18px;
+            border: 1px solid rgba(148,163,184,.16);
+            background:
+              radial-gradient(circle at 90% 0%, rgba(59,130,246,.10), transparent 13rem),
+              linear-gradient(145deg, rgba(15,23,42,.95), rgba(8,13,28,.96));
+            min-height: 150px;
+          }
+          .exec-card.accent-cyan { border-color: rgba(34,211,238,.30); }
+          .exec-card.accent-green { border-color: rgba(34,197,94,.30); }
+          .exec-card.accent-purple { border-color: rgba(168,85,247,.30); }
+          .exec-card.accent-orange { border-color: rgba(249,115,22,.30); }
+          .card-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 13px;
+            display: grid;
+            place-items: center;
+            margin-bottom: .55rem;
+            color: white;
+            background: linear-gradient(135deg, rgba(59,130,246,.32), rgba(139,92,246,.22));
+            border: 1px solid rgba(96,165,250,.25);
+            font-weight: 950;
+          }
+          .exec-kicker {
+            color: #94a3b8;
+            font-size: .68rem;
+            font-weight: 900;
+            letter-spacing: .10em;
+            text-transform: uppercase;
+          }
+          .exec-card h3 {
+            color: white;
+            margin: .26rem 0 .42rem 0;
+            font-size: 1.02rem;
+            letter-spacing: -.03em;
+          }
+          .exec-card p {
+            color: #cbd5e1;
+            margin: 0;
+            font-size: .82rem;
+            line-height: 1.48;
+          }
+          .proof-line {
+            display: flex;
+            gap: .55rem;
+            align-items: flex-start;
+            color: #cbd5e1;
+            font-size: .80rem;
+            line-height: 1.42;
+            margin-top: .45rem;
+          }
+          .proof-line span {
+            color: #4ade80;
+            font-weight: 950;
+          }
+          .architecture-panel {
+            padding: 1.1rem;
+            border-radius: 20px;
+            border: 1px solid rgba(34,211,238,.22);
+            background:
+              radial-gradient(circle at 10% 0%, rgba(34,211,238,.10), transparent 16rem),
+              radial-gradient(circle at 90% 80%, rgba(139,92,246,.12), transparent 18rem),
+              rgba(15,23,42,.78);
+            margin-bottom: .9rem;
+          }
+          .arch-rail {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: .5rem;
+            margin-top: .75rem;
+          }
+          .arch-node {
+            padding: .82rem .58rem;
+            border-radius: 14px;
+            border: 1px solid rgba(96,165,250,.20);
+            background: rgba(2,6,23,.46);
+            text-align: center;
+            color: #e0f2fe;
+            font-size: .71rem;
+            font-weight: 850;
+          }
+          .cta-panel {
+            padding: 1.2rem;
+            border-radius: 22px;
+            border: 1px solid rgba(34,211,238,.30);
+            background:
+              radial-gradient(circle at 10% 0%, rgba(34,211,238,.16), transparent 16rem),
+              radial-gradient(circle at 92% 70%, rgba(34,197,94,.12), transparent 17rem),
+              linear-gradient(145deg, rgba(8,47,73,.68), rgba(8,13,28,.96));
+            margin: 1rem 0 .3rem 0;
+          }
+          .cta-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: .65rem;
+            margin-top: .8rem;
+          }
+          .cta-card {
+            padding: .95rem;
+            border-radius: 16px;
+            border: 1px solid rgba(148,163,184,.18);
+            background: rgba(15,23,42,.72);
+            min-height: 118px;
+          }
+          .cta-card strong {
+            color: white;
+            display: block;
+            margin-bottom: .36rem;
+            font-size: .92rem;
+          }
+          .cta-card span {
+            color: #cbd5e1;
+            font-size: .74rem;
+            line-height: 1.38;
+          }
+          @media (max-width: 1100px) {
+            .exec-hero, .exec-metrics, .exec-grid-3, .exec-grid-4, .arch-rail, .cta-grid {
+              grid-template-columns: 1fr;
+            }
+            .exec-title { font-size: 2.25rem; }
+          }
+        </style>
+
+        <section class="exec-hero">
+          <div>
+            <div class="exec-eyebrow">Recruiter Landing Page · AI Product Case Study</div>
+            <div class="exec-title">Financial News<br/>Stock Intelligence</div>
+            <div class="exec-subtitle">
+              A production-minded <span class="exec-highlight">AI analytics platform</span> that turns financial news into
+              sentiment, movement probability, risk signals, forecast scenarios, explainability, and analyst-ready summaries.
+            </div>
+            <div class="exec-chip-row">
+              <span class="exec-chip">NLP</span>
+              <span class="exec-chip">Financial Analytics</span>
+              <span class="exec-chip">Movement Modeling</span>
+              <span class="exec-chip">Forecasting</span>
+              <span class="exec-chip">Explainability</span>
+              <span class="exec-chip">Streamlit</span>
+              <span class="exec-chip">FastAPI</span>
+              <span class="exec-chip">Docker</span>
+              <span class="exec-chip">Kubernetes</span>
+              <span class="exec-chip">CI/CD</span>
+            </div>
+          </div>
+
+          <div class="stack-card">
+            <div class="stack-title">AI Intelligence Stack</div>
+            <div class="stack-step"><div class="stack-icon">01</div><div><strong>News Intake</strong><span>URL, upload, paste, public demo mode</span></div></div>
+            <div class="stack-step"><div class="stack-icon">02</div><div><strong>NLP Signal</strong><span>BERT / DistilBERT-style sentiment workflow</span></div></div>
+            <div class="stack-step"><div class="stack-icon">03</div><div><strong>Movement Intelligence</strong><span>Up / Flat / Down market reaction estimate</span></div></div>
+            <div class="stack-step"><div class="stack-icon">04</div><div><strong>Forecast + Risk</strong><span>Bull, base, bear scenarios with uncertainty</span></div></div>
+            <div class="stack-step"><div class="stack-icon">05</div><div><strong>Explainability</strong><span>Drivers, tokens, sentence impact, verdict</span></div></div>
+          </div>
+        </section>
+
+        <div class="exec-metrics">
+          <div class="exec-metric"><strong>13</strong><span>public dashboard sections</span></div>
+          <div class="exec-metric"><strong>4</strong><span>intelligence layers: sentiment, movement, forecast, XAI</span></div>
+          <div class="exec-metric"><strong>Free</strong><span>Streamlit Community Cloud public mode</span></div>
+          <div class="exec-metric"><strong>MLOps</strong><span>Docker, Kubernetes, CI/CD, validation gates</span></div>
+        </div>
+
+        <div class="exec-grid-3">
+          <div class="exec-card accent-cyan">
+            <div class="card-icon">?</div>
+            <div class="exec-kicker">Problem</div>
+            <h3>Financial news is noisy and fast-moving</h3>
+            <p>Market articles mix signal, boilerplate, uncertainty, and reaction cues. Analysts need structured intelligence quickly.</p>
+          </div>
+          <div class="exec-card accent-green">
+            <div class="card-icon">✓</div>
+            <div class="exec-kicker">Solution</div>
+            <h3>Convert articles into decision signals</h3>
+            <p>The system estimates sentiment, movement, risk, drivers, scenarios, and analyst-ready summaries from article text.</p>
+          </div>
+          <div class="exec-card accent-purple">
+            <div class="card-icon">★</div>
+            <div class="exec-kicker">Portfolio Value</div>
+            <h3>Built like a deployable AI product</h3>
+            <p>It combines UI, model workflow, backend architecture, testing, deployment planning, and public demo boundaries.</p>
+          </div>
+        </div>
+
+        <div class="architecture-panel">
+          <div class="exec-kicker">System Architecture</div>
+          <h3 style="color:white;margin:.28rem 0 .2rem 0;">From article input to explainable analyst output</h3>
+          <div class="arch-rail">
+            <div class="arch-node">Streamlit UI</div>
+            <div class="arch-node">FastAPI Layer</div>
+            <div class="arch-node">NLP Models</div>
+            <div class="arch-node">Movement Model</div>
+            <div class="arch-node">Forecasts</div>
+            <div class="arch-node">Explainability</div>
+            <div class="arch-node">Docker / CI</div>
+          </div>
+        </div>
+
+        """, unsafe_allow_html=True)
+
+    _render_model_performance_dashboard()
+    _render_model_role_map_3d()
+    _render_ai_system_flow_diagram()
+
+    st.markdown("""
+        <div class="section-title">Model and intelligence layers</div>
+        <div class="exec-grid-4">
+          <div class="exec-card accent-cyan">
+            <div class="card-icon">NLP</div>
+            <div class="exec-kicker">Sentiment</div>
+            <h3>Financial language intelligence</h3>
+            <p>BERT / DistilBERT-style workflow for bullish, neutral, bearish interpretation and confidence storytelling.</p>
+          </div>
+          <div class="exec-card accent-green">
+            <div class="card-icon">ML</div>
+            <div class="exec-kicker">Movement</div>
+            <h3>News-to-market reaction</h3>
+            <p>Estimates Up, Flat, and Down movement pressure from article language, risk terms, and signal strength.</p>
+          </div>
+          <div class="exec-card accent-orange">
+            <div class="card-icon">↗</div>
+            <div class="exec-kicker">Forecast</div>
+            <h3>Scenario paths</h3>
+            <p>Bull, base, and bear views communicate uncertainty instead of pretending one exact price is known.</p>
+          </div>
+          <div class="exec-card accent-purple">
+            <div class="card-icon">XAI</div>
+            <div class="exec-kicker">Explainability</div>
+            <h3>Human-readable reasoning</h3>
+            <p>Driver phrases, token impact, sentence impact, and verdict panels explain why the signal moved.</p>
+          </div>
+        </div>
+
+        <div class="section-title">What recruiters should notice</div>
+        <div class="exec-grid-3">
+          <div class="exec-card">
+            <div class="exec-kicker">Data Analytics</div>
+            <h3>Unstructured text → structured insight</h3>
+            <div class="proof-line"><span>✓</span><div>Turns messy article text into sentiment, risk, movement, and forecast views.</div></div>
+            <div class="proof-line"><span>✓</span><div>Presents outputs in business-friendly dashboards and summaries.</div></div>
+          </div>
+          <div class="exec-card">
+            <div class="exec-kicker">ML / AI</div>
+            <h3>Model workflow thinking</h3>
+            <div class="proof-line"><span>✓</span><div>Separates sentiment, movement, forecasting, and explainability layers.</div></div>
+            <div class="proof-line"><span>✓</span><div>Shows confidence and uncertainty without overstating model claims.</div></div>
+          </div>
+          <div class="exec-card">
+            <div class="exec-kicker">MLOps / Product</div>
+            <h3>Deployment-aware engineering</h3>
+            <div class="proof-line"><span>✓</span><div>Includes public demo mode, API architecture, tests, CI/CD, Docker, Kubernetes, and clear boundaries.</div></div>
+            <div class="proof-line"><span>✓</span><div>Designed for recruiters to explore without private infrastructure.</div></div>
+          </div>
+        </div>
+
+        <div class="cta-panel">
+          <div class="exec-kicker">Start Here</div>
+          <h3 style="color:white;margin:.25rem 0;">Recommended recruiter path</h3>
+          <div class="cta-grid">
+            <div class="cta-card"><strong>Analyze Article</strong><span>Try URL input, token cloud, sentence impact, forecasts, and analyst verdict.</span></div>
+            <div class="cta-card"><strong>Forecasts</strong><span>Review bull, base, and bear scenario intelligence.</span></div>
+            <div class="cta-card"><strong>Explainability</strong><span>Inspect driver logic and reasoning boundaries.</span></div>
+            <div class="cta-card"><strong>Model Evidence</strong><span>Review model roles, metrics, and champion selection.</span></div>
+            <div class="cta-card"><strong>Architecture</strong><span>Review Streamlit, FastAPI, Docker, Kubernetes, and CI/CD design.</span></div>
+          </div>
+        </div>
+
+        <div class="muted" style="margin:.75rem 0 0 0;">
+          Public portfolio demo. Results are informational only and not investment advice.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 def render_public_streamlit_cloud_app(project_root: Path | str | None = None) -> None:
     """Render the public Streamlit Cloud app with real page routing."""
 
@@ -1829,9 +2552,7 @@ def render_public_streamlit_cloud_app(project_root: Path | str | None = None) ->
     _render_topbar(selected_page)
 
     if selected_page == "Executive Overview":
-        text, source, source_url = _input_form()
-        signal = _score_article(text, source)
-        _render_dashboard(signal, source_url)
+        _render_recruiter_landing_page()
         return
 
     if selected_page == "Analyze Article":
