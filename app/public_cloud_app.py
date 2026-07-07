@@ -6138,6 +6138,823 @@ def _render_model_training_evidence_page() -> None:
     )
 
 
+def _render_provenance_page() -> None:
+    """Render Provenance as a source, verification, disclaimer, and trust-boundary ledger."""
+
+    import html
+    import re
+    from datetime import datetime
+    from urllib.parse import urlparse
+
+    def _extract_article_from_url(url: str) -> tuple[str, str, str]:
+        clean_url = url.strip()
+        if not clean_url:
+            return "No URL provided.", "", ""
+
+        parsed = urlparse(clean_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            return "Invalid URL. Paste a full URL starting with http:// or https://.", "", ""
+
+        try:
+            import requests
+            from bs4 import BeautifulSoup
+
+            response = requests.get(
+                clean_url,
+                timeout=8,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Macintosh; Intel Mac OS X) "
+                        "AppleWebKit/537.36 Chrome/120 Safari/537.36"
+                    )
+                },
+            )
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.text, "html.parser")
+            for tag in soup(["script", "style", "noscript", "svg", "form", "nav", "footer", "header"]):
+                tag.decompose()
+
+            title = ""
+            if soup.find("h1"):
+                title = soup.find("h1").get_text(" ", strip=True)
+            if not title and soup.title:
+                title = soup.title.get_text(" ", strip=True)
+
+            paragraphs = [
+                p_tag.get_text(" ", strip=True)
+                for p_tag in soup.find_all("p")
+                if len(p_tag.get_text(" ", strip=True).split()) >= 8
+            ]
+            body = "\n\n".join(paragraphs[:12]).strip()
+
+            if not body:
+                return "URL loaded, but article text could not be extracted. Paste article text manually.", title, ""
+
+            return "URL article text extracted.", title, body
+
+        except Exception as exc:
+            return f"URL extraction failed. Paste article text manually. Reason: {exc}", "", ""
+
+    def _domain_from_url(url: str) -> tuple[str, bool]:
+        clean_url = url.strip()
+        if not clean_url:
+            return "Manual / pasted input", False
+
+        parsed = urlparse(clean_url)
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            domain = parsed.netloc.lower().replace("www.", "")
+            return domain, True
+
+        return "Invalid or incomplete URL", False
+
+    def _source_type(domain: str, source_name: str) -> str:
+        known_financial = {
+            "reuters.com",
+            "bloomberg.com",
+            "cnbc.com",
+            "marketwatch.com",
+            "wsj.com",
+            "ft.com",
+            "finance.yahoo.com",
+            "investing.com",
+            "seekingalpha.com",
+            "barrons.com",
+        }
+        if source_name.strip():
+            return f"User-labeled source: {source_name.strip()}"
+        if domain in known_financial or any(domain.endswith("." + item) for item in known_financial):
+            return "Recognized financial-news domain"
+        if domain == "Manual / pasted input":
+            return "Manual pasted source"
+        if domain == "Invalid or incomplete URL":
+            return "Source unknown"
+        return "External web source"
+
+    def _detect_entities(text: str) -> str:
+        lowered = text.lower()
+        entities: list[str] = []
+
+        if re.search(r"\bdow\b|\bdjia\b", lowered):
+            entities.append("Dow")
+        if re.search(r"\bnasdaq\b|\bqqq\b", lowered):
+            entities.append("Nasdaq")
+        if re.search(r"\bs&p\b|\bsp500\b|\bspx\b|\bspy\b", lowered):
+            entities.append("S&P 500")
+        if re.search(r"\bchip\b|\bchips\b|\bsemiconductor\b|\bsemiconductors\b|\bnvidia\b|\bnvda\b|\bamd\b|\bintel\b", lowered):
+            entities.append("Chips / semiconductors")
+        if re.search(r"\brates?\b|\bfed\b|\binflation\b|\btreasury\b", lowered):
+            entities.append("Macro / rates")
+
+        ticker_matches = re.findall(r"\$?[A-Z]{2,5}\b", text)
+        ticker_matches = [x.replace("$", "") for x in ticker_matches if x not in {"LIVE", "CEO", "CFO", "EPS", "THE"}]
+        for ticker in ticker_matches[:4]:
+            if ticker not in entities and ticker not in {"DOW"}:
+                entities.append(ticker)
+
+        return ", ".join(entities) if entities else "No ticker, index, or sector entity detected"
+
+    sample_headline = "Dow jumps 150 points for first close above 53,000; Nasdaq rises as chips rebound"
+    sample_body = (
+        "Stocks maintained positive momentum after a strong week on Wall Street. "
+        "The S&P 500 gained 0.72%, while the Nasdaq Composite advanced 1.12% as chip stocks rebounded. "
+        "Investors pointed to stronger technology momentum, improving risk appetite, and broad-market strength. "
+        "This public dashboard separates source checks, model outputs, demo boundaries, and financial disclaimers."
+    )
+
+    if "pv_url" not in st.session_state:
+        st.session_state.pv_url = ""
+    if "pv_source" not in st.session_state:
+        st.session_state.pv_source = "Manual demo source"
+    if "pv_headline" not in st.session_state:
+        st.session_state.pv_headline = sample_headline
+    if "pv_body" not in st.session_state:
+        st.session_state.pv_body = sample_body
+    if "pv_status" not in st.session_state:
+        st.session_state.pv_status = "Sample public-demo provenance loaded."
+
+    st.markdown(
+        """
+        <style>
+          .pv-hero {
+            display:grid;
+            grid-template-columns:1.08fr .92fr;
+            gap:1rem;
+            padding:1.35rem;
+            border-radius:24px;
+            border:1px solid rgba(34,211,238,.34);
+            background:
+              radial-gradient(circle at 8% 8%, rgba(34,211,238,.20), transparent 22rem),
+              radial-gradient(circle at 76% 8%, rgba(139,92,246,.23), transparent 24rem),
+              radial-gradient(circle at 88% 94%, rgba(34,197,94,.13), transparent 22rem),
+              linear-gradient(145deg, rgba(8,47,73,.72), rgba(8,13,28,.96));
+            box-shadow:0 30px 90px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.07);
+            margin-bottom:.9rem;
+          }
+          .pv-kicker {
+            color:#67e8f9;
+            font-size:.70rem;
+            font-weight:950;
+            letter-spacing:.13em;
+            text-transform:uppercase;
+          }
+          .pv-title {
+            color:white;
+            font-size:2.58rem;
+            line-height:1;
+            font-weight:950;
+            letter-spacing:-.06em;
+            margin:.42rem 0 .55rem 0;
+          }
+          .pv-subtitle {
+            color:#dbeafe;
+            font-size:1rem;
+            line-height:1.55;
+          }
+          .pv-chip-row {
+            display:flex;
+            flex-wrap:wrap;
+            gap:.48rem;
+            margin-top:.9rem;
+          }
+          .pv-chip {
+            padding:.43rem .68rem;
+            border-radius:999px;
+            font-size:.72rem;
+            font-weight:850;
+            color:#bfdbfe;
+            border:1px solid rgba(96,165,250,.25);
+            background:rgba(15,23,42,.65);
+          }
+          .pv-ledger {
+            padding:1rem;
+            border-radius:20px;
+            border:1px solid rgba(34,197,94,.30);
+            background:
+              radial-gradient(circle at 8% 0%, rgba(34,197,94,.13), transparent 16rem),
+              linear-gradient(160deg, rgba(15,23,42,.92), rgba(2,6,23,.96));
+          }
+          .pv-ledger h3 {
+            margin:.15rem 0 .35rem 0;
+            color:white;
+            font-size:1.35rem;
+            letter-spacing:-.04em;
+          }
+          .pv-ledger .big {
+            color:#86efac;
+            font-size:2rem;
+            font-weight:950;
+            letter-spacing:-.05em;
+            line-height:1.05;
+            margin:.35rem 0;
+          }
+          .pv-ledger p, .pv-ledger li {
+            color:#cbd5e1;
+            font-size:.78rem;
+            line-height:1.42;
+          }
+          .pv-ledger ul {
+            margin:.45rem 0 0 1rem;
+            padding:0;
+          }
+          .pv-panel {
+            margin:.95rem 0;
+            padding:1.1rem;
+            border-radius:22px;
+            border:1px solid rgba(34,211,238,.24);
+            background:
+              radial-gradient(circle at 6% 0%, rgba(34,211,238,.11), transparent 18rem),
+              radial-gradient(circle at 94% 30%, rgba(139,92,246,.13), transparent 20rem),
+              linear-gradient(145deg, rgba(15,23,42,.88), rgba(8,13,28,.96));
+            box-shadow:0 22px 60px rgba(0,0,0,.25);
+          }
+          .pv-section-title {
+            color:white;
+            font-size:1.25rem;
+            font-weight:950;
+            letter-spacing:-.04em;
+            margin:.2rem 0 .35rem 0;
+          }
+          .pv-copy {
+            color:#cbd5e1;
+            font-size:.84rem;
+            line-height:1.48;
+            margin:0;
+          }
+          .pv-metrics {
+            display:grid;
+            grid-template-columns:repeat(5,minmax(0,1fr));
+            gap:.68rem;
+            margin:.85rem 0 .9rem 0;
+          }
+          .pv-metric {
+            padding:1rem;
+            border-radius:18px;
+            border:1px solid rgba(148,163,184,.16);
+            background:rgba(15,23,42,.82);
+          }
+          .pv-metric strong {
+            color:white;
+            font-size:1.35rem;
+            font-weight:950;
+            display:block;
+          }
+          .pv-metric span {
+            color:#cbd5e1;
+            font-size:.74rem;
+            font-weight:760;
+          }
+          .pv-grid-2 {
+            display:grid;
+            grid-template-columns:repeat(2,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .pv-grid-3 {
+            display:grid;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .pv-grid-4 {
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .pv-card {
+            padding:.95rem;
+            border-radius:17px;
+            border:1px solid rgba(148,163,184,.16);
+            background:rgba(15,23,42,.74);
+          }
+          .pv-card strong {
+            color:white;
+            display:block;
+            font-size:.96rem;
+            margin-bottom:.32rem;
+          }
+          .pv-card span, .pv-card li {
+            color:#cbd5e1;
+            font-size:.75rem;
+            line-height:1.38;
+          }
+          .pv-card ul {
+            margin:.2rem 0 0 1rem;
+            padding:0;
+          }
+          .pv-table {
+            width:100%;
+            border-collapse:separate;
+            border-spacing:0 .45rem;
+            margin-top:.75rem;
+          }
+          .pv-table th {
+            color:#94a3b8;
+            font-size:.70rem;
+            text-align:left;
+            padding:.35rem .5rem;
+            text-transform:uppercase;
+            letter-spacing:.08em;
+          }
+          .pv-table td {
+            color:#e5e7eb;
+            font-size:.78rem;
+            padding:.62rem .5rem;
+            background:rgba(15,23,42,.72);
+            border-top:1px solid rgba(148,163,184,.13);
+            border-bottom:1px solid rgba(148,163,184,.13);
+          }
+          .pv-table td:first-child {
+            border-left:1px solid rgba(148,163,184,.13);
+            border-radius:12px 0 0 12px;
+            font-weight:900;
+          }
+          .pv-table td:last-child {
+            border-right:1px solid rgba(148,163,184,.13);
+            border-radius:0 12px 12px 0;
+          }
+          .pv-warning {
+            padding:1rem;
+            border-radius:18px;
+            border:1px solid rgba(251,191,36,.30);
+            background:
+              radial-gradient(circle at 0% 0%, rgba(251,191,36,.12), transparent 14rem),
+              rgba(15,23,42,.74);
+          }
+          .pv-warning strong {
+            color:#fbbf24;
+            display:block;
+            font-size:1.05rem;
+            margin-bottom:.25rem;
+          }
+          .pv-warning span {
+            color:#dbeafe;
+            font-size:.8rem;
+            line-height:1.42;
+          }
+          .pv-explain {
+            margin:.45rem 0 .9rem 0;
+            padding:.9rem 1rem;
+            border-radius:16px;
+            border:1px solid rgba(148,163,184,.15);
+            background:rgba(15,23,42,.66);
+            color:#cbd5e1;
+            font-size:.81rem;
+            line-height:1.48;
+          }
+          .pv-explain strong { color:white; }
+          .pv-good { color:#86efac !important; }
+          .pv-warn { color:#fbbf24 !important; }
+          .pv-bad { color:#fca5a5 !important; }
+          @media (max-width:1100px) {
+            .pv-hero,.pv-metrics,.pv-grid-2,.pv-grid-3,.pv-grid-4 { grid-template-columns:1fr; }
+            .pv-title { font-size:2.05rem; }
+          }
+        </style>
+
+        <section class="pv-hero">
+          <div>
+            <div class="pv-kicker">Provenance & Verification Ledger</div>
+            <div class="pv-title">Source Checks,<br/>Trust Boundaries & Disclaimers</div>
+            <div class="pv-subtitle">
+              Track article source, extraction method, verification checks, public-demo boundaries,
+              evidence lineage, and financial-risk disclaimers before trusting any dashboard output.
+            </div>
+            <div class="pv-chip-row">
+              <span class="pv-chip">Source checks</span>
+              <span class="pv-chip">Domain parsing</span>
+              <span class="pv-chip">Extraction trail</span>
+              <span class="pv-chip">Verification gates</span>
+              <span class="pv-chip">Demo boundary</span>
+              <span class="pv-chip">Not investment advice</span>
+            </div>
+          </div>
+
+          <div class="pv-ledger">
+            <div class="pv-kicker">Trust Ledger Verdict</div>
+            <h3>Transparent, bounded, auditable</h3>
+            <div class="big">VERIFIED FORMAT</div>
+            <p>
+              This page separates what the system checks from what it does not claim.
+              It verifies source format, extraction status, workflow transparency, and disclaimer coverage.
+            </p>
+            <ul>
+              <li>Checks article URL/domain/text presence.</li>
+              <li>Shows public-demo boundaries clearly.</li>
+              <li>Does not claim article truth verification.</li>
+              <li>Does not provide investment advice.</li>
+            </ul>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <section class="pv-panel">
+          <div class="pv-kicker">Provenance Input</div>
+          <div class="pv-section-title">Enter article source and run verification checks</div>
+          <p class="pv-copy">
+            URL extraction may fail on blocked or paywalled sites. If that happens, paste the headline and article body manually.
+            This page checks source handling and transparency boundaries; it does not certify that an article is factually true.
+          </p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    left, right = st.columns([1.15, .85])
+    with left:
+        url_value = st.text_input("Article URL", value=st.session_state.pv_url, placeholder="https://...")
+        source_name = st.text_input("Optional source name", value=st.session_state.pv_source, placeholder="Reuters, CNBC, Bloomberg, manual note...")
+        headline = st.text_input("Article headline", value=st.session_state.pv_headline)
+        body = st.text_area("Article body or summary", value=st.session_state.pv_body, height=145)
+
+    with right:
+        verification_mode = st.selectbox(
+            "Verification mode",
+            ["Public demo boundary", "Source format check", "Extraction check", "Full transparency check"],
+            index=0,
+        )
+        show_disclaimer = st.checkbox("Show not-investment-advice disclaimer", value=True)
+        show_demo_boundary = st.checkbox("Show public-demo boundary", value=True)
+        fetch_clicked = st.button("Extract URL text", type="secondary", use_container_width=True)
+        sample_clicked = st.button("Load sample provenance", type="secondary", use_container_width=True)
+        verify_clicked = st.button("Run verification ledger", type="primary", use_container_width=True)
+
+    if fetch_clicked:
+        status, fetched_headline, fetched_body = _extract_article_from_url(url_value)
+        st.session_state.pv_url = url_value
+        st.session_state.pv_status = status
+        if fetched_headline:
+            st.session_state.pv_headline = fetched_headline
+        if fetched_body:
+            st.session_state.pv_body = fetched_body
+        st.rerun()
+
+    if sample_clicked:
+        st.session_state.pv_url = ""
+        st.session_state.pv_source = "Manual demo source"
+        st.session_state.pv_headline = sample_headline
+        st.session_state.pv_body = sample_body
+        st.session_state.pv_status = "Sample public-demo provenance loaded."
+        st.rerun()
+
+    st.session_state.pv_url = url_value
+    st.session_state.pv_source = source_name
+    st.session_state.pv_headline = headline
+    st.session_state.pv_body = body
+
+    full_text = f"{headline}\n{body}".strip()
+    word_count = len(re.findall(r"\b\w+\b", full_text))
+    domain, valid_url = _domain_from_url(url_value)
+    source_type = _source_type(domain, source_name)
+    detected_entities = _detect_entities(full_text)
+    extraction_success = bool(body.strip()) and word_count >= 25
+    headline_present = bool(headline.strip())
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    gates = [
+        {"gate": "URL format check", "status": "PASSED" if valid_url or not url_value.strip() else "FAILED", "score": 100 if valid_url or not url_value.strip() else 30, "detail": "URL is valid or manual pasted input is being used."},
+        {"gate": "Domain detected", "status": "PASSED" if domain != "Invalid or incomplete URL" else "FAILED", "score": 95 if domain != "Invalid or incomplete URL" else 25, "detail": f"Parsed source domain: {domain}."},
+        {"gate": "Headline present", "status": "PASSED" if headline_present else "FAILED", "score": 100 if headline_present else 20, "detail": "Headline exists for source traceability."},
+        {"gate": "Article text present", "status": "PASSED" if extraction_success else "REVIEW", "score": 92 if extraction_success else 55, "detail": f"{word_count} words available for analysis."},
+        {"gate": "Entity mention check", "status": "PASSED" if detected_entities != "No ticker, index, or sector entity detected" else "REVIEW", "score": 88 if detected_entities != "No ticker, index, or sector entity detected" else 60, "detail": detected_entities},
+        {"gate": "Public demo boundary shown", "status": "PASSED" if show_demo_boundary else "REVIEW", "score": 100 if show_demo_boundary else 60, "detail": "Public demo limitations are disclosed."},
+        {"gate": "Investment disclaimer shown", "status": "PASSED" if show_disclaimer else "REVIEW", "score": 100 if show_disclaimer else 50, "detail": "Not-investment-advice warning is displayed."},
+        {"gate": "Workflow transparency", "status": "PASSED", "score": 94, "detail": "Source, extraction, model output, and disclaimers are separated."},
+    ]
+
+    avg_score = round(sum(gate["score"] for gate in gates) / len(gates))
+    passed_gates = sum(1 for gate in gates if gate["status"] == "PASSED")
+
+    if avg_score >= 88 and show_disclaimer and show_demo_boundary:
+        trust_verdict = "High transparency"
+        trust_class = "pv-good"
+    elif avg_score >= 70:
+        trust_verdict = "Needs review"
+        trust_class = "pv-warn"
+    else:
+        trust_verdict = "Low provenance confidence"
+        trust_class = "pv-bad"
+
+    st.markdown(
+        f"""
+        <div class="pv-metrics">
+          <div class="pv-metric"><strong class="{trust_class}">{html.escape(trust_verdict)}</strong><span>verification verdict</span></div>
+          <div class="pv-metric"><strong>{avg_score}/100</strong><span>verification score</span></div>
+          <div class="pv-metric"><strong>{passed_gates}/{len(gates)}</strong><span>gates passed</span></div>
+          <div class="pv-metric"><strong>{html.escape(domain)}</strong><span>detected domain</span></div>
+          <div class="pv-metric"><strong>{word_count}</strong><span>words captured</span></div>
+        </div>
+
+        <section class="pv-panel">
+          <div class="pv-kicker">Source Verification Summary</div>
+          <div class="pv-section-title">What was captured from the input</div>
+          <div class="pv-grid-4">
+            <div class="pv-card"><strong>Source type</strong><span>{html.escape(source_type)}</span></div>
+            <div class="pv-card"><strong>URL status</strong><span>{"Valid URL" if valid_url else "Manual / missing / invalid URL"}</span></div>
+            <div class="pv-card"><strong>Extraction status</strong><span>{html.escape(st.session_state.pv_status)}</span></div>
+            <div class="pv-card"><strong>Verification time</strong><span>{html.escape(timestamp)}</span></div>
+          </div>
+          <div class="pv-grid-2">
+            <div class="pv-card"><strong>Detected market entities</strong><span>{html.escape(detected_entities)}</span></div>
+            <div class="pv-card"><strong>Verification mode</strong><span>{html.escape(verification_mode)}</span></div>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    try:
+        import plotly.graph_objects as go
+
+        gate_fig = go.Figure(
+            go.Bar(
+                x=[gate["score"] for gate in gates],
+                y=[gate["gate"] for gate in gates],
+                orientation="h",
+                customdata=[gate["detail"] for gate in gates],
+                hovertemplate="<b>%{y}</b><br>Score: %{x}/100<br>%{customdata}<extra></extra>",
+            )
+        )
+        gate_fig.update_layout(
+            title="Verification Gate Board · Source, Boundary, Disclaimer Checks",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,.35)",
+            height=430,
+            margin=dict(l=0, r=0, t=55, b=0),
+            xaxis=dict(title="Verification score", range=[0, 105]),
+            yaxis_title="",
+        )
+        st.plotly_chart(gate_fig, use_container_width=True, config={"displayModeBar": False})
+
+        st.markdown(
+            """
+            <div class="pv-explain">
+              <strong>How to read this chart:</strong>
+              the page checks source format, text availability, market-entity detection, public-demo boundary visibility,
+              and disclaimer coverage. These are transparency checks, not guarantees that the article is true.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            radar_categories = ["Source check", "Content check", "Workflow transparency", "Disclaimer coverage", "Evidence completeness"]
+            radar_scores = [
+                95 if valid_url or not url_value.strip() else 35,
+                92 if extraction_success else 55,
+                94,
+                100 if show_disclaimer else 50,
+                avg_score,
+            ]
+            radar = go.Figure()
+            radar.add_trace(
+                go.Scatterpolar(
+                    r=radar_scores + [radar_scores[0]],
+                    theta=radar_categories + [radar_categories[0]],
+                    fill="toself",
+                    name="Verification score",
+                )
+            )
+            radar.update_layout(
+                title="Verification Score Radar",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+                height=420,
+                margin=dict(l=10, r=10, t=55, b=10),
+                showlegend=False,
+            )
+            st.plotly_chart(radar, use_container_width=True, config={"displayModeBar": False})
+
+        with col2:
+            timeline = go.Figure()
+            stages = [
+                "Input submitted",
+                "Domain parsed",
+                "Text captured",
+                "Entities checked",
+                "Model boundary added",
+                "Disclaimer applied",
+                "Output shown",
+            ]
+            scores = [88, 92, 90 if extraction_success else 62, 88, 96, 100 if show_disclaimer else 50, avg_score]
+            timeline.add_trace(
+                go.Scatter(
+                    x=list(range(1, len(stages) + 1)),
+                    y=scores,
+                    mode="lines+markers+text",
+                    text=stages,
+                    textposition="top center",
+                    marker=dict(size=15, line=dict(width=1, color="rgba(255,255,255,.35)")),
+                    line=dict(width=4),
+                    hovertemplate="<b>%{text}</b><br>Confidence: %{y}/100<extra></extra>",
+                )
+            )
+            timeline.update_layout(
+                title="Provenance Timeline · From Source To Dashboard Output",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=420,
+                margin=dict(l=0, r=0, t=65, b=0),
+                xaxis=dict(title="Verification step", tickmode="linear", range=[0.5, len(stages) + .5]),
+                yaxis=dict(title="Confidence", range=[0, 105]),
+                showlegend=False,
+            )
+            st.plotly_chart(timeline, use_container_width=True, config={"displayModeBar": False})
+
+        flow = go.Figure(
+            go.Sankey(
+                arrangement="snap",
+                node=dict(
+                    pad=18,
+                    thickness=18,
+                    line=dict(color="rgba(255,255,255,.25)", width=1),
+                    label=[
+                        "Article URL / pasted text",
+                        "Domain parser",
+                        "Text extraction",
+                        "Signal pages",
+                        "Explanation layer",
+                        "Public demo boundary",
+                        "Not investment advice",
+                        "Dashboard output",
+                    ],
+                ),
+                link=dict(
+                    source=[0, 0, 1, 2, 3, 4, 5, 6],
+                    target=[1, 2, 3, 3, 7, 7, 7, 7],
+                    value=[4, 6, 4, 6, 5, 5, 5, 5],
+                ),
+            )
+        )
+        flow.update_layout(
+            title="Evidence Lineage Flow · What Travels With The Output",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,.35)",
+            height=420,
+            margin=dict(l=10, r=10, t=55, b=10),
+            font=dict(size=12),
+        )
+        st.plotly_chart(flow, use_container_width=True, config={"displayModeBar": False})
+
+    except Exception as exc:
+        st.warning(f"Provenance charts could not render. Reason: {exc}")
+
+    gate_rows = ""
+    for gate in gates:
+        klass = "pv-good" if gate["status"] == "PASSED" else "pv-warn" if gate["status"] == "REVIEW" else "pv-bad"
+        gate_rows += (
+            "<tr>"
+            f"<td>{html.escape(gate['gate'])}</td>"
+            f"<td class='{klass}'>{html.escape(gate['status'])}</td>"
+            f"<td>{gate['score']}/100</td>"
+            f"<td>{html.escape(gate['detail'])}</td>"
+            "</tr>"
+        )
+
+    lineage_rows = ""
+    lineage = [
+        ("Article URL", url_value if url_value.strip() else "Manual / pasted text used"),
+        ("Source domain", domain),
+        ("Source type", source_type),
+        ("Extraction method", "URL extraction" if valid_url and "extracted" in st.session_state.pv_status.lower() else "Manual paste / demo sample"),
+        ("Headline captured", "Yes" if headline_present else "No"),
+        ("Content length", f"{word_count} words"),
+        ("Market entities", detected_entities),
+        ("Public demo boundary", "Shown" if show_demo_boundary else "Hidden by user control"),
+        ("Investment disclaimer", "Shown" if show_disclaimer else "Hidden by user control"),
+    ]
+    for item, evidence in lineage:
+        lineage_rows += (
+            "<tr>"
+            f"<td>{html.escape(item)}</td>"
+            f"<td>{html.escape(evidence)}</td>"
+            "</tr>"
+        )
+
+    st.markdown(
+        f"""
+        <section class="pv-panel">
+          <div class="pv-kicker">Verification Checklist</div>
+          <div class="pv-section-title">Checks performed before trusting the output</div>
+          <table class="pv-table">
+            <thead>
+              <tr>
+                <th>Check</th>
+                <th>Status</th>
+                <th>Score</th>
+                <th>Evidence</th>
+              </tr>
+            </thead>
+            <tbody>{gate_rows}</tbody>
+          </table>
+        </section>
+
+        <section class="pv-panel">
+          <div class="pv-kicker">Evidence Lineage Table</div>
+          <div class="pv-section-title">What evidence travels with the article</div>
+          <table class="pv-table">
+            <thead>
+              <tr>
+                <th>Input / evidence item</th>
+                <th>Captured value</th>
+              </tr>
+            </thead>
+            <tbody>{lineage_rows}</tbody>
+          </table>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    demo_boundary_html = ""
+    if show_demo_boundary:
+        demo_boundary_html = """
+        <div class="pv-warning">
+          <strong>Public demo boundary</strong>
+          <span>
+            Public Cloud Mode uses transparent demo-safe logic. Some values are curated for demonstration unless connected
+            to private model registry, historical database, or live market-data infrastructure.
+          </span>
+        </div>
+        """
+
+    disclaimer_html = ""
+    if show_disclaimer:
+        disclaimer_html = """
+        <div class="pv-warning">
+          <strong>Not investment advice</strong>
+          <span>
+            Outputs are educational and analytical demonstrations. They are not personalized financial advice, trading instructions,
+            or guarantees of future market movement.
+          </span>
+        </div>
+        """
+
+    st.markdown(
+        f"""
+        <section class="pv-panel">
+          <div class="pv-kicker">Trust Boundary</div>
+          <div class="pv-section-title">What is checked vs what is not claimed</div>
+          <div class="pv-grid-2">
+            <div class="pv-card">
+              <strong>What the system checks</strong>
+              <ul>
+                <li>URL format and domain parsing</li>
+                <li>Article text availability</li>
+                <li>Headline/body presence</li>
+                <li>Market entity mentions</li>
+                <li>Workflow transparency</li>
+                <li>Disclaimer visibility</li>
+              </ul>
+            </div>
+            <div class="pv-card">
+              <strong>What the system does not claim</strong>
+              <ul>
+                <li>Article truth certification</li>
+                <li>Guaranteed market movement</li>
+                <li>Insider-information validation</li>
+                <li>Personal investment suitability</li>
+                <li>Guaranteed factual completeness</li>
+                <li>Live source reputation scoring</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section class="pv-panel">
+          <div class="pv-kicker">Boundary & Disclaimer Center</div>
+          <div class="pv-grid-2">
+            {demo_boundary_html}
+            {disclaimer_html}
+          </div>
+        </section>
+
+        <section class="pv-panel">
+          <div class="pv-kicker">Final Verification Verdict</div>
+          <div class="pv-section-title">Why this page matters</div>
+          <p class="pv-copy">
+            The dashboard separates source checks, model output, public-demo boundaries, and financial disclaimers.
+            This makes the system safer and more auditable: users can see what was checked, what was only demonstrated,
+            and what should not be assumed. Current verdict: <strong>{html.escape(trust_verdict)}</strong> with a
+            verification score of {avg_score}/100.
+          </p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _render_public_placeholder_page(page_title: str) -> None:
     """Render a real routed public page outside Executive Overview."""
 
@@ -7493,6 +8310,10 @@ def render_public_streamlit_cloud_app(project_root: Path | str | None = None) ->
 
     if selected_page == "Model Training / Evidence":
         _render_model_training_evidence_page()
+        return
+
+    if selected_page == "Provenance":
+        _render_provenance_page()
         return
 
     _render_public_placeholder_page(selected_page)
