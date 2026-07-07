@@ -3889,6 +3889,821 @@ def _render_explainability_page() -> None:
     )
 
 
+def _render_scenario_analysis_page() -> None:
+    """Render Scenario Analysis as an article-driven what-if intelligence cockpit."""
+
+    import html
+    import re
+    from urllib.parse import urlparse
+
+    def _clamp(value: float, low: float, high: float) -> float:
+        return max(low, min(high, value))
+
+    def _extract_article_from_url(url: str) -> tuple[str, str, str]:
+        clean_url = url.strip()
+        if not clean_url:
+            return "No URL provided.", "", ""
+
+        parsed = urlparse(clean_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            return "Invalid URL. Paste a full URL starting with http:// or https://.", "", ""
+
+        try:
+            import requests
+            from bs4 import BeautifulSoup
+
+            response = requests.get(
+                clean_url,
+                timeout=8,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Macintosh; Intel Mac OS X) "
+                        "AppleWebKit/537.36 Chrome/120 Safari/537.36"
+                    )
+                },
+            )
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.text, "html.parser")
+            for tag in soup(["script", "style", "noscript", "svg", "form", "nav", "footer", "header"]):
+                tag.decompose()
+
+            title = ""
+            if soup.find("h1"):
+                title = soup.find("h1").get_text(" ", strip=True)
+            if not title and soup.title:
+                title = soup.title.get_text(" ", strip=True)
+
+            paragraphs = [
+                p_tag.get_text(" ", strip=True)
+                for p_tag in soup.find_all("p")
+                if len(p_tag.get_text(" ", strip=True).split()) >= 8
+            ]
+            body = "\n\n".join(paragraphs[:12]).strip()
+
+            if not body:
+                return "URL loaded, but article text could not be extracted. Paste article text manually.", title, ""
+
+            return "URL article text extracted.", title, body
+
+        except Exception as exc:
+            return f"URL extraction failed. Paste article text manually. Reason: {exc}", "", ""
+
+    def _detect_target(text: str, user_target: str) -> tuple[str, str]:
+        lowered = text.lower()
+        entities: list[str] = []
+
+        if re.search(r"\bdow\b|\bdjia\b", lowered):
+            entities.append("Dow")
+        if re.search(r"\bnasdaq\b|\bqqq\b", lowered):
+            entities.append("Nasdaq")
+        if re.search(r"\bs&p\b|\bsp500\b|\bspx\b|\bspy\b", lowered):
+            entities.append("S&P 500")
+        if re.search(r"\bchip\b|\bchips\b|\bsemiconductor\b|\bsemiconductors\b|\bnvidia\b|\bnvda\b|\bamd\b|\bintel\b", lowered):
+            entities.append("Chips / semiconductors")
+        if re.search(r"\brates?\b|\bfed\b|\binflation\b|\btreasury\b", lowered):
+            entities.append("Macro / rates")
+
+        ticker_matches = re.findall(r"\$?[A-Z]{2,5}\b", text)
+        ticker_matches = [x.replace("$", "") for x in ticker_matches if x not in {"LIVE", "CEO", "CFO", "EPS", "THE"}]
+        for ticker in ticker_matches[:4]:
+            if ticker not in entities and ticker not in {"DOW"}:
+                entities.append(ticker)
+
+        if user_target.strip():
+            return "User-selected target", user_target.strip()
+
+        if "Dow" in entities or "Nasdaq" in entities or "S&P 500" in entities:
+            if "Chips / semiconductors" in entities:
+                return "Broad market + sector", ", ".join(entities)
+            return "Broad market / index", ", ".join(entities)
+
+        if "Chips / semiconductors" in entities:
+            return "Sector / theme", ", ".join(entities)
+
+        if ticker_matches:
+            return "Ticker / company", ", ".join(entities) if entities else ", ".join(ticker_matches[:4])
+
+        return "General financial news", "No specific ticker or index detected"
+
+    def _article_driver_score(text: str) -> tuple[float, float, float, list[str]]:
+        lowered = text.lower()
+        bullish_patterns = [
+            (r"\bjumps?\b|\brises?\b|\brose\b|\badvanced\b", 0.9, "positive price-action language"),
+            (r"\brebounds?\b|\brall(y|ies|ied)\b|\bgains?\b", 1.0, "rebound or rally language"),
+            (r"\bcloses?\s+above\b|\brecord\s+(close|high)\b|\ball[- ]time high\b", 1.2, "key-level or record-close strength"),
+            (r"\bbeat(s|ing)?\b|\bbeats?\s+estimates\b|\braises?\s+guidance\b", 1.3, "earnings or guidance upside"),
+            (r"\bchips?\s+rebound\b|\bsemiconductors?\s+rebound\b|\bai\b|\btechnology\s+momentum\b", 1.0, "technology or semiconductor momentum"),
+        ]
+        bearish_patterns = [
+            (r"\bdrops?\b|\bfalls?\b|\bfell\b|\bslides?\b|\btumbles?\b", 1.0, "negative price-action language"),
+            (r"\bmiss(es|ed)?\b|\bmisses?\s+estimates\b|\bcuts?\s+guidance\b", 1.3, "earnings or guidance downside"),
+            (r"\bsell[- ]?off\b|\bweakness\b|\bslowdown\b", 1.1, "selloff or weakness language"),
+        ]
+        risk_patterns = [
+            (r"\brisk(s)?\b|\buncertain(ty)?\b|\bvolatil(e|ity)\b", 0.9, "explicit risk or volatility language"),
+            (r"\binflation\b|\brates?\b|\bfed\b|\brecession\b|\bmacro\b", 1.0, "macro or rates pressure"),
+            (r"\bregulatory\b|\blawsuit\b|\bprobe\b|\bcredit\b|\bdebt\b|\bliquidity\b", 1.1, "regulatory, credit, or liquidity risk"),
+        ]
+
+        bull = 0.0
+        bear = 0.0
+        risk = 0.0
+        cues: list[str] = []
+
+        for pattern, weight, label in bullish_patterns:
+            if re.search(pattern, lowered, flags=re.IGNORECASE):
+                bull += weight
+                cues.append(label)
+
+        for pattern, weight, label in bearish_patterns:
+            if re.search(pattern, lowered, flags=re.IGNORECASE):
+                bear += weight
+                cues.append(label)
+
+        for pattern, weight, label in risk_patterns:
+            if re.search(pattern, lowered, flags=re.IGNORECASE):
+                risk += weight
+                cues.append(label)
+
+        return round(bull, 2), round(bear, 2), round(risk, 2), cues[:7]
+
+    sample_headline = "Dow jumps 150 points for first close above 53,000; Nasdaq rises as chips rebound"
+    sample_body = (
+        "Stocks maintained positive momentum after a strong week on Wall Street. "
+        "The S&P 500 gained 0.72%, while the Nasdaq Composite advanced 1.12% as chip stocks rebounded. "
+        "Investors pointed to stronger technology momentum, improving risk appetite, and broad-market strength, "
+        "while macro uncertainty remained limited."
+    )
+
+    if "sc_url" not in st.session_state:
+        st.session_state.sc_url = ""
+    if "sc_headline" not in st.session_state:
+        st.session_state.sc_headline = sample_headline
+    if "sc_body" not in st.session_state:
+        st.session_state.sc_body = sample_body
+    if "sc_target" not in st.session_state:
+        st.session_state.sc_target = "Broad market"
+    if "sc_status" not in st.session_state:
+        st.session_state.sc_status = "Sample article loaded for public demo."
+
+    st.markdown(
+        """
+        <style>
+          .sc-hero {
+            display:grid;
+            grid-template-columns:1.08fr .92fr;
+            gap:1rem;
+            padding:1.35rem;
+            border-radius:24px;
+            border:1px solid rgba(34,211,238,.34);
+            background:
+              radial-gradient(circle at 8% 8%, rgba(34,211,238,.20), transparent 22rem),
+              radial-gradient(circle at 76% 8%, rgba(139,92,246,.22), transparent 24rem),
+              radial-gradient(circle at 88% 94%, rgba(34,197,94,.13), transparent 22rem),
+              linear-gradient(145deg, rgba(8,47,73,.72), rgba(8,13,28,.96));
+            box-shadow:0 30px 90px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.07);
+            margin-bottom:.9rem;
+          }
+          .sc-kicker {
+            color:#67e8f9;
+            font-size:.70rem;
+            font-weight:950;
+            letter-spacing:.13em;
+            text-transform:uppercase;
+          }
+          .sc-title {
+            color:white;
+            font-size:2.6rem;
+            line-height:1;
+            font-weight:950;
+            letter-spacing:-.06em;
+            margin:.42rem 0 .55rem 0;
+          }
+          .sc-subtitle {
+            color:#dbeafe;
+            font-size:1rem;
+            line-height:1.55;
+          }
+          .sc-chip-row {
+            display:flex;
+            flex-wrap:wrap;
+            gap:.48rem;
+            margin-top:.9rem;
+          }
+          .sc-chip {
+            padding:.43rem .68rem;
+            border-radius:999px;
+            font-size:.72rem;
+            font-weight:850;
+            color:#bfdbfe;
+            border:1px solid rgba(96,165,250,.25);
+            background:rgba(15,23,42,.65);
+          }
+          .sc-engine {
+            padding:1rem;
+            border-radius:20px;
+            border:1px solid rgba(148,163,184,.18);
+            background:linear-gradient(160deg, rgba(15,23,42,.92), rgba(2,6,23,.96));
+          }
+          .sc-step {
+            display:grid;
+            grid-template-columns:34px 1fr;
+            gap:.65rem;
+            align-items:center;
+            padding:.54rem;
+            margin-bottom:.45rem;
+            border-radius:13px;
+            border:1px solid rgba(96,165,250,.18);
+            background:rgba(15,23,42,.70);
+          }
+          .sc-num {
+            width:34px;
+            height:34px;
+            display:grid;
+            place-items:center;
+            border-radius:11px;
+            color:#67e8f9;
+            background:rgba(14,165,233,.13);
+            border:1px solid rgba(34,211,238,.25);
+            font-weight:950;
+          }
+          .sc-step strong {
+            display:block;
+            color:white;
+            font-size:.82rem;
+          }
+          .sc-step span {
+            display:block;
+            color:#94a3b8;
+            font-size:.70rem;
+            margin-top:.08rem;
+          }
+          .sc-panel {
+            margin:.95rem 0;
+            padding:1.1rem;
+            border-radius:22px;
+            border:1px solid rgba(34,211,238,.24);
+            background:
+              radial-gradient(circle at 6% 0%, rgba(34,211,238,.11), transparent 18rem),
+              radial-gradient(circle at 94% 30%, rgba(139,92,246,.13), transparent 20rem),
+              linear-gradient(145deg, rgba(15,23,42,.88), rgba(8,13,28,.96));
+            box-shadow:0 22px 60px rgba(0,0,0,.25);
+          }
+          .sc-section-title {
+            color:white;
+            font-size:1.25rem;
+            font-weight:950;
+            letter-spacing:-.04em;
+            margin:.2rem 0 .35rem 0;
+          }
+          .sc-copy {
+            color:#cbd5e1;
+            font-size:.84rem;
+            line-height:1.48;
+            margin:0;
+          }
+          .sc-metrics {
+            display:grid;
+            grid-template-columns:repeat(5,minmax(0,1fr));
+            gap:.68rem;
+            margin:.85rem 0 .9rem 0;
+          }
+          .sc-metric {
+            padding:1rem;
+            border-radius:18px;
+            border:1px solid rgba(148,163,184,.16);
+            background:rgba(15,23,42,.82);
+          }
+          .sc-metric strong {
+            color:white;
+            font-size:1.35rem;
+            font-weight:950;
+            display:block;
+          }
+          .sc-metric span {
+            color:#cbd5e1;
+            font-size:.74rem;
+            font-weight:760;
+          }
+          .sc-grid-3 {
+            display:grid;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .sc-grid-4 {
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .sc-card {
+            padding:.95rem;
+            border-radius:17px;
+            border:1px solid rgba(148,163,184,.16);
+            background:rgba(15,23,42,.74);
+          }
+          .sc-card strong {
+            color:white;
+            display:block;
+            font-size:.96rem;
+            margin-bottom:.32rem;
+          }
+          .sc-card span, .sc-card li {
+            color:#cbd5e1;
+            font-size:.75rem;
+            line-height:1.38;
+          }
+          .sc-card ul {
+            margin:.2rem 0 0 1rem;
+            padding:0;
+          }
+          .sc-case {
+            padding:1.05rem;
+            border-radius:20px;
+            border:1px solid rgba(148,163,184,.17);
+            background:linear-gradient(145deg, rgba(15,23,42,.86), rgba(2,6,23,.92));
+          }
+          .sc-case h3 {
+            color:white;
+            margin:.1rem 0 .3rem 0;
+            font-size:1.15rem;
+            letter-spacing:-.03em;
+          }
+          .sc-case .big {
+            color:white;
+            font-size:1.9rem;
+            font-weight:950;
+            margin:.2rem 0;
+          }
+          .sc-case p {
+            color:#cbd5e1;
+            font-size:.78rem;
+            line-height:1.45;
+            margin:.3rem 0 0 0;
+          }
+          .sc-table {
+            width:100%;
+            border-collapse:separate;
+            border-spacing:0 .45rem;
+            margin-top:.75rem;
+          }
+          .sc-table th {
+            color:#94a3b8;
+            font-size:.70rem;
+            text-align:left;
+            padding:.35rem .5rem;
+            text-transform:uppercase;
+            letter-spacing:.08em;
+          }
+          .sc-table td {
+            color:#e5e7eb;
+            font-size:.78rem;
+            padding:.62rem .5rem;
+            background:rgba(15,23,42,.72);
+            border-top:1px solid rgba(148,163,184,.13);
+            border-bottom:1px solid rgba(148,163,184,.13);
+          }
+          .sc-table td:first-child {
+            border-left:1px solid rgba(148,163,184,.13);
+            border-radius:12px 0 0 12px;
+            font-weight:900;
+          }
+          .sc-table td:last-child {
+            border-right:1px solid rgba(148,163,184,.13);
+            border-radius:0 12px 12px 0;
+          }
+          .sc-explain {
+            margin:.45rem 0 .9rem 0;
+            padding:.9rem 1rem;
+            border-radius:16px;
+            border:1px solid rgba(148,163,184,.15);
+            background:rgba(15,23,42,.66);
+            color:#cbd5e1;
+            font-size:.81rem;
+            line-height:1.48;
+          }
+          .sc-explain strong { color:white; }
+          .sc-good { color:#86efac !important; }
+          .sc-warn { color:#fbbf24 !important; }
+          .sc-bad { color:#fca5a5 !important; }
+          @media (max-width:1100px) {
+            .sc-hero,.sc-metrics,.sc-grid-3,.sc-grid-4 { grid-template-columns:1fr; }
+            .sc-title { font-size:2.05rem; }
+          }
+        </style>
+
+        <section class="sc-hero">
+          <div>
+            <div class="sc-kicker">Scenario Intelligence Cockpit</div>
+            <div class="sc-title">What-If Market<br/>Outcome Engine</div>
+            <div class="sc-subtitle">
+              Enter a financial article, adjust stress levers, and compare upside, base, and downside
+              cases with probability, return range, risk pressure, and analyst explanation.
+            </div>
+            <div class="sc-chip-row">
+              <span class="sc-chip">Article URL</span>
+              <span class="sc-chip">Paste fallback</span>
+              <span class="sc-chip">What-if levers</span>
+              <span class="sc-chip">Upside case</span>
+              <span class="sc-chip">Base case</span>
+              <span class="sc-chip">Downside case</span>
+              <span class="sc-chip">Risk matrix</span>
+            </div>
+          </div>
+
+          <div class="sc-engine">
+            <div class="sc-kicker">Scenario Engine</div>
+            <div class="sc-step"><div class="sc-num">01</div><div><strong>Read current signal</strong><span>Article, target, tone, risk language</span></div></div>
+            <div class="sc-step"><div class="sc-num">02</div><div><strong>Apply what-if levers</strong><span>Momentum, macro pressure, volatility, sector strength</span></div></div>
+            <div class="sc-step"><div class="sc-num">03</div><div><strong>Build paths</strong><span>Upside, base, downside reaction windows</span></div></div>
+            <div class="sc-step"><div class="sc-num">04</div><div><strong>Estimate probability</strong><span>Scenario weights based on drivers and stress</span></div></div>
+            <div class="sc-step"><div class="sc-num">05</div><div><strong>Explain decision risk</strong><span>Where the thesis works, fades, or breaks</span></div></div>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <section class="sc-panel">
+          <div class="sc-kicker">Scenario Input</div>
+          <div class="sc-section-title">Enter article source and tune the what-if assumptions</div>
+          <p class="sc-copy">
+            URL extraction may fail on blocked or paywalled sites. If that happens, paste the headline and article body manually.
+            This is a public-demo scenario engine; it shows transparent what-if logic and does not guarantee market outcomes.
+          </p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    input_left, input_right = st.columns([1.12, .88])
+
+    with input_left:
+        url_value = st.text_input("Article URL", value=st.session_state.sc_url, placeholder="https://...")
+        target_hint = st.text_input(
+            "Optional ticker / index / sector",
+            value=st.session_state.sc_target,
+            placeholder="Examples: NVDA, Nasdaq, Dow, S&P 500, Semiconductors, Broad market",
+        )
+        headline = st.text_input("Article headline", value=st.session_state.sc_headline)
+        article_body = st.text_area("Article body or summary", value=st.session_state.sc_body, height=145)
+
+    with input_right:
+        horizon = st.selectbox("Scenario horizon", ["1 day", "3 days", "7 days", "14 days", "30 days"], index=2)
+        sector_momentum = st.slider("Sector momentum", min_value=-5, max_value=5, value=2, step=1)
+        macro_pressure = st.slider("Macro pressure", min_value=0, max_value=10, value=3, step=1)
+        volatility_stress = st.slider("Volatility stress", min_value=0, max_value=10, value=4, step=1)
+        risk_tolerance = st.selectbox("Risk tolerance", ["Conservative", "Balanced", "Aggressive"], index=1)
+
+        fetch_clicked = st.button("Extract URL text", type="secondary", use_container_width=True)
+        sample_clicked = st.button("Load sample article", type="secondary", use_container_width=True)
+        generate_clicked = st.button("Generate scenario analysis", type="primary", use_container_width=True)
+
+    if fetch_clicked:
+        status, fetched_headline, fetched_body = _extract_article_from_url(url_value)
+        st.session_state.sc_url = url_value
+        st.session_state.sc_status = status
+        if fetched_headline:
+            st.session_state.sc_headline = fetched_headline
+        if fetched_body:
+            st.session_state.sc_body = fetched_body
+        st.rerun()
+
+    if sample_clicked:
+        st.session_state.sc_url = ""
+        st.session_state.sc_headline = sample_headline
+        st.session_state.sc_body = sample_body
+        st.session_state.sc_target = "Broad market"
+        st.session_state.sc_status = "Sample article loaded for public demo."
+        st.rerun()
+
+    st.session_state.sc_url = url_value
+    st.session_state.sc_headline = headline
+    st.session_state.sc_body = article_body
+    st.session_state.sc_target = target_hint
+
+    full_text = f"{headline}\n{article_body}".strip()
+    word_count = len(re.findall(r"\b\w+\b", full_text))
+    target_type, detected_entities = _detect_target(full_text, target_hint)
+    bull_score, bear_score, risk_score, cues = _article_driver_score(full_text)
+
+    base_driver_score = bull_score - bear_score - (risk_score * 0.55)
+    stress_drag = (macro_pressure * 0.18) + (volatility_stress * 0.16)
+    momentum_boost = sector_momentum * 0.22
+    net_score = round(base_driver_score + momentum_boost - stress_drag, 2)
+
+    horizon_multiplier = {
+        "1 day": 0.45,
+        "3 days": 0.75,
+        "7 days": 1.00,
+        "14 days": 1.35,
+        "30 days": 1.85,
+    }[horizon]
+
+    base_move = round(_clamp(net_score * horizon_multiplier, -6.5, 8.5), 2)
+    upside_move = round(base_move + 1.8 + max(0, sector_momentum) * 0.32 + max(0, bull_score) * 0.25, 2)
+    downside_move = round(base_move - 1.9 - macro_pressure * 0.22 - volatility_stress * 0.25 - risk_score * 0.28, 2)
+
+    upside_prob = _clamp(34 + bull_score * 7 + sector_momentum * 3 - macro_pressure * 1.8 - volatility_stress * 1.4, 12, 72)
+    downside_prob = _clamp(24 + bear_score * 7 + risk_score * 5 + macro_pressure * 2 + volatility_stress * 1.8 - sector_momentum * 2, 10, 68)
+    base_prob = max(8, 100 - upside_prob - downside_prob)
+
+    total_prob = upside_prob + base_prob + downside_prob
+    upside_prob = round(upside_prob * 100 / total_prob)
+    base_prob = round(base_prob * 100 / total_prob)
+    downside_prob = 100 - upside_prob - base_prob
+
+    expected_move = round((upside_move * upside_prob + base_move * base_prob + downside_move * downside_prob) / 100, 2)
+    risk_pressure = round(_clamp(risk_score * 12 + macro_pressure * 6 + volatility_stress * 5 - sector_momentum * 2, 0, 100))
+    opportunity_pressure = round(_clamp(bull_score * 14 + max(0, sector_momentum) * 7 - bear_score * 6, 0, 100))
+
+    if expected_move > 1.0 and risk_pressure < 55:
+        decision_read = "Opportunity-favored"
+        decision_class = "sc-good"
+    elif expected_move < -1.0 or risk_pressure > 70:
+        decision_read = "Risk-heavy"
+        decision_class = "sc-bad"
+    else:
+        decision_read = "Balanced / watch"
+        decision_class = "sc-warn"
+
+    cue_html = "".join(f"<li>{html.escape(cue)}</li>" for cue in cues) if cues else "<li>No strong article cue detected.</li>"
+
+    st.markdown(
+        f"""
+        <section class="sc-panel">
+          <div class="sc-kicker">Current Signal Context</div>
+          <div class="sc-section-title">What the scenario engine detected</div>
+          <div class="sc-grid-4">
+            <div class="sc-card"><strong>Target context</strong><span>{html.escape(target_type)} · {html.escape(detected_entities)}</span></div>
+            <div class="sc-card"><strong>Input quality</strong><span>{word_count} words analyzed</span></div>
+            <div class="sc-card"><strong>Scenario horizon</strong><span>{html.escape(horizon)}</span></div>
+            <div class="sc-card"><strong>Source status</strong><span>{html.escape(st.session_state.sc_status)}</span></div>
+          </div>
+          <div class="sc-grid-3">
+            <div class="sc-card"><strong class="sc-good">Bullish pressure</strong><span>{bull_score:.1f} driver score</span></div>
+            <div class="sc-card"><strong class="sc-bad">Bearish pressure</strong><span>{bear_score:.1f} driver score</span></div>
+            <div class="sc-card"><strong class="sc-warn">Detected cues</strong><ul>{cue_html}</ul></div>
+          </div>
+        </section>
+
+        <div class="sc-metrics">
+          <div class="sc-metric"><strong class="{decision_class}">{html.escape(decision_read)}</strong><span>scenario read</span></div>
+          <div class="sc-metric"><strong>{expected_move:+.1f}%</strong><span>probability-weighted move</span></div>
+          <div class="sc-metric"><strong>{risk_pressure}/100</strong><span>risk pressure</span></div>
+          <div class="sc-metric"><strong>{opportunity_pressure}/100</strong><span>opportunity pressure</span></div>
+          <div class="sc-metric"><strong>{risk_tolerance}</strong><span>risk profile selected</span></div>
+        </div>
+
+        <section class="sc-panel">
+          <div class="sc-kicker">Upside / Base / Downside Cases</div>
+          <div class="sc-grid-3">
+            <div class="sc-case">
+              <h3>Upside case</h3>
+              <div class="big sc-good">{upside_move:+.1f}%</div>
+              <p><strong>{upside_prob}% probability.</strong> Momentum follows through, risk stays contained, and sector leadership remains intact.</p>
+            </div>
+            <div class="sc-case">
+              <h3>Base case</h3>
+              <div class="big sc-warn">{base_move:+.1f}%</div>
+              <p><strong>{base_prob}% probability.</strong> Article signal is partly priced in, but the main trend remains stable.</p>
+            </div>
+            <div class="sc-case">
+              <h3>Downside case</h3>
+              <div class="big sc-bad">{downside_move:+.1f}%</div>
+              <p><strong>{downside_prob}% probability.</strong> Macro pressure, volatility, or risk language overwhelms the positive signal.</p>
+            </div>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    try:
+        import plotly.graph_objects as go
+
+        days = [0, 1, 3, 7, 14, 30]
+        scale = {
+            "1 day": 1,
+            "3 days": 3,
+            "7 days": 7,
+            "14 days": 14,
+            "30 days": 30,
+        }[horizon]
+
+        def _path(final_move: float) -> list[float]:
+            return [round(final_move * min(day, scale) / max(1, scale), 2) for day in days]
+
+        fan = go.Figure()
+        fan.add_trace(go.Scatter(x=days, y=_path(upside_move), mode="lines+markers", name="Upside case", line=dict(width=4)))
+        fan.add_trace(go.Scatter(x=days, y=_path(base_move), mode="lines+markers", name="Base case", line=dict(width=5)))
+        fan.add_trace(go.Scatter(x=days, y=_path(downside_move), mode="lines+markers", name="Downside case", line=dict(width=4)))
+        fan.add_trace(go.Scatter(x=days, y=[expected_move * min(day, scale) / max(1, scale) for day in days], mode="lines+markers", name="Probability-weighted path", line=dict(width=4, dash="dash")))
+        fan.update_layout(
+            title="Scenario Fan Chart · Upside, Base, Downside Reaction Paths",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,.35)",
+            height=460,
+            margin=dict(l=0, r=0, t=55, b=0),
+            xaxis_title="Days after signal",
+            yaxis_title="Scenario movement %",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        )
+        st.plotly_chart(fan, use_container_width=True, config={"displayModeBar": False})
+
+        st.markdown(
+            """
+            <div class="sc-explain">
+              <strong>How to read this chart:</strong>
+              the fan chart shows how the current article signal could behave under favorable, normal, and stressed conditions.
+              The dashed line is the probability-weighted path.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            prob_fig = go.Figure(
+                go.Bar(
+                    x=["Upside", "Base", "Downside"],
+                    y=[upside_prob, base_prob, downside_prob],
+                    text=[f"{upside_prob}%", f"{base_prob}%", f"{downside_prob}%"],
+                    textposition="outside",
+                )
+            )
+            prob_fig.update_layout(
+                title="Scenario Probability Mix",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=400,
+                margin=dict(l=0, r=0, t=55, b=0),
+                xaxis_title="Scenario",
+                yaxis_title="Probability %",
+                yaxis=dict(range=[0, 100]),
+            )
+            st.plotly_chart(prob_fig, use_container_width=True, config={"displayModeBar": False})
+
+        with col2:
+            matrix = go.Figure(
+                go.Scatter(
+                    x=[risk_pressure, risk_pressure * 0.72, min(100, risk_pressure * 1.18)],
+                    y=[opportunity_pressure, opportunity_pressure * 0.86, max(0, opportunity_pressure * 0.58)],
+                    mode="markers+text",
+                    text=["Base", "Upside", "Downside"],
+                    textposition="top center",
+                    marker=dict(size=[22, 26, 24], opacity=.9, line=dict(width=1, color="rgba(255,255,255,.35)")),
+                    hovertemplate="<b>%{text}</b><br>Risk pressure: %{x}<br>Opportunity pressure: %{y}<extra></extra>",
+                )
+            )
+            matrix.update_layout(
+                title="Risk / Opportunity Matrix",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=400,
+                margin=dict(l=0, r=0, t=55, b=0),
+                xaxis=dict(title="Risk pressure", range=[0, 100]),
+                yaxis=dict(title="Opportunity pressure", range=[0, 100]),
+            )
+            st.plotly_chart(matrix, use_container_width=True, config={"displayModeBar": False})
+
+        col3, col4 = st.columns(2)
+
+        with col3:
+            levers = go.Figure(
+                go.Bar(
+                    x=[sector_momentum, -macro_pressure, -volatility_stress, bull_score, -risk_score],
+                    y=["Sector momentum", "Macro pressure", "Volatility stress", "Bullish article cues", "Risk language"],
+                    orientation="h",
+                )
+            )
+            levers.update_layout(
+                title="What-If Lever Contribution",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=390,
+                margin=dict(l=0, r=0, t=55, b=0),
+                xaxis_title="Scenario contribution",
+                yaxis_title="",
+            )
+            st.plotly_chart(levers, use_container_width=True, config={"displayModeBar": False})
+
+        with col4:
+            stress_curve = go.Figure()
+            stress_levels = list(range(0, 11))
+            stress_curve.add_trace(
+                go.Scatter(
+                    x=stress_levels,
+                    y=[round(base_move - level * 0.35, 2) for level in stress_levels],
+                    mode="lines+markers",
+                    name="Base case under stress",
+                    line=dict(width=4),
+                )
+            )
+            stress_curve.add_trace(
+                go.Scatter(
+                    x=stress_levels,
+                    y=[round(upside_move - level * 0.25, 2) for level in stress_levels],
+                    mode="lines+markers",
+                    name="Upside resilience",
+                    line=dict(width=3, dash="dash"),
+                )
+            )
+            stress_curve.update_layout(
+                title="Stress Test Curve · What If Volatility Rises?",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=390,
+                margin=dict(l=0, r=0, t=55, b=0),
+                xaxis_title="Additional volatility stress",
+                yaxis_title="Scenario movement %",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            )
+            st.plotly_chart(stress_curve, use_container_width=True, config={"displayModeBar": False})
+
+    except Exception as exc:
+        st.warning(f"Scenario Analysis charts could not render. Reason: {exc}")
+
+    rows = [
+        ("Upside", f"{upside_prob}%", f"{upside_move:+.1f}%", "Sector leadership continues; risk remains contained.", "Follow-through opportunity"),
+        ("Base", f"{base_prob}%", f"{base_move:+.1f}%", "Signal is partially priced in; trend remains stable.", "Balanced monitoring"),
+        ("Downside", f"{downside_prob}%", f"{downside_move:+.1f}%", "Macro pressure or volatility overwhelms the article signal.", "Protective caution"),
+        ("Stress test", "Manual", f"{base_move - volatility_stress * 0.35:+.1f}%", "Volatility pressure rises after the article.", "Watch risk expansion"),
+    ]
+
+    table_rows = ""
+    for scenario_name, probability, movement, condition, interpretation in rows:
+        table_rows += (
+            "<tr>"
+            f"<td>{html.escape(scenario_name)}</td>"
+            f"<td>{html.escape(probability)}</td>"
+            f"<td>{html.escape(movement)}</td>"
+            f"<td>{html.escape(condition)}</td>"
+            f"<td>{html.escape(interpretation)}</td>"
+            "</tr>"
+        )
+
+    analyst_summary = (
+        "The scenario mix currently favors opportunity because bullish article pressure and sector momentum outweigh stress inputs."
+        if decision_read == "Opportunity-favored"
+        else "The scenario mix is risk-heavy because stress inputs and risk language dominate the positive article drivers."
+        if decision_read == "Risk-heavy"
+        else "The scenario mix is balanced because opportunity and risk inputs are close enough that confirmation matters."
+    )
+
+    st.markdown(
+        f"""
+        <section class="sc-panel">
+          <div class="sc-kicker">Scenario Stress-Test Table</div>
+          <div class="sc-section-title">What has to happen for each case</div>
+          <table class="sc-table">
+            <thead>
+              <tr>
+                <th>Case</th>
+                <th>Probability</th>
+                <th>Move</th>
+                <th>Condition</th>
+                <th>Interpretation</th>
+              </tr>
+            </thead>
+            <tbody>{table_rows}</tbody>
+          </table>
+        </section>
+
+        <section class="sc-panel">
+          <div class="sc-kicker">Decision Boundary</div>
+          <div class="sc-grid-3">
+            <div class="sc-card"><strong>Upside trigger</strong><span>Momentum continues, risk pressure stays below 55/100, and sector leadership remains visible.</span></div>
+            <div class="sc-card"><strong>Base trigger</strong><span>Article signal remains supportive but no new confirmation appears.</span></div>
+            <div class="sc-card"><strong>Downside trigger</strong><span>Macro pressure, volatility, credit risk, or regulatory language rises after the initial signal.</span></div>
+          </div>
+        </section>
+
+        <section class="sc-panel">
+          <div class="sc-kicker">Scenario Analyst Explanation</div>
+          <div class="sc-section-title">What the what-if engine suggests</div>
+          <p class="sc-copy">
+            {html.escape(analyst_summary)} The probability-weighted scenario move is {expected_move:+.1f}% over the selected
+            {html.escape(horizon)} horizon. Upside is estimated at {upside_move:+.1f}% with {upside_prob}% probability,
+            base case is {base_move:+.1f}% with {base_prob}% probability, and downside is {downside_move:+.1f}%
+            with {downside_prob}% probability. This page is a transparent public-demo scenario analysis layer,
+            not investment advice or a guaranteed forecast.
+          </p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
 def _render_public_placeholder_page(page_title: str) -> None:
     """Render a real routed public page outside Executive Overview."""
 
@@ -5232,6 +6047,10 @@ def render_public_streamlit_cloud_app(project_root: Path | str | None = None) ->
 
     if selected_page == "Explainability":
         _render_explainability_page()
+        return
+
+    if selected_page == "Scenario Analysis":
+        _render_scenario_analysis_page()
         return
 
     _render_public_placeholder_page(selected_page)
