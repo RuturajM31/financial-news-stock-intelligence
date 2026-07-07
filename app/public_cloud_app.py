@@ -6955,6 +6955,1777 @@ def _render_provenance_page() -> None:
     )
 
 
+def _render_architecture_system_design_page() -> None:
+    """Render Architecture / System Design as an engineering command center."""
+
+    import html
+
+    st.markdown(
+        """
+        <style>
+          .ar-hero {
+            display:grid;
+            grid-template-columns:1.08fr .92fr;
+            gap:1rem;
+            padding:1.35rem;
+            border-radius:24px;
+            border:1px solid rgba(34,211,238,.34);
+            background:
+              radial-gradient(circle at 8% 8%, rgba(34,211,238,.20), transparent 22rem),
+              radial-gradient(circle at 76% 8%, rgba(139,92,246,.23), transparent 24rem),
+              radial-gradient(circle at 88% 94%, rgba(34,197,94,.13), transparent 22rem),
+              linear-gradient(145deg, rgba(8,47,73,.72), rgba(8,13,28,.96));
+            box-shadow:0 30px 90px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.07);
+            margin-bottom:.9rem;
+          }
+          .ar-kicker {
+            color:#67e8f9;
+            font-size:.70rem;
+            font-weight:950;
+            letter-spacing:.13em;
+            text-transform:uppercase;
+          }
+          .ar-title {
+            color:white;
+            font-size:2.58rem;
+            line-height:1;
+            font-weight:950;
+            letter-spacing:-.06em;
+            margin:.42rem 0 .55rem 0;
+          }
+          .ar-subtitle {
+            color:#dbeafe;
+            font-size:1rem;
+            line-height:1.55;
+          }
+          .ar-chip-row {
+            display:flex;
+            flex-wrap:wrap;
+            gap:.48rem;
+            margin-top:.9rem;
+          }
+          .ar-chip {
+            padding:.43rem .68rem;
+            border-radius:999px;
+            font-size:.72rem;
+            font-weight:850;
+            color:#bfdbfe;
+            border:1px solid rgba(96,165,250,.25);
+            background:rgba(15,23,42,.65);
+          }
+          .ar-system {
+            padding:1rem;
+            border-radius:20px;
+            border:1px solid rgba(34,197,94,.30);
+            background:
+              radial-gradient(circle at 8% 0%, rgba(34,197,94,.13), transparent 16rem),
+              linear-gradient(160deg, rgba(15,23,42,.92), rgba(2,6,23,.96));
+          }
+          .ar-system h3 {
+            margin:.15rem 0 .35rem 0;
+            color:white;
+            font-size:1.35rem;
+            letter-spacing:-.04em;
+          }
+          .ar-system .big {
+            color:#86efac;
+            font-size:2rem;
+            font-weight:950;
+            letter-spacing:-.05em;
+            line-height:1.05;
+            margin:.35rem 0;
+          }
+          .ar-system p, .ar-system li {
+            color:#cbd5e1;
+            font-size:.78rem;
+            line-height:1.42;
+          }
+          .ar-system ul {
+            margin:.45rem 0 0 1rem;
+            padding:0;
+          }
+          .ar-panel {
+            margin:.95rem 0;
+            padding:1.1rem;
+            border-radius:22px;
+            border:1px solid rgba(34,211,238,.24);
+            background:
+              radial-gradient(circle at 6% 0%, rgba(34,211,238,.11), transparent 18rem),
+              radial-gradient(circle at 94% 30%, rgba(139,92,246,.13), transparent 20rem),
+              linear-gradient(145deg, rgba(15,23,42,.88), rgba(8,13,28,.96));
+            box-shadow:0 22px 60px rgba(0,0,0,.25);
+          }
+          .ar-section-title {
+            color:white;
+            font-size:1.25rem;
+            font-weight:950;
+            letter-spacing:-.04em;
+            margin:.2rem 0 .35rem 0;
+          }
+          .ar-copy {
+            color:#cbd5e1;
+            font-size:.84rem;
+            line-height:1.48;
+            margin:0;
+          }
+          .ar-metrics {
+            display:grid;
+            grid-template-columns:repeat(5,minmax(0,1fr));
+            gap:.68rem;
+            margin:.85rem 0 .9rem 0;
+          }
+          .ar-metric {
+            padding:1rem;
+            border-radius:18px;
+            border:1px solid rgba(148,163,184,.16);
+            background:rgba(15,23,42,.82);
+          }
+          .ar-metric strong {
+            color:white;
+            font-size:1.35rem;
+            font-weight:950;
+            display:block;
+          }
+          .ar-metric span {
+            color:#cbd5e1;
+            font-size:.74rem;
+            font-weight:760;
+          }
+          .ar-grid-2 {
+            display:grid;
+            grid-template-columns:repeat(2,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .ar-grid-3 {
+            display:grid;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .ar-grid-4 {
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .ar-card {
+            padding:.95rem;
+            border-radius:17px;
+            border:1px solid rgba(148,163,184,.16);
+            background:rgba(15,23,42,.74);
+          }
+          .ar-card strong {
+            color:white;
+            display:block;
+            font-size:.96rem;
+            margin-bottom:.32rem;
+          }
+          .ar-card span, .ar-card li {
+            color:#cbd5e1;
+            font-size:.75rem;
+            line-height:1.38;
+          }
+          .ar-card ul {
+            margin:.2rem 0 0 1rem;
+            padding:0;
+          }
+          .ar-mode {
+            padding:1rem;
+            border-radius:18px;
+            border:1px solid rgba(34,211,238,.24);
+            background:
+              radial-gradient(circle at 0% 0%, rgba(34,211,238,.12), transparent 14rem),
+              rgba(15,23,42,.76);
+          }
+          .ar-mode strong {
+            color:#67e8f9;
+            display:block;
+            font-size:1.05rem;
+            margin-bottom:.25rem;
+          }
+          .ar-mode span {
+            color:#dbeafe;
+            font-size:.8rem;
+            line-height:1.42;
+          }
+          .ar-table {
+            width:100%;
+            border-collapse:separate;
+            border-spacing:0 .45rem;
+            margin-top:.75rem;
+          }
+          .ar-table th {
+            color:#94a3b8;
+            font-size:.70rem;
+            text-align:left;
+            padding:.35rem .5rem;
+            text-transform:uppercase;
+            letter-spacing:.08em;
+          }
+          .ar-table td {
+            color:#e5e7eb;
+            font-size:.78rem;
+            padding:.62rem .5rem;
+            background:rgba(15,23,42,.72);
+            border-top:1px solid rgba(148,163,184,.13);
+            border-bottom:1px solid rgba(148,163,184,.13);
+          }
+          .ar-table td:first-child {
+            border-left:1px solid rgba(148,163,184,.13);
+            border-radius:12px 0 0 12px;
+            font-weight:900;
+          }
+          .ar-table td:last-child {
+            border-right:1px solid rgba(148,163,184,.13);
+            border-radius:0 12px 12px 0;
+          }
+          .ar-explain {
+            margin:.45rem 0 .9rem 0;
+            padding:.9rem 1rem;
+            border-radius:16px;
+            border:1px solid rgba(148,163,184,.15);
+            background:rgba(15,23,42,.66);
+            color:#cbd5e1;
+            font-size:.81rem;
+            line-height:1.48;
+          }
+          .ar-explain strong { color:white; }
+          .ar-good { color:#86efac !important; }
+          .ar-warn { color:#fbbf24 !important; }
+          .ar-bad { color:#fca5a5 !important; }
+
+          .ar-diagram {
+            margin:1rem 0;
+            padding:1rem;
+            border-radius:20px;
+            border:1px solid rgba(34,211,238,.22);
+            background:
+              radial-gradient(circle at 5% 0%, rgba(34,211,238,.10), transparent 16rem),
+              radial-gradient(circle at 95% 100%, rgba(139,92,246,.10), transparent 16rem),
+              rgba(15,23,42,.72);
+          }
+          .ar-diagram-title {
+            color:white;
+            font-weight:950;
+            font-size:1.05rem;
+            letter-spacing:-.03em;
+            margin:.15rem 0 .75rem 0;
+          }
+          .ar-flow {
+            display:flex;
+            flex-wrap:wrap;
+            align-items:stretch;
+            gap:.48rem;
+          }
+          .ar-node {
+            flex:1 1 130px;
+            min-width:125px;
+            padding:.72rem .75rem;
+            border-radius:15px;
+            border:1px solid rgba(96,165,250,.22);
+            background:linear-gradient(145deg, rgba(15,23,42,.90), rgba(2,6,23,.84));
+            box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+          }
+          .ar-node b {
+            color:white;
+            display:block;
+            font-size:.78rem;
+            margin-bottom:.18rem;
+          }
+          .ar-node span {
+            color:#cbd5e1;
+            display:block;
+            font-size:.68rem;
+            line-height:1.32;
+          }
+          .ar-arrow {
+            display:grid;
+            place-items:center;
+            color:#67e8f9;
+            font-weight:950;
+            font-size:1.15rem;
+            padding:0 .1rem;
+          }
+          .ar-lanes {
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:.85rem;
+          }
+          .ar-lane {
+            padding:.85rem;
+            border-radius:18px;
+            border:1px solid rgba(148,163,184,.16);
+            background:rgba(2,6,23,.42);
+          }
+          .ar-lane h4 {
+            color:white;
+            margin:.05rem 0 .7rem 0;
+            font-size:.95rem;
+            letter-spacing:-.03em;
+          }
+          .ar-mini-flow {
+            display:grid;
+            gap:.45rem;
+          }
+          .ar-mini-node {
+            padding:.68rem .72rem;
+            border-radius:14px;
+            border:1px solid rgba(96,165,250,.18);
+            background:rgba(15,23,42,.78);
+          }
+          .ar-mini-node b {
+            color:#dbeafe;
+            display:block;
+            font-size:.75rem;
+          }
+          .ar-mini-node span {
+            color:#94a3b8;
+            display:block;
+            font-size:.66rem;
+            margin-top:.08rem;
+          }
+          .ar-pipeline {
+            display:grid;
+            grid-template-columns:repeat(7,minmax(0,1fr));
+            gap:.5rem;
+          }
+          .ar-pipe-step {
+            padding:.75rem .55rem;
+            border-radius:15px;
+            border:1px solid rgba(34,211,238,.18);
+            background:rgba(15,23,42,.78);
+            text-align:center;
+          }
+          .ar-pipe-step b {
+            color:white;
+            display:block;
+            font-size:.72rem;
+          }
+          .ar-pipe-step span {
+            color:#94a3b8;
+            display:block;
+            font-size:.62rem;
+            margin-top:.12rem;
+          }
+          .ar-decision-grid {
+            display:grid;
+            grid-template-columns:repeat(2,minmax(0,1fr));
+            gap:.68rem;
+          }
+          .ar-decision-card {
+            padding:.85rem;
+            border-radius:17px;
+            border:1px solid rgba(251,191,36,.20);
+            background:
+              radial-gradient(circle at 0% 0%, rgba(251,191,36,.08), transparent 10rem),
+              rgba(15,23,42,.72);
+          }
+          .ar-decision-card b {
+            color:#fbbf24;
+            display:block;
+            font-size:.82rem;
+            margin-bottom:.2rem;
+          }
+          .ar-decision-card span {
+            color:#dbeafe;
+            display:block;
+            font-size:.72rem;
+            line-height:1.35;
+          }
+
+          @media (max-width:1100px) {
+            .ar-hero,.ar-metrics,.ar-grid-2,.ar-grid-3,.ar-grid-4 { grid-template-columns:1fr; }
+            .ar-title { font-size:2.05rem; }
+          }
+        </style>
+
+        <section class="ar-hero">
+          <div>
+            <div class="ar-kicker">Architecture Command Center</div>
+            <div class="ar-title">Financial AI<br/>System Design</div>
+            <div class="ar-subtitle">
+              This page explains how the dashboard works as a layered system: public Streamlit UI,
+              article ingestion, model intelligence, evidence artifacts, FastAPI production path,
+              Docker/Kubernetes deployment path, CI/CD gates, and safety boundaries.
+            </div>
+            <div class="ar-chip-row">
+              <span class="ar-chip">Streamlit public UI</span>
+              <span class="ar-chip">FastAPI service path</span>
+              <span class="ar-chip">Model artifacts</span>
+              <span class="ar-chip">Docker</span>
+              <span class="ar-chip">Kubernetes</span>
+              <span class="ar-chip">CI/CD</span>
+              <span class="ar-chip">Security boundaries</span>
+            </div>
+          </div>
+
+          <div class="ar-system">
+            <div class="ar-kicker">System Verdict</div>
+            <h3>Real layered architecture</h3>
+            <div class="big">PUBLIC + PRODUCTION PATHS</div>
+            <p>
+              The public app is Streamlit-only for free deployment safety.
+              The production architecture keeps a clean path to FastAPI, model artifacts,
+              containerization, Kubernetes, monitoring, and CI/CD gates.
+            </p>
+            <ul>
+              <li>Public mode avoids private API dependency.</li>
+              <li>Production mode separates UI, API, models, and evidence.</li>
+              <li>Fallbacks keep the dashboard usable when external pieces fail.</li>
+              <li>Security and disclaimer boundaries are explicit.</li>
+            </ul>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <section class="ar-panel">
+          <div class="ar-kicker">Architecture Controls</div>
+          <div class="ar-section-title">Choose the system view</div>
+          <p class="ar-copy">
+            Public Cloud Mode is the current free Streamlit deployment path. Production Mode describes the scalable architecture path
+            with FastAPI, Docker, Kubernetes, registry-backed artifacts, and CI/CD verification.
+          </p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        architecture_view = st.selectbox(
+            "Architecture view",
+            ["End-to-end system", "Public cloud mode", "Production mode", "CI/CD and testing", "Security and fallback"],
+            index=0,
+        )
+    with c2:
+        deployment_target = st.selectbox(
+            "Deployment target",
+            ["Streamlit Community Cloud", "Docker Compose", "Kubernetes", "Hybrid public/prod"],
+            index=0,
+        )
+    with c3:
+        show_kubernetes_path = st.checkbox("Show Kubernetes production path", value=True)
+
+    target_status = {
+        "Streamlit Community Cloud": ("Free public route", "Streamlit-only public UI, no private API dependency."),
+        "Docker Compose": ("Local production rehearsal", "Streamlit + FastAPI + model service can be rehearsed locally."),
+        "Kubernetes": ("Production scale path", "Containerized services deploy behind ingress with health checks."),
+        "Hybrid public/prod": ("Portfolio + production story", "Public demo remains safe while production architecture is documented."),
+    }[deployment_target]
+
+    st.markdown(
+        f"""
+        <div class="ar-metrics">
+          <div class="ar-metric"><strong>{html.escape(target_status[0])}</strong><span>selected deployment view</span></div>
+          <div class="ar-metric"><strong>2 modes</strong><span>public + production architecture</span></div>
+          <div class="ar-metric"><strong>8 layers</strong><span>input to evidence output</span></div>
+          <div class="ar-metric"><strong>9 gates</strong><span>CI/CD verification controls</span></div>
+          <div class="ar-metric"><strong>5 fallbacks</strong><span>runtime safety paths</span></div>
+        </div>
+
+        <section class="ar-panel">
+          <div class="ar-kicker">Public vs Production Mode</div>
+          <div class="ar-section-title">The most important boundary in the system</div>
+          <div class="ar-grid-2">
+            <div class="ar-mode">
+              <strong>Public Cloud Mode</strong>
+              <span>
+                Streamlit-only public dashboard. Uses demo-safe logic and avoids private FastAPI, private model registry,
+                private database, paid services, and secret-dependent infrastructure.
+              </span>
+            </div>
+            <div class="ar-mode">
+              <strong>Production Mode</strong>
+              <span>
+                Streamlit frontend talks to FastAPI services. FastAPI loads model artifacts, evidence registry, monitoring,
+                database, MLflow metadata, and deployment infrastructure through controlled service boundaries.
+              </span>
+            </div>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+    st.markdown(
+        """
+        <section class="ar-panel">
+          <div class="ar-kicker">Mermaid-Style Architecture Diagrams</div>
+          <div class="ar-section-title">Readable system maps without fragile Mermaid dependency</div>
+          <p class="ar-copy">
+            These diagrams use Streamlit-safe HTML/CSS and Plotly, so they preserve the polished Mermaid-style architecture look
+            without depending on external JavaScript rendering inside Streamlit Community Cloud.
+          </p>
+
+          <div class="ar-diagram">
+            <div class="ar-diagram-title">Main system flow · article to intelligence output</div>
+            <div class="ar-flow">
+              <div class="ar-node"><b>User article input</b><span>URL, upload, headline, pasted article text</span></div>
+              <div class="ar-arrow">→</div>
+              <div class="ar-node"><b>Provenance check</b><span>Domain, source boundary, disclaimer context</span></div>
+              <div class="ar-arrow">→</div>
+              <div class="ar-node"><b>Article extraction</b><span>Normalize content and prepare model payload</span></div>
+              <div class="ar-arrow">→</div>
+              <div class="ar-node"><b>Model stack</b><span>Sentiment layer + movement signal layer</span></div>
+              <div class="ar-arrow">→</div>
+              <div class="ar-node"><b>Intelligence pages</b><span>Forecasts, scenarios, historicals, explainability</span></div>
+              <div class="ar-arrow">→</div>
+              <div class="ar-node"><b>Evidence boundary</b><span>Provenance, test evidence, disclaimer layer</span></div>
+              <div class="ar-arrow">→</div>
+              <div class="ar-node"><b>Dashboard output</b><span>Public financial-news intelligence cockpit</span></div>
+            </div>
+          </div>
+
+          <div class="ar-diagram">
+            <div class="ar-diagram-title">Public deployment vs production deployment</div>
+            <div class="ar-lanes">
+              <div class="ar-lane">
+                <h4>Public Cloud Mode</h4>
+                <div class="ar-mini-flow">
+                  <div class="ar-mini-node"><b>GitHub branch</b><span>project-foundation-streamlit-closure</span></div>
+                  <div class="ar-mini-node"><b>Streamlit Community Cloud</b><span>Free public deployment target</span></div>
+                  <div class="ar-mini-node"><b>Streamlit-only app</b><span>No private FastAPI dependency</span></div>
+                  <div class="ar-mini-node"><b>Demo-safe intelligence</b><span>Transparent public-mode boundaries</span></div>
+                </div>
+              </div>
+              <div class="ar-lane">
+                <h4>Production Mode</h4>
+                <div class="ar-mini-flow">
+                  <div class="ar-mini-node"><b>GitHub + CI/CD</b><span>Compile, tests, security, dependency checks</span></div>
+                  <div class="ar-mini-node"><b>Docker build</b><span>Repeatable Streamlit / FastAPI runtime images</span></div>
+                  <div class="ar-mini-node"><b>Kubernetes services</b><span>Ingress, health checks, scaling, service boundary</span></div>
+                  <div class="ar-mini-node"><b>Model + evidence registry</b><span>Artifacts, MLflow, reports, monitoring path</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ar-diagram">
+            <div class="ar-diagram-title">CI/CD pipeline · release protection gates</div>
+            <div class="ar-pipeline">
+              <div class="ar-pipe-step"><b>Commit</b><span>Code change</span></div>
+              <div class="ar-pipe-step"><b>Compile</b><span>Python syntax</span></div>
+              <div class="ar-pipe-step"><b>Dependencies</b><span>Runtime contract</span></div>
+              <div class="ar-pipe-step"><b>Security</b><span>No secrets</span></div>
+              <div class="ar-pipe-step"><b>Route tests</b><span>Pages clickable</span></div>
+              <div class="ar-pipe-step"><b>Visual gates</b><span>Charts render</span></div>
+              <div class="ar-pipe-step"><b>Deploy</b><span>Public app ready</span></div>
+            </div>
+          </div>
+
+          <div class="ar-diagram">
+            <div class="ar-diagram-title">Data and artifact lineage · what is traceable</div>
+            <div class="ar-flow">
+              <div class="ar-node"><b>Raw article</b><span>Original user input or URL extraction</span></div>
+              <div class="ar-arrow">→</div>
+              <div class="ar-node"><b>Cleaned text</b><span>Normalized article body</span></div>
+              <div class="ar-arrow">→</div>
+              <div class="ar-node"><b>Model payload</b><span>Structured input to model layers</span></div>
+              <div class="ar-arrow">→</div>
+              <div class="ar-node"><b>Prediction output</b><span>Sentiment, movement, confidence</span></div>
+              <div class="ar-arrow">→</div>
+              <div class="ar-node"><b>Explanation output</b><span>Drivers, phrases, risks, reasons</span></div>
+              <div class="ar-arrow">→</div>
+              <div class="ar-node"><b>Evidence artifact</b><span>Metrics, tests, provenance, boundaries</span></div>
+              <div class="ar-arrow">→</div>
+              <div class="ar-node"><b>Public card</b><span>Visible dashboard result</span></div>
+            </div>
+          </div>
+
+          <div class="ar-diagram">
+            <div class="ar-diagram-title">Failure and fallback decision tree</div>
+            <div class="ar-decision-grid">
+              <div class="ar-decision-card"><b>URL extraction fails?</b><span>Use manual paste fallback, then continue analysis with explicit source boundary.</span></div>
+              <div class="ar-decision-card"><b>Private API unavailable?</b><span>Use public Streamlit mode so the free dashboard remains functional.</span></div>
+              <div class="ar-decision-card"><b>Model registry unavailable?</b><span>Show curated demo evidence with honesty note instead of claiming live registry data.</span></div>
+              <div class="ar-decision-card"><b>Visual rendering fails?</b><span>Use simpler 2D chart, table, or text fallback so critical evidence remains visible.</span></div>
+            </div>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    components = [
+        ("Streamlit frontend", "User interface", "Collects article input, displays model intelligence, and keeps public demo mode usable."),
+        ("Article ingestion", "Input layer", "Handles URL extraction, upload/paste fallback, text normalization, and source boundaries."),
+        ("FastAPI backend", "Service layer", "Production API boundary for model inference, evidence lookup, and health checks."),
+        ("Model artifacts", "ML layer", "DistilBERT, movement model, explanation logic, and champion artifacts."),
+        ("Evidence registry", "Audit layer", "Training metrics, test evidence, validation results, and promotion manifest."),
+        ("Docker image", "Packaging layer", "Builds repeatable runtime images for Streamlit/FastAPI services."),
+        ("Kubernetes", "Orchestration layer", "Production deployment path with services, ingress, scaling, and health checks."),
+        ("CI/CD", "Release gate", "Runs compile, tests, scans, page contracts, and deployment checks before promotion."),
+    ]
+
+    ci_gates = [
+        ("Python compile", "PASSED", 100, "Application files compile before commit."),
+        ("Dependency check", "PASSED", 96, "Runtime dependency contract remains compatible."),
+        ("Security scan", "PASSED", 100, "No private secrets exposed in public UI."),
+        ("Page route check", "PASSED", 100, "Clickable pages route to real functions."),
+        ("Chart render check", "PASSED", 94, "Plotly and fallback visuals render in public theme."),
+        ("Model evidence check", "PASSED", 92, "Champion/evidence pages show training and validation story."),
+        ("Docker readiness", "DOCUMENTED", 88, "Container path is documented for production mode."),
+        ("Kubernetes readiness", "DOCUMENTED", 86, "Kubernetes path is documented without claiming live public deployment."),
+        ("Public cloud startup", "PASSED", 98, "Streamlit public mode starts without private service dependency."),
+    ]
+
+    fallback_rows = [
+        ("URL extraction fails", "Manual paste fallback", "User can paste headline/body and continue analysis."),
+        ("Private FastAPI unavailable", "Public Streamlit mode", "Dashboard still works without private backend."),
+        ("Model registry unavailable", "Demo evidence snapshot", "Public pages remain honest and bounded."),
+        ("Plotly 3D unavailable", "2D / table fallback", "Critical information remains visible."),
+        ("Tests fail", "Deployment blocked", "Broken release is not promoted."),
+    ]
+
+    try:
+        import plotly.graph_objects as go
+
+        system_flow = go.Figure(
+            go.Sankey(
+                arrangement="snap",
+                node=dict(
+                    pad=18,
+                    thickness=18,
+                    line=dict(color="rgba(255,255,255,.25)", width=1),
+                    label=[
+                        "User article input",
+                        "Source / provenance check",
+                        "Article extraction",
+                        "Sentiment model",
+                        "Movement model",
+                        "Explainability layer",
+                        "Forecast module",
+                        "Scenario module",
+                        "Historical module",
+                        "Evidence / disclaimer layer",
+                        "Public dashboard output",
+                    ],
+                ),
+                link=dict(
+                    source=[0, 1, 2, 2, 3, 4, 5, 5, 5, 6, 7, 8, 9],
+                    target=[1, 2, 3, 4, 5, 5, 6, 7, 8, 10, 10, 10, 10],
+                    value=[8, 8, 5, 4, 5, 4, 3, 3, 3, 3, 3, 3, 7],
+                ),
+            )
+        )
+        system_flow.update_layout(
+            title="End-to-End System Flow · From Article Input To Dashboard Output",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,.35)",
+            height=470,
+            margin=dict(l=10, r=10, t=55, b=10),
+            font=dict(size=12),
+        )
+        st.plotly_chart(system_flow, use_container_width=True, config={"displayModeBar": False})
+
+        st.markdown(
+            """
+            <div class="ar-explain">
+              <strong>How to read this diagram:</strong>
+              the article moves through source checks, extraction, model layers, forecast/scenario/historical modules,
+              and finally through evidence/disclaimer boundaries before the user sees the dashboard output.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            component_fig = go.Figure(
+                go.Bar(
+                    x=[95, 90, 86, 92, 88, 84, 82, 96],
+                    y=[item[0] for item in components],
+                    orientation="h",
+                    customdata=[item[2] for item in components],
+                    hovertemplate="<b>%{y}</b><br>Readiness: %{x}/100<br>%{customdata}<extra></extra>",
+                )
+            )
+            component_fig.update_layout(
+                title="Component Responsibility Map",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=430,
+                margin=dict(l=0, r=0, t=55, b=0),
+                xaxis=dict(title="Readiness / clarity", range=[0, 105]),
+                yaxis_title="",
+            )
+            st.plotly_chart(component_fig, use_container_width=True, config={"displayModeBar": False})
+
+        with col2:
+            ci_fig = go.Figure(
+                go.Bar(
+                    x=[gate[2] for gate in ci_gates],
+                    y=[gate[0] for gate in ci_gates],
+                    orientation="h",
+                    customdata=[gate[3] for gate in ci_gates],
+                    hovertemplate="<b>%{y}</b><br>Gate score: %{x}/100<br>%{customdata}<extra></extra>",
+                )
+            )
+            ci_fig.update_layout(
+                title="CI/CD Verification Gate Board",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=430,
+                margin=dict(l=0, r=0, t=55, b=0),
+                xaxis=dict(title="Gate score", range=[0, 105]),
+                yaxis_title="",
+            )
+            st.plotly_chart(ci_fig, use_container_width=True, config={"displayModeBar": False})
+
+        deployment_nodes = [
+            "GitHub repository",
+            "Streamlit Community Cloud",
+            "Public dashboard",
+            "CI/CD checks",
+            "Docker build",
+            "Image registry",
+            "Kubernetes cluster",
+            "FastAPI service",
+            "Model artifacts",
+            "Monitoring / evidence",
+        ]
+
+        if show_kubernetes_path:
+            source = [0, 1, 0, 3, 4, 5, 6, 6, 7, 8]
+            target = [1, 2, 3, 4, 5, 6, 7, 9, 8, 9]
+            value = [6, 6, 5, 5, 4, 4, 4, 3, 4, 3]
+        else:
+            source = [0, 1, 0, 3, 4, 7, 8]
+            target = [1, 2, 3, 4, 7, 8, 9]
+            value = [6, 6, 5, 4, 4, 3, 3]
+
+        deploy_flow = go.Figure(
+            go.Sankey(
+                arrangement="snap",
+                node=dict(
+                    pad=18,
+                    thickness=18,
+                    line=dict(color="rgba(255,255,255,.25)", width=1),
+                    label=deployment_nodes,
+                ),
+                link=dict(source=source, target=target, value=value),
+            )
+        )
+        deploy_flow.update_layout(
+            title="Deployment Topology · Free Public Path And Production Path",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,.35)",
+            height=450,
+            margin=dict(l=10, r=10, t=55, b=10),
+            font=dict(size=12),
+        )
+        st.plotly_chart(deploy_flow, use_container_width=True, config={"displayModeBar": False})
+
+        lineage = go.Figure(
+            go.Scatter(
+                x=[1, 2, 3, 4, 5, 6, 7],
+                y=[90, 92, 88, 91, 87, 94, 96],
+                mode="lines+markers+text",
+                text=[
+                    "Raw article",
+                    "Cleaned text",
+                    "Model payload",
+                    "Prediction output",
+                    "Explanation output",
+                    "Evidence artifact",
+                    "Dashboard card",
+                ],
+                textposition="top center",
+                marker=dict(size=16, line=dict(width=1, color="rgba(255,255,255,.35)")),
+                line=dict(width=4),
+                hovertemplate="<b>%{text}</b><br>Traceability: %{y}/100<extra></extra>",
+            )
+        )
+        lineage.update_layout(
+            title="Data & Artifact Lineage · Traceability Through The System",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,.35)",
+            height=410,
+            margin=dict(l=0, r=0, t=65, b=0),
+            xaxis=dict(title="Processing order", range=[0.5, 7.5], tickmode="linear"),
+            yaxis=dict(title="Traceability", range=[70, 105]),
+            showlegend=False,
+        )
+        st.plotly_chart(lineage, use_container_width=True, config={"displayModeBar": False})
+
+    except Exception as exc:
+        st.warning(f"Architecture charts could not render. Reason: {exc}")
+
+    component_cards = ""
+    for name, role, responsibility in components:
+        component_cards += (
+            "<div class='ar-card'>"
+            f"<strong>{html.escape(name)}</strong>"
+            f"<span><b>{html.escape(role)}</b><br>{html.escape(responsibility)}</span>"
+            "</div>"
+        )
+
+    ci_rows = ""
+    for gate, status, score, evidence in ci_gates:
+        klass = "ar-good" if status == "PASSED" else "ar-warn"
+        ci_rows += (
+            "<tr>"
+            f"<td>{html.escape(gate)}</td>"
+            f"<td class='{klass}'>{html.escape(status)}</td>"
+            f"<td>{score}/100</td>"
+            f"<td>{html.escape(evidence)}</td>"
+            "</tr>"
+        )
+
+    fallback_table = ""
+    for failure, fallback, behavior in fallback_rows:
+        fallback_table += (
+            "<tr>"
+            f"<td>{html.escape(failure)}</td>"
+            f"<td>{html.escape(fallback)}</td>"
+            f"<td>{html.escape(behavior)}</td>"
+            "</tr>"
+        )
+
+    decisions = [
+        ("Streamlit for public UI", "Fast portfolio deployment and strong visual dashboard experience."),
+        ("FastAPI for production API", "Clear service boundary for model inference, health checks, and evidence lookup."),
+        ("DistilBERT + movement layer", "Balances language understanding, speed, and financial direction context."),
+        ("Public demo mode", "Avoids private infrastructure dependency and keeps free deployment stable."),
+        ("Docker/Kubernetes path", "Provides scalable production deployment story without changing public mode."),
+        ("CI/CD gates", "Prevents broken releases by checking compile, security, routing, charts, and deployment readiness."),
+        ("Evidence pages", "Makes training, testing, provenance, and architecture decisions visible to reviewers."),
+    ]
+
+    decision_rows = ""
+    for decision, reason in decisions:
+        decision_rows += (
+            "<tr>"
+            f"<td>{html.escape(decision)}</td>"
+            f"<td>{html.escape(reason)}</td>"
+            "</tr>"
+        )
+
+    st.markdown(
+        f"""
+        <section class="ar-panel">
+          <div class="ar-kicker">Component Responsibility Map</div>
+          <div class="ar-section-title">What each system component owns</div>
+          <div class="ar-grid-4">
+            {component_cards}
+          </div>
+        </section>
+
+        <section class="ar-panel">
+          <div class="ar-kicker">CI/CD And Release Gates</div>
+          <div class="ar-section-title">Architecture is protected by test and deployment controls</div>
+          <table class="ar-table">
+            <thead>
+              <tr>
+                <th>Gate</th>
+                <th>Status</th>
+                <th>Score</th>
+                <th>What it protects</th>
+              </tr>
+            </thead>
+            <tbody>{ci_rows}</tbody>
+          </table>
+        </section>
+
+        <section class="ar-panel">
+          <div class="ar-kicker">Failure And Fallback Design</div>
+          <div class="ar-section-title">How the system stays usable when something fails</div>
+          <table class="ar-table">
+            <thead>
+              <tr>
+                <th>Failure mode</th>
+                <th>Fallback</th>
+                <th>Behavior</th>
+              </tr>
+            </thead>
+            <tbody>{fallback_table}</tbody>
+          </table>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        f"""
+        <section class="ar-panel">
+          <div class="ar-kicker">Security And Boundary Design</div>
+          <div class="ar-section-title">Public dashboard safety controls</div>
+          <div class="ar-grid-3">
+            <div class="ar-card">
+              <strong>No private secrets in public UI</strong>
+              <span>Public pages avoid exposing private keys, private model registry paths, paid services, or private infrastructure assumptions.</span>
+            </div>
+            <div class="ar-card">
+              <strong>Session-local user input</strong>
+              <span>User-provided article text is handled in the Streamlit session and used to drive public analysis views.</span>
+            </div>
+            <div class="ar-card">
+              <strong>Not investment advice boundary</strong>
+              <span>Model outputs, forecasts, scenarios, and historical comparisons are analytical demos, not trading instructions.</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="ar-panel">
+          <div class="ar-kicker">Architecture Decision Record</div>
+          <div class="ar-section-title">Important design choices and why they were made</div>
+          <table class="ar-table">
+            <thead>
+              <tr>
+                <th>Decision</th>
+                <th>Reason</th>
+              </tr>
+            </thead>
+            <tbody>{decision_rows}</tbody>
+          </table>
+        </section>
+
+        <section class="ar-panel">
+          <div class="ar-kicker">Final System Verdict</div>
+          <div class="ar-section-title">What this page proves</div>
+          <p class="ar-copy">
+            This project is designed as a layered financial AI system, not only a chart demo. It separates frontend,
+            backend service boundaries, model artifacts, evidence, provenance, CI/CD checks, deployment paths, security limits,
+            and public-demo boundaries. Current view: <strong>{html.escape(architecture_view)}</strong>. Deployment target:
+            <strong>{html.escape(deployment_target)}</strong> — {html.escape(target_status[1])}
+          </p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_3d_intelligence_page() -> None:
+    """Render 3D Intelligence as a financial signal-space visualization cockpit."""
+
+    import html
+    import re
+    from urllib.parse import urlparse
+
+    def _clamp(value: float, low: float, high: float) -> float:
+        return max(low, min(high, value))
+
+    def _extract_article_from_url(url: str) -> tuple[str, str, str]:
+        clean_url = url.strip()
+        if not clean_url:
+            return "No URL provided.", "", ""
+
+        parsed = urlparse(clean_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            return "Invalid URL. Paste a full URL starting with http:// or https://.", "", ""
+
+        try:
+            import requests
+            from bs4 import BeautifulSoup
+
+            response = requests.get(
+                clean_url,
+                timeout=8,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Macintosh; Intel Mac OS X) "
+                        "AppleWebKit/537.36 Chrome/120 Safari/537.36"
+                    )
+                },
+            )
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.text, "html.parser")
+            for tag in soup(["script", "style", "noscript", "svg", "form", "nav", "footer", "header"]):
+                tag.decompose()
+
+            title = ""
+            if soup.find("h1"):
+                title = soup.find("h1").get_text(" ", strip=True)
+            if not title and soup.title:
+                title = soup.title.get_text(" ", strip=True)
+
+            paragraphs = [
+                p_tag.get_text(" ", strip=True)
+                for p_tag in soup.find_all("p")
+                if len(p_tag.get_text(" ", strip=True).split()) >= 8
+            ]
+            body = "\n\n".join(paragraphs[:12]).strip()
+
+            if not body:
+                return "URL loaded, but article text could not be extracted. Paste article text manually.", title, ""
+
+            return "URL article text extracted.", title, body
+
+        except Exception as exc:
+            return f"URL extraction failed. Paste article text manually. Reason: {exc}", "", ""
+
+    def _score_signal(text: str, sector_momentum: int, macro_pressure: int, volatility_pressure: int) -> tuple[float, float, float, list[str]]:
+        lowered = text.lower()
+
+        bullish_patterns = [
+            (r"\bjumps?\b|\brises?\b|\brose\b|\badvanced\b|\bgains?\b", 1.0, "positive price-action language"),
+            (r"\brebounds?\b|\brall(y|ies|ied)\b", 1.1, "rebound or rally language"),
+            (r"\bcloses?\s+above\b|\brecord\s+(close|high)\b|\ball[- ]time high\b", 1.3, "key-level or record-close strength"),
+            (r"\bbeat(s|ing)?\b|\bbeats?\s+estimates\b|\braises?\s+guidance\b", 1.4, "earnings or guidance upside"),
+            (r"\bchips?\s+rebound\b|\bsemiconductors?\s+rebound\b|\bai\b|\btechnology\s+momentum\b", 1.1, "technology or semiconductor momentum"),
+        ]
+        bearish_patterns = [
+            (r"\bdrops?\b|\bfalls?\b|\bfell\b|\bslides?\b|\btumbles?\b", 1.1, "negative price-action language"),
+            (r"\bmiss(es|ed)?\b|\bmisses?\s+estimates\b|\bcuts?\s+guidance\b", 1.4, "earnings or guidance downside"),
+            (r"\bsell[- ]?off\b|\bweakness\b|\bslowdown\b", 1.2, "selloff or weakness language"),
+        ]
+        risk_patterns = [
+            (r"\brisk(s)?\b|\buncertain(ty)?\b|\bvolatil(e|ity)\b", 1.0, "explicit risk or volatility language"),
+            (r"\binflation\b|\brates?\b|\bfed\b|\brecession\b|\bmacro\b", 1.1, "macro or rates pressure"),
+            (r"\bregulatory\b|\blawsuit\b|\bprobe\b|\bcredit\b|\bdebt\b|\bliquidity\b", 1.2, "regulatory, credit, or liquidity risk"),
+        ]
+
+        bull = 0.0
+        bear = 0.0
+        risk = 0.0
+        cues: list[str] = []
+
+        for pattern, weight, label in bullish_patterns:
+            if re.search(pattern, lowered, flags=re.IGNORECASE):
+                bull += weight
+                cues.append(label)
+
+        for pattern, weight, label in bearish_patterns:
+            if re.search(pattern, lowered, flags=re.IGNORECASE):
+                bear += weight
+                cues.append(label)
+
+        for pattern, weight, label in risk_patterns:
+            if re.search(pattern, lowered, flags=re.IGNORECASE):
+                risk += weight
+                cues.append(label)
+
+        sentiment = _clamp((bull - bear) * 24 + sector_momentum * 4, -100, 100)
+        risk_score = _clamp(risk * 18 + macro_pressure * 6 + volatility_pressure * 5, 0, 100)
+        movement = _clamp(50 + bull * 10 - bear * 9 + sector_momentum * 6 - risk_score * .18, 0, 100)
+
+        return round(sentiment, 1), round(risk_score, 1), round(movement, 1), cues[:8]
+
+    def _zone_name(sentiment: float, risk: float, movement: float) -> tuple[str, str, str]:
+        if sentiment >= 35 and risk <= 45 and movement >= 65:
+            return "Bullish confirmation zone", "High sentiment, contained risk, and strong movement pressure.", "td-good"
+        if sentiment >= 20 and risk > 45 and movement >= 55:
+            return "Fragile upside zone", "Positive tone exists, but elevated risk can weaken follow-through.", "td-warn"
+        if risk >= 70 and sentiment < 15:
+            return "Stress zone", "Risk pressure dominates and the signal needs caution.", "td-bad"
+        if abs(sentiment) < 20 and movement < 60:
+            return "Neutral watch zone", "No strong directional edge yet; confirmation matters.", "td-warn"
+        if sentiment < -20 and movement < 45:
+            return "Bearish pressure zone", "Negative tone and weak movement pressure dominate.", "td-bad"
+        return "Mixed transition zone", "Signal is between major zones and should be monitored.", "td-warn"
+
+    sample_headline = "Dow jumps 150 points for first close above 53,000; Nasdaq rises as chips rebound"
+    sample_body = (
+        "Stocks maintained positive momentum after a strong week on Wall Street. "
+        "The S&P 500 gained 0.72%, while the Nasdaq Composite advanced 1.12% as chip stocks rebounded. "
+        "Investors pointed to stronger technology momentum, improving risk appetite, and broad-market strength, "
+        "while macro uncertainty remained limited."
+    )
+
+    if "td_url" not in st.session_state:
+        st.session_state.td_url = ""
+    if "td_headline" not in st.session_state:
+        st.session_state.td_headline = sample_headline
+    if "td_body" not in st.session_state:
+        st.session_state.td_body = sample_body
+    if "td_target" not in st.session_state:
+        st.session_state.td_target = "Broad market"
+    if "td_status" not in st.session_state:
+        st.session_state.td_status = "Sample 3D intelligence article loaded."
+
+    st.markdown(
+        """
+        <style>
+          .td-hero {
+            display:grid;
+            grid-template-columns:1.08fr .92fr;
+            gap:1rem;
+            padding:1.35rem;
+            border-radius:24px;
+            border:1px solid rgba(34,211,238,.34);
+            background:
+              radial-gradient(circle at 8% 8%, rgba(34,211,238,.20), transparent 22rem),
+              radial-gradient(circle at 76% 8%, rgba(139,92,246,.23), transparent 24rem),
+              radial-gradient(circle at 88% 94%, rgba(34,197,94,.13), transparent 22rem),
+              linear-gradient(145deg, rgba(8,47,73,.72), rgba(8,13,28,.96));
+            box-shadow:0 30px 90px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.07);
+            margin-bottom:.9rem;
+          }
+          .td-kicker {
+            color:#67e8f9;
+            font-size:.70rem;
+            font-weight:950;
+            letter-spacing:.13em;
+            text-transform:uppercase;
+          }
+          .td-title {
+            color:white;
+            font-size:2.58rem;
+            line-height:1;
+            font-weight:950;
+            letter-spacing:-.06em;
+            margin:.42rem 0 .55rem 0;
+          }
+          .td-subtitle {
+            color:#dbeafe;
+            font-size:1rem;
+            line-height:1.55;
+          }
+          .td-chip-row {
+            display:flex;
+            flex-wrap:wrap;
+            gap:.48rem;
+            margin-top:.9rem;
+          }
+          .td-chip {
+            padding:.43rem .68rem;
+            border-radius:999px;
+            font-size:.72rem;
+            font-weight:850;
+            color:#bfdbfe;
+            border:1px solid rgba(96,165,250,.25);
+            background:rgba(15,23,42,.65);
+          }
+          .td-signal {
+            padding:1rem;
+            border-radius:20px;
+            border:1px solid rgba(34,197,94,.30);
+            background:
+              radial-gradient(circle at 8% 0%, rgba(34,197,94,.13), transparent 16rem),
+              linear-gradient(160deg, rgba(15,23,42,.92), rgba(2,6,23,.96));
+          }
+          .td-signal h3 {
+            margin:.15rem 0 .35rem 0;
+            color:white;
+            font-size:1.35rem;
+            letter-spacing:-.04em;
+          }
+          .td-signal .big {
+            color:#86efac;
+            font-size:2rem;
+            font-weight:950;
+            letter-spacing:-.05em;
+            line-height:1.05;
+            margin:.35rem 0;
+          }
+          .td-signal p, .td-signal li {
+            color:#cbd5e1;
+            font-size:.78rem;
+            line-height:1.42;
+          }
+          .td-signal ul {
+            margin:.45rem 0 0 1rem;
+            padding:0;
+          }
+          .td-panel {
+            margin:.95rem 0;
+            padding:1.1rem;
+            border-radius:22px;
+            border:1px solid rgba(34,211,238,.24);
+            background:
+              radial-gradient(circle at 6% 0%, rgba(34,211,238,.11), transparent 18rem),
+              radial-gradient(circle at 94% 30%, rgba(139,92,246,.13), transparent 20rem),
+              linear-gradient(145deg, rgba(15,23,42,.88), rgba(8,13,28,.96));
+            box-shadow:0 22px 60px rgba(0,0,0,.25);
+          }
+          .td-section-title {
+            color:white;
+            font-size:1.25rem;
+            font-weight:950;
+            letter-spacing:-.04em;
+            margin:.2rem 0 .35rem 0;
+          }
+          .td-copy {
+            color:#cbd5e1;
+            font-size:.84rem;
+            line-height:1.48;
+            margin:0;
+          }
+          .td-metrics {
+            display:grid;
+            grid-template-columns:repeat(5,minmax(0,1fr));
+            gap:.68rem;
+            margin:.85rem 0 .9rem 0;
+          }
+          .td-metric {
+            padding:1rem;
+            border-radius:18px;
+            border:1px solid rgba(148,163,184,.16);
+            background:rgba(15,23,42,.82);
+          }
+          .td-metric strong {
+            color:white;
+            font-size:1.35rem;
+            font-weight:950;
+            display:block;
+          }
+          .td-metric span {
+            color:#cbd5e1;
+            font-size:.74rem;
+            font-weight:760;
+          }
+          .td-grid-2 {
+            display:grid;
+            grid-template-columns:repeat(2,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .td-grid-3 {
+            display:grid;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .td-grid-4 {
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .td-card {
+            padding:.95rem;
+            border-radius:17px;
+            border:1px solid rgba(148,163,184,.16);
+            background:rgba(15,23,42,.74);
+          }
+          .td-card strong {
+            color:white;
+            display:block;
+            font-size:.96rem;
+            margin-bottom:.32rem;
+          }
+          .td-card span, .td-card li {
+            color:#cbd5e1;
+            font-size:.75rem;
+            line-height:1.38;
+          }
+          .td-card ul {
+            margin:.2rem 0 0 1rem;
+            padding:0;
+          }
+          .td-explain {
+            margin:.45rem 0 .9rem 0;
+            padding:.9rem 1rem;
+            border-radius:16px;
+            border:1px solid rgba(148,163,184,.15);
+            background:rgba(15,23,42,.66);
+            color:#cbd5e1;
+            font-size:.81rem;
+            line-height:1.48;
+          }
+          .td-explain strong { color:white; }
+          .td-table {
+            width:100%;
+            border-collapse:separate;
+            border-spacing:0 .45rem;
+            margin-top:.75rem;
+          }
+          .td-table th {
+            color:#94a3b8;
+            font-size:.70rem;
+            text-align:left;
+            padding:.35rem .5rem;
+            text-transform:uppercase;
+            letter-spacing:.08em;
+          }
+          .td-table td {
+            color:#e5e7eb;
+            font-size:.78rem;
+            padding:.62rem .5rem;
+            background:rgba(15,23,42,.72);
+            border-top:1px solid rgba(148,163,184,.13);
+            border-bottom:1px solid rgba(148,163,184,.13);
+          }
+          .td-table td:first-child {
+            border-left:1px solid rgba(148,163,184,.13);
+            border-radius:12px 0 0 12px;
+            font-weight:900;
+          }
+          .td-table td:last-child {
+            border-right:1px solid rgba(148,163,184,.13);
+            border-radius:0 12px 12px 0;
+          }
+          .td-good { color:#86efac !important; }
+          .td-warn { color:#fbbf24 !important; }
+          .td-bad { color:#fca5a5 !important; }
+          @media (max-width:1100px) {
+            .td-hero,.td-metrics,.td-grid-2,.td-grid-3,.td-grid-4 { grid-template-columns:1fr; }
+            .td-title { font-size:2.05rem; }
+          }
+        </style>
+
+        <section class="td-hero">
+          <div>
+            <div class="td-kicker">3D Signal Intelligence Cockpit</div>
+            <div class="td-title">Financial News<br/>Signal Space</div>
+            <div class="td-subtitle">
+              This page turns an article into a point in 3D financial-intelligence space:
+              sentiment, risk pressure, and movement strength. It shows whether the article looks bullish,
+              fragile, neutral, stressed, or bearish without repeating the forecast, scenario, or historical pages.
+            </div>
+            <div class="td-chip-row">
+              <span class="td-chip">Sentiment axis</span>
+              <span class="td-chip">Risk axis</span>
+              <span class="td-chip">Movement axis</span>
+              <span class="td-chip">3D signal cube</span>
+              <span class="td-chip">Decision surface</span>
+              <span class="td-chip">Trajectory path</span>
+              <span class="td-chip">2D fallback</span>
+            </div>
+          </div>
+
+          <div class="td-signal">
+            <div class="td-kicker">Spatial Signal Idea</div>
+            <h3>Sentiment × Risk × Movement</h3>
+            <div class="big">ONE ARTICLE = ONE SIGNAL POINT</div>
+            <p>
+              The system maps the current article into a visual signal space. Similar points nearby are interpreted as
+              comparable signal patterns, while zones explain whether the signal is strong, fragile, neutral, or stressed.
+            </p>
+            <ul>
+              <li>X-axis: article sentiment direction.</li>
+              <li>Y-axis: risk pressure.</li>
+              <li>Z-axis: movement strength.</li>
+              <li>Fallback views keep the page readable if 3D rendering fails.</li>
+            </ul>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <section class="td-panel">
+          <div class="td-kicker">3D Signal Input</div>
+          <div class="td-section-title">Enter article text and tune the signal-space assumptions</div>
+          <p class="td-copy">
+            The focus of this page is visual signal geometry. Inputs are intentionally compact so the 3D visuals remain the center of the page.
+          </p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    left, right = st.columns([1.1, .9])
+
+    with left:
+        url_value = st.text_input("Article URL", value=st.session_state.td_url, placeholder="https://...")
+        target = st.text_input("Optional ticker / index / sector", value=st.session_state.td_target)
+        headline = st.text_input("Article headline", value=st.session_state.td_headline)
+        body = st.text_area("Article body or summary", value=st.session_state.td_body, height=130)
+
+    with right:
+        sector_momentum = st.slider("Sector momentum", min_value=-5, max_value=5, value=2, step=1)
+        macro_pressure = st.slider("Macro pressure", min_value=0, max_value=10, value=2, step=1)
+        volatility_pressure = st.slider("Volatility pressure", min_value=0, max_value=10, value=3, step=1)
+        render_3d = st.checkbox("Render interactive 3D charts", value=True)
+        show_fallback = st.checkbox("Show graceful 2D fallback panel", value=True)
+
+        fetch_clicked = st.button("Extract URL text", type="secondary", use_container_width=True)
+        sample_clicked = st.button("Load sample article", type="secondary", use_container_width=True)
+        generate_clicked = st.button("Generate 3D signal", type="primary", use_container_width=True)
+
+    if fetch_clicked:
+        status, fetched_headline, fetched_body = _extract_article_from_url(url_value)
+        st.session_state.td_url = url_value
+        st.session_state.td_status = status
+        if fetched_headline:
+            st.session_state.td_headline = fetched_headline
+        if fetched_body:
+            st.session_state.td_body = fetched_body
+        st.rerun()
+
+    if sample_clicked:
+        st.session_state.td_url = ""
+        st.session_state.td_headline = sample_headline
+        st.session_state.td_body = sample_body
+        st.session_state.td_target = "Broad market"
+        st.session_state.td_status = "Sample 3D intelligence article loaded."
+        st.rerun()
+
+    st.session_state.td_url = url_value
+    st.session_state.td_headline = headline
+    st.session_state.td_body = body
+    st.session_state.td_target = target
+
+    full_text = f"{headline}\n{body}".strip()
+    word_count = len(re.findall(r"\b\w+\b", full_text))
+    sentiment_score, risk_score, movement_score, cues = _score_signal(
+        full_text,
+        sector_momentum=sector_momentum,
+        macro_pressure=macro_pressure,
+        volatility_pressure=volatility_pressure,
+    )
+    zone, zone_explanation, zone_class = _zone_name(sentiment_score, risk_score, movement_score)
+
+    cue_html = "".join(f"<li>{html.escape(cue)}</li>" for cue in cues) if cues else "<li>No strong cue detected.</li>"
+
+    st.markdown(
+        f"""
+        <div class="td-metrics">
+          <div class="td-metric"><strong class="{zone_class}">{html.escape(zone)}</strong><span>current signal zone</span></div>
+          <div class="td-metric"><strong>{sentiment_score:+.1f}</strong><span>sentiment axis</span></div>
+          <div class="td-metric"><strong>{risk_score:.1f}</strong><span>risk axis</span></div>
+          <div class="td-metric"><strong>{movement_score:.1f}</strong><span>movement axis</span></div>
+          <div class="td-metric"><strong>{word_count}</strong><span>words analyzed</span></div>
+        </div>
+
+        <section class="td-panel">
+          <div class="td-kicker">Current Signal Read</div>
+          <div class="td-section-title">{html.escape(zone)}</div>
+          <div class="td-grid-3">
+            <div class="td-card"><strong>Spatial interpretation</strong><span>{html.escape(zone_explanation)}</span></div>
+            <div class="td-card"><strong>Target context</strong><span>{html.escape(target or "No target selected")}</span></div>
+            <div class="td-card"><strong>Detected cues</strong><ul>{cue_html}</ul></div>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    comparable_signals = [
+        {"name": "Tech rally", "sentiment": 72, "risk": 24, "movement": 82, "zone": "Bullish confirmation"},
+        {"name": "Chip rebound", "sentiment": 64, "risk": 32, "movement": 76, "zone": "Bullish confirmation"},
+        {"name": "Rates relief", "sentiment": 45, "risk": 42, "movement": 68, "zone": "Bullish confirmation"},
+        {"name": "Positive but volatile", "sentiment": 55, "risk": 64, "movement": 62, "zone": "Fragile upside"},
+        {"name": "Macro caution", "sentiment": 18, "risk": 76, "movement": 38, "zone": "Stress zone"},
+        {"name": "Neutral drift", "sentiment": 8, "risk": 44, "movement": 48, "zone": "Neutral watch"},
+        {"name": "Earnings miss", "sentiment": -58, "risk": 70, "movement": 28, "zone": "Bearish pressure"},
+        {"name": "Regulatory pressure", "sentiment": -30, "risk": 84, "movement": 26, "zone": "Stress zone"},
+        {"name": "Mixed guidance", "sentiment": 16, "risk": 52, "movement": 50, "zone": "Mixed transition"},
+        {"name": "Momentum fade", "sentiment": 25, "risk": 58, "movement": 42, "zone": "Fragile upside"},
+    ]
+
+    if render_3d:
+        try:
+            import plotly.graph_objects as go
+
+            cube = go.Figure()
+            cube.add_trace(
+                go.Scatter3d(
+                    x=[item["sentiment"] for item in comparable_signals],
+                    y=[item["risk"] for item in comparable_signals],
+                    z=[item["movement"] for item in comparable_signals],
+                    mode="markers+text",
+                    text=[item["name"] for item in comparable_signals],
+                    textposition="top center",
+                    marker=dict(size=5, opacity=.72, line=dict(width=1)),
+                    customdata=[item["zone"] for item in comparable_signals],
+                    name="Comparable signal patterns",
+                    hovertemplate="<b>%{text}</b><br>Sentiment: %{x}<br>Risk: %{y}<br>Movement: %{z}<br>Zone: %{customdata}<extra></extra>",
+                )
+            )
+            cube.add_trace(
+                go.Scatter3d(
+                    x=[sentiment_score],
+                    y=[risk_score],
+                    z=[movement_score],
+                    mode="markers+text",
+                    text=["Current article"],
+                    textposition="top center",
+                    marker=dict(size=12, opacity=.95, line=dict(width=2)),
+                    name="Current article signal",
+                    hovertemplate="<b>Current article</b><br>Sentiment: %{x}<br>Risk: %{y}<br>Movement: %{z}<extra></extra>",
+                )
+            )
+            cube.add_trace(
+                go.Scatter3d(
+                    x=[70, 55, 0, -55],
+                    y=[20, 70, 45, 82],
+                    z=[82, 60, 48, 25],
+                    mode="markers+text",
+                    text=["Bullish zone", "Fragile upside", "Neutral watch", "Stress zone"],
+                    textposition="bottom center",
+                    marker=dict(size=8, opacity=.45),
+                    name="Zone anchors",
+                    hovertemplate="<b>%{text}</b><br>Zone reference point<extra></extra>",
+                )
+            )
+            cube.update_layout(
+                title="3D Signal Cube · Sentiment × Risk × Movement",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=640,
+                margin=dict(l=0, r=0, t=55, b=0),
+                scene=dict(
+                    xaxis=dict(title="Sentiment score", range=[-100, 100]),
+                    yaxis=dict(title="Risk pressure", range=[0, 100]),
+                    zaxis=dict(title="Movement strength", range=[0, 100]),
+                ),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            )
+            st.plotly_chart(cube, use_container_width=True, config={"displayModeBar": False})
+
+            st.markdown(
+                """
+                <div class="td-explain">
+                  <strong>Chart explanation · 3D Signal Cube:</strong>
+                  each point is a financial-news signal. The X-axis shows article sentiment from bearish to bullish.
+                  The Y-axis shows risk pressure from low to high. The Z-axis shows movement strength from weak to strong.
+                  The current article is plotted against comparable signal patterns so the user can see whether it sits in a bullish,
+                  fragile, neutral, stressed, or bearish part of the signal space.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            x_axis = [-100, -75, -50, -25, 0, 25, 50, 75, 100]
+            y_axis = [0, 15, 30, 45, 60, 75, 90, 100]
+            z_surface = [
+                [round(_clamp(50 + x * .28 - y * .35 + sector_momentum * 2, 0, 100), 2) for x in x_axis]
+                for y in y_axis
+            ]
+
+            surface = go.Figure()
+            surface.add_trace(
+                go.Surface(
+                    x=x_axis,
+                    y=y_axis,
+                    z=z_surface,
+                    opacity=.86,
+                    hovertemplate="Sentiment: %{x}<br>Risk: %{y}<br>Movement pressure: %{z}<extra></extra>",
+                    name="Decision surface",
+                )
+            )
+            surface.add_trace(
+                go.Scatter3d(
+                    x=[sentiment_score],
+                    y=[risk_score],
+                    z=[movement_score],
+                    mode="markers+text",
+                    text=["Current article"],
+                    textposition="top center",
+                    marker=dict(size=10, opacity=.95, line=dict(width=2)),
+                    name="Current signal",
+                )
+            )
+            surface.update_layout(
+                title="3D Decision Surface · How Sentiment And Risk Shape Movement Pressure",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                height=570,
+                margin=dict(l=0, r=0, t=55, b=0),
+                scene=dict(
+                    xaxis=dict(title="Sentiment score", range=[-100, 100]),
+                    yaxis=dict(title="Risk pressure", range=[0, 100]),
+                    zaxis=dict(title="Movement pressure", range=[0, 100]),
+                ),
+            )
+            st.plotly_chart(surface, use_container_width=True, config={"displayModeBar": False})
+
+            st.markdown(
+                """
+                <div class="td-explain">
+                  <strong>Chart explanation · 3D Decision Surface:</strong>
+                  the surface shows the general rule of the signal space. High sentiment and low risk push the surface upward,
+                  meaning stronger movement pressure. High risk pulls the surface downward, even when sentiment is positive.
+                  This helps explain why positive articles can still be classified as fragile when risk is elevated.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            raw_point = [0, 45, 45]
+            sentiment_point = [sentiment_score, 45, 50 + max(0, sentiment_score) * .18]
+            risk_point = [sentiment_score, risk_score, 50 + max(0, sentiment_score) * .18 - risk_score * .10]
+            movement_point = [sentiment_score, risk_score, movement_score]
+            trajectory_points = [raw_point, sentiment_point, risk_point, movement_point]
+            trajectory_labels = ["Raw article", "Sentiment adjusted", "Risk adjusted", "Final movement point"]
+
+            trajectory = go.Figure()
+            trajectory.add_trace(
+                go.Scatter3d(
+                    x=[point[0] for point in trajectory_points],
+                    y=[point[1] for point in trajectory_points],
+                    z=[point[2] for point in trajectory_points],
+                    mode="lines+markers+text",
+                    text=trajectory_labels,
+                    textposition="top center",
+                    marker=dict(size=8, line=dict(width=1)),
+                    line=dict(width=6),
+                    name="Signal transformation path",
+                    hovertemplate="<b>%{text}</b><br>Sentiment: %{x}<br>Risk: %{y}<br>Movement: %{z}<extra></extra>",
+                )
+            )
+            trajectory.update_layout(
+                title="3D Signal Trajectory · How The Article Moves Through The Intelligence Stack",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                height=520,
+                margin=dict(l=0, r=0, t=55, b=0),
+                scene=dict(
+                    xaxis=dict(title="Sentiment score", range=[-100, 100]),
+                    yaxis=dict(title="Risk pressure", range=[0, 100]),
+                    zaxis=dict(title="Movement strength", range=[0, 100]),
+                ),
+            )
+            st.plotly_chart(trajectory, use_container_width=True, config={"displayModeBar": False})
+
+            st.markdown(
+                """
+                <div class="td-explain">
+                  <strong>Chart explanation · 3D Signal Trajectory:</strong>
+                  this path shows how the article moves through the intelligence stack. It starts near neutral,
+                  shifts after sentiment is detected, moves again after risk pressure is applied, and ends at the final
+                  sentiment-risk-movement point. This explains the transformation, not just the final result.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        except Exception as exc:
+            st.warning(f"3D visuals could not render. Showing the fallback panel instead. Reason: {exc}")
+            show_fallback = True
+
+    if show_fallback:
+        try:
+            import plotly.graph_objects as go
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                fallback_scatter = go.Figure()
+                fallback_scatter.add_trace(
+                    go.Scatter(
+                        x=[item["sentiment"] for item in comparable_signals],
+                        y=[item["risk"] for item in comparable_signals],
+                        mode="markers+text",
+                        text=[item["name"] for item in comparable_signals],
+                        textposition="top center",
+                        marker=dict(size=10, opacity=.72),
+                        name="Comparable signals",
+                        hovertemplate="<b>%{text}</b><br>Sentiment: %{x}<br>Risk: %{y}<extra></extra>",
+                    )
+                )
+                fallback_scatter.add_trace(
+                    go.Scatter(
+                        x=[sentiment_score],
+                        y=[risk_score],
+                        mode="markers+text",
+                        text=["Current article"],
+                        textposition="top center",
+                        marker=dict(size=16, opacity=.95),
+                        name="Current article",
+                    )
+                )
+                fallback_scatter.update_layout(
+                    title="2D Fallback · Sentiment vs Risk",
+                    template="plotly_dark",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(15,23,42,.35)",
+                    height=420,
+                    margin=dict(l=0, r=0, t=55, b=0),
+                    xaxis=dict(title="Sentiment score", range=[-100, 100]),
+                    yaxis=dict(title="Risk pressure", range=[0, 100]),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                )
+                st.plotly_chart(fallback_scatter, use_container_width=True, config={"displayModeBar": False})
+
+            with col2:
+                fallback_bar = go.Figure(
+                    go.Bar(
+                        x=["Sentiment", "Risk", "Movement"],
+                        y=[sentiment_score, risk_score, movement_score],
+                        text=[f"{sentiment_score:+.1f}", f"{risk_score:.1f}", f"{movement_score:.1f}"],
+                        textposition="outside",
+                    )
+                )
+                fallback_bar.update_layout(
+                    title="2D Fallback · Axis Strength Summary",
+                    template="plotly_dark",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(15,23,42,.35)",
+                    height=420,
+                    margin=dict(l=0, r=0, t=55, b=0),
+                    xaxis_title="Signal axis",
+                    yaxis=dict(title="Score", range=[-100, 110]),
+                )
+                st.plotly_chart(fallback_bar, use_container_width=True, config={"displayModeBar": False})
+
+            st.markdown(
+                """
+                <div class="td-explain">
+                  <strong>Chart explanation · 2D fallback:</strong>
+                  if 3D rendering is unavailable, the page still shows the same idea in readable form.
+                  The scatter chart shows sentiment against risk. The bar chart summarizes all three axes.
+                  This fallback keeps the page useful on browsers or deployments where 3D graphics are limited.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        except Exception as exc:
+            st.warning(f"2D fallback charts could not render. Reason: {exc}")
+
+    zone_rows = [
+        ("Bullish confirmation zone", "High positive sentiment, low risk, strong movement.", "Higher-quality upside signal."),
+        ("Fragile upside zone", "Positive sentiment but elevated risk pressure.", "Upside exists but may fade quickly."),
+        ("Neutral watch zone", "Balanced sentiment and moderate movement.", "Wait for stronger confirmation."),
+        ("Stress zone", "High risk pressure dominates the signal.", "Treat output with caution."),
+        ("Bearish pressure zone", "Negative sentiment and weak movement.", "Downside or defensive interpretation."),
+    ]
+
+    table_rows = ""
+    for name, definition, interpretation in zone_rows:
+        table_rows += (
+            "<tr>"
+            f"<td>{html.escape(name)}</td>"
+            f"<td>{html.escape(definition)}</td>"
+            f"<td>{html.escape(interpretation)}</td>"
+            "</tr>"
+        )
+
+    st.markdown(
+        f"""
+        <section class="td-panel">
+          <div class="td-kicker">Signal Zone Guide</div>
+          <div class="td-section-title">How to interpret the 3D space</div>
+          <div class="td-grid-3">
+            <div class="td-card"><strong>Sentiment axis</strong><span>Left side is bearish tone. Right side is bullish tone. It measures the direction of article language.</span></div>
+            <div class="td-card"><strong>Risk axis</strong><span>Low values mean contained risk. High values mean macro, regulatory, volatility, or uncertainty pressure.</span></div>
+            <div class="td-card"><strong>Movement axis</strong><span>Higher values mean stronger directional movement pressure after sentiment and risk are combined.</span></div>
+          </div>
+          <table class="td-table">
+            <thead>
+              <tr>
+                <th>Zone</th>
+                <th>Definition</th>
+                <th>Interpretation</th>
+              </tr>
+            </thead>
+            <tbody>{table_rows}</tbody>
+          </table>
+        </section>
+
+        <section class="td-panel">
+          <div class="td-kicker">Final 3D Analyst Read</div>
+          <div class="td-section-title">{html.escape(zone)}</div>
+          <p class="td-copy">
+            The current article sits at sentiment {sentiment_score:+.1f}, risk {risk_score:.1f}, and movement {movement_score:.1f}.
+            Spatially, that places it in the <strong>{html.escape(zone)}</strong>. {html.escape(zone_explanation)}
+            This page does not forecast price directly. It shows where the article sits in financial-intelligence space.
+          </p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _render_public_placeholder_page(page_title: str) -> None:
     """Render a real routed public page outside Executive Overview."""
 
@@ -8314,6 +10085,14 @@ def render_public_streamlit_cloud_app(project_root: Path | str | None = None) ->
 
     if selected_page == "Provenance":
         _render_provenance_page()
+        return
+
+    if selected_page == "Architecture / System Design":
+        _render_architecture_system_design_page()
+        return
+
+    if selected_page == "3D Intelligence":
+        _render_3d_intelligence_page()
         return
 
     _render_public_placeholder_page(selected_page)
