@@ -1,0 +1,234 @@
+{
+  "benchmark_completed_utc_date": "2026-07-03",
+  "benchmark_name": "Financial PhraseBank sentiment benchmark",
+  "dataset": {
+    "class_order": [
+      "Bearish",
+      "Neutral",
+      "Bullish"
+    ],
+    "name": "Financial PhraseBank",
+    "split_note": "All compared models used the same 518-row test split.",
+    "split_rows": {
+      "test": 518,
+      "training": 2413,
+      "validation": 517
+    },
+    "test_class_counts": {
+      "Bearish": 63,
+      "Bullish": 133,
+      "Neutral": 322
+    }
+  },
+  "deployment_champion": "distilbert",
+  "evidence_gaps": {
+    "artifact_checksums": "Model artifact checksums were not included in the benchmark summary.",
+    "artifact_sizes": "Artifact byte sizes were not included in the verified comparison summary.",
+    "confidence_reliability": "Per-prediction probabilities were not included in the benchmark summary.",
+    "dataset_checksum": "A dataset checksum was not included in the benchmark summary.",
+    "detailed_data_quality_counts": "Detailed duplicate and missing-value counts were not included in the benchmark summary.",
+    "live_multi_model_inference": "FastAPI exposes DistilBERT for live sentiment. BERT and BERT LoRA are benchmark-only.",
+    "random_seed": "The benchmark summary did not expose the training seed as a display field.",
+    "sample_predictions": "Correct and incorrect text examples were not included in the benchmark summary.",
+    "training_dependency_versions": "Exact package versions from the completed training environment were not included in the benchmark summary.",
+    "training_hardware": "The final benchmark summary did not record the hardware used for every model run."
+  },
+  "evidence_status": "verified_completed_benchmark",
+  "model_revision": "86b5e0934494bd15c9632b12f734a8a67f723594",
+  "models": {
+    "bert": {
+      "accuracy": 0.9131274131274131,
+      "artifact_size_bytes": null,
+      "confusion_matrix": [
+        [
+          58,
+          1,
+          4
+        ],
+        [
+          10,
+          297,
+          15
+        ],
+        [
+          5,
+          10,
+          118
+        ]
+      ],
+      "display_name": "BERT",
+      "latency_ms_per_record": 53.387838,
+      "limitation": "Slower and heavier than DistilBERT for the live application.",
+      "macro_f1": 0.8899574644672684,
+      "memory_mib": 417.65,
+      "memory_note": "Consistent FP32 parameter estimate used for comparison.",
+      "per_class": {
+        "Bearish": {
+          "f1": 0.8529411764705882,
+          "precision": 0.7945205479452054,
+          "recall": 0.9206349206349206,
+          "support": 63
+        },
+        "Bullish": {
+          "f1": 0.874074074074074,
+          "precision": 0.8613138686131386,
+          "recall": 0.8872180451127819,
+          "support": 133
+        },
+        "Neutral": {
+          "f1": 0.9428571428571428,
+          "precision": 0.9642857142857143,
+          "recall": 0.922360248447205,
+          "support": 322
+        }
+      },
+      "role": "Quality champion",
+      "selection_reason": "Highest verified prediction quality on the shared test split.",
+      "status": "trained_and_evaluated",
+      "test_runtime_seconds": 27.6549,
+      "total_parameters": 109484547,
+      "trainable_parameters": 109484547,
+      "training_history": [
+        {
+          "average_training_loss": 0.75165,
+          "epoch": 1,
+          "validation_accuracy": 0.8955512572533849,
+          "validation_loss": 0.33156025409698486,
+          "validation_macro_f1": 0.8709771820603786
+        },
+        {
+          "average_training_loss": 0.21361666666666668,
+          "epoch": 2,
+          "validation_accuracy": 0.9206963249516441,
+          "validation_loss": 0.29956066608428955,
+          "validation_macro_f1": 0.9042207615649499
+        },
+        {
+          "average_training_loss": 0.09403333333333334,
+          "epoch": 3,
+          "validation_accuracy": 0.9342359767891683,
+          "validation_loss": 0.3006148338317871,
+          "validation_macro_f1": 0.9157009741813186
+        }
+      ],
+      "training_seconds": 1647.0894507280027,
+      "weighted_f1": 0.9142608995550172
+    },
+    "bert_lora": {
+      "accuracy": 0.8416988416988417,
+      "artifact_size_bytes": null,
+      "confusion_matrix": [
+        [
+          58,
+          1,
+          4
+        ],
+        [
+          12,
+          275,
+          35
+        ],
+        [
+          11,
+          19,
+          103
+        ]
+      ],
+      "display_name": "BERT LoRA",
+      "latency_ms_per_record": 62.21583,
+      "limitation": "Lower quality and slower measured inference than DistilBERT in this benchmark.",
+      "macro_f1": 0.8153521710896103,
+      "memory_mib": 418.784,
+      "memory_note": "Consistent FP32 comparison estimate; the adapter itself trained far fewer parameters.",
+      "per_class": {
+        "Bearish": {
+          "f1": 0.8055555555555556,
+          "precision": 0.7160493827160493,
+          "recall": 0.9206349206349206,
+          "support": 63
+        },
+        "Bullish": {
+          "f1": 0.749090909090909,
+          "precision": 0.7253521126760564,
+          "recall": 0.7744360902255639,
+          "support": 133
+        },
+        "Neutral": {
+          "f1": 0.8914100486223663,
+          "precision": 0.9322033898305084,
+          "recall": 0.8540372670807453,
+          "support": 322
+        }
+      },
+      "role": "Parameter-efficient alternative",
+      "selection_reason": "Trained only 297,219 parameters, proving a parameter-efficient alternative.",
+      "status": "trained_and_evaluated",
+      "test_runtime_seconds": 32.2278,
+      "total_parameters": 109781766,
+      "trainable_parameters": 297219,
+      "training_history": [
+        {
+          "average_training_loss": 0.9603666666666667,
+          "epoch": 1,
+          "validation_accuracy": 0.6943907156673114,
+          "validation_loss": 0.7077662348747253,
+          "validation_macro_f1": 0.5587644881999722
+        },
+        {
+          "average_training_loss": 0.56405,
+          "epoch": 2,
+          "validation_accuracy": 0.8085106382978723,
+          "validation_loss": 0.5353912115097046,
+          "validation_macro_f1": 0.7823376509181369
+        },
+        {
+          "average_training_loss": 0.36093333333333333,
+          "epoch": 3,
+          "validation_accuracy": 0.8433268858800773,
+          "validation_loss": 0.4653669595718384,
+          "validation_macro_f1": 0.8099577290850711
+        }
+      ],
+      "training_seconds": 1049.0185054119793,
+      "weighted_f1": 0.8444268852615692
+    },
+    "distilbert": {
+      "accuracy": 0.8996138996138996,
+      "artifact_size_bytes": null,
+      "confusion_matrix": null,
+      "display_name": "DistilBERT",
+      "latency_ms_per_record": 31.200193,
+      "limitation": "The comparison summary did not include its confusion matrix or training history.",
+      "macro_f1": 0.877856,
+      "memory_mib": 255.416,
+      "memory_note": "Consistent FP32 parameter estimate used for comparison.",
+      "per_class": null,
+      "role": "Deployment champion",
+      "selection_reason": "Best verified balance of quality, response speed, and memory use.",
+      "status": "trained_and_evaluated",
+      "test_runtime_seconds": null,
+      "total_parameters": 66955779,
+      "trainable_parameters": 66955779,
+      "training_history": null,
+      "training_seconds": null,
+      "weighted_f1": 0.901021
+    }
+  },
+  "quality_champion": "bert",
+  "quality_ranking": [
+    "bert",
+    "distilbert",
+    "bert_lora"
+  ],
+  "schema_version": 1,
+  "source_note": "Values were transcribed from the completed sentiment benchmark suite. Unavailable fields remain null and are not estimated.",
+  "verification": {
+    "application_deployment_changed": false,
+    "bert_lora": "COMPLETED",
+    "full_bert": "COMPLETED",
+    "model_comparison": "COMPLETED",
+    "post_training_project_tests": 96,
+    "post_training_transformer_tests": 61,
+    "sentiment_benchmark_suite": "PASSED"
+  }
+}

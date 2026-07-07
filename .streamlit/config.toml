@@ -1,0 +1,38 @@
+# Project-level Streamlit configuration.
+#
+# The file uses only public presentation and privacy settings. Secrets and API
+# addresses must be stored separately in a later package and never committed.
+
+[client]
+showErrorDetails = "none"
+toolbarMode = "viewer"
+showSidebarNavigation = false
+showErrorLinks = false
+
+[browser]
+gatherUsageStats = false
+
+[server]
+headless = true
+runOnSave = false
+maxUploadSize = 25
+
+[theme]
+base = "dark"
+primaryColor = "#38BDF8"
+backgroundColor = "#07111F"
+secondaryBackgroundColor = "#0B1727"
+textColor = "#F3F7FB"
+font = "sans-serif"
+borderColor = "#1C344A"
+showWidgetBorder = true
+baseRadius = "0.85rem"
+buttonRadius = "0.75rem"
+showSidebarBorder = true
+
+[theme.sidebar]
+backgroundColor = "#07101D"
+secondaryBackgroundColor = "#0B1727"
+textColor = "#E7EEF6"
+primaryColor = "#38BDF8"
+borderColor = "#1C344A"

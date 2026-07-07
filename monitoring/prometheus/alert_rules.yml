@@ -1,0 +1,51 @@
+groups:
+  - name: financial-news-intelligence
+    rules:
+      - alert: FinancialNewsApiDown
+        expr: up{job="financial-news-intelligence-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Financial News Intelligence API is unavailable
+          description: Prometheus has failed to scrape the API for two minutes.
+      - alert: FinancialNewsApiHighErrorRate
+        expr: |
+          sum(rate(fni_http_requests_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(fni_http_requests_total[5m])), 0.001)
+          > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: API 5xx rate exceeds 5 percent
+          description: Investigate request IDs in structured application logs.
+      - alert: FinancialNewsApiHighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(fni_http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: API p95 latency exceeds two seconds
+          description: Inspect route and service-operation duration metrics.
+      - alert: FinancialNewsServiceOperationFailures
+        expr: sum(increase(fni_service_operations_total{outcome="failed"}[10m])) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Repeated model or intelligence operation failures
+          description: Correlate the operation label with structured logs.
+      - alert: FinancialNewsRequestBacklog
+        expr: fni_http_requests_in_flight > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Sustained API request backlog
+          description: Review worker latency and deployment capacity.

@@ -1,0 +1,183 @@
+{
+  "data_grain": {
+    "foundation_event": "one verified SEC event mapped to one session",
+    "historical_match": "one test record and one earlier train/validation SEC event",
+    "local_explanation": "one test record and raw feature",
+    "movement_model": "one canonical ticker and target-session date",
+    "scenario": "one historical-audit record"
+  },
+  "deployment_changed": false,
+  "explainability_methods": {
+    "global": "nonzero model-native importance",
+    "historical_similarity": "same-ticker train-validation earlier-only TF-IDF cosine",
+    "local": "train-validation reference perturbation",
+    "scenarios": "train-validation earlier empirical reactions",
+    "sentiment_phrases": "train-validation class mean TF-IDF difference"
+  },
+  "generated_at_utc": "2026-07-05T12:46:22.757556+00:00",
+  "leakage_controls": [
+    "foundation event time precedes target-session open",
+    "market predictors are shifted one complete session",
+    "chronological development and audit blocks use purged dates",
+    "expanding development folds select the champion",
+    "terminal development labels rank only the pre-registered shortlist",
+    "historical audit is evaluated once and never selects a model",
+    "global phrases and company context use train-validation only",
+    "historical matches and scenarios use reference evidence only",
+    "historical evidence is strictly earlier than each test session"
+  ],
+  "licence_boundary": {
+    "public_deployment_allowed_by_this_package": false,
+    "raw_tiingo_values_in_intelligence_outputs": false,
+    "raw_tiingo_values_publicly_redistributable": false,
+    "tiingo_classification": "internal_use_only"
+  },
+  "limitations": [
+    "SEC disclosures are not a complete representation of all market news.",
+    "Historical associations and feature sensitivity are not causal proof.",
+    "Model quality may degrade outside the 2015-2020 evidence window.",
+    "Per-ticker sample sizes may be smaller than aggregate sample sizes.",
+    "No result guarantees future price movement or investment performance.",
+    "Public deployment requires a separate data-licensing review."
+  ],
+  "mandatory_disclaimer": "For educational and research use only. This output is not financial, investment, legal, or tax advice. Markets involve risk, and users must perform independent due diligence.",
+  "reproducibility": {
+    "foundation_manifest_sha256": "510152d22c1d65631a2b6e6f4a7ec3c4c03b542b109d48c78400d73d9f025da2",
+    "random_seed": 42,
+    "runtime_versions": {
+      "executable": "/Users/ruturajmokashi/Projects/financial-news-stock-intelligence/.venv/bin/python",
+      "joblib": "1.4.2",
+      "numpy": "1.26.4",
+      "pandas": "2.1.4",
+      "platform": "macOS-11.7.11-x86_64-i386-64bit",
+      "python": "3.10.9",
+      "python_implementation": "CPython",
+      "scikit_learn": "1.5.0"
+    },
+    "training_config": {
+      "convergence_warnings_are_errors": true,
+      "decision_global_offsets": [
+        -0.3,
+        -0.2,
+        -0.1,
+        0.0,
+        0.1,
+        0.2,
+        0.3
+      ],
+      "decision_policy_maximum_fold_weighted_drop": 0.015,
+      "decision_policy_minimum_improved_fold_ratio": 0.5,
+      "decision_policy_minimum_macro_improvement": 0.01,
+      "decision_policy_minimum_weighted_improvement": 0.0,
+      "decision_ticker_minimum_improvement": 0.015,
+      "decision_ticker_minimum_records": 12,
+      "decision_ticker_offsets": [
+        0.0
+      ],
+      "development_confirmation_ratio": 0.09,
+      "enable_ticker_offsets": false,
+      "focused_test_mode": false,
+      "forest_estimators": 500,
+      "logistic_max_iterations": 5000,
+      "logistic_solver": "lbfgs",
+      "logistic_tolerance": 0.0001,
+      "minimum_class_support": 5,
+      "minimum_confirmation_dates": 60,
+      "minimum_fold_macro_f1": 0.25,
+      "minimum_fold_weighted_f1": 0.3,
+      "minimum_per_ticker_macro_f1": 0.1,
+      "minimum_predicted_classes": 3,
+      "minimum_test_macro_f1": 0.3,
+      "minimum_test_weighted_f1": 0.4,
+      "minimum_validation_improvement": 0.015,
+      "minimum_validation_macro_f1": 0.34,
+      "per_ticker_minimum_records": 8,
+      "permutation_repeats": 8,
+      "probability_tolerance": 1e-06,
+      "random_seed": 42,
+      "rolling_initial_train_ratio": 0.55,
+      "rolling_purge_dates": 1,
+      "rolling_recency_weight_power": 1.0,
+      "rolling_validation_folds": 4,
+      "terminal_shortlist_max_per_family": 2,
+      "terminal_shortlist_size": 5,
+      "text_max_features": 750
+    }
+  },
+  "selection_and_quality": {
+    "all_three_prediction_classes_required": true,
+    "baseline_improvement_required": true,
+    "candidate_selection_scope": "purged expanding folds inside early development",
+    "historical_audit_used_for_selection": false,
+    "quality_gates": {
+      "failures": [],
+      "status": "passed",
+      "test_baseline_macro_f1": 0.20110192837465565,
+      "test_baseline_weighted_f1": 0.26059954031982,
+      "test_champion_macro_f1": 0.396334469710208,
+      "test_champion_weighted_f1": 0.40284067961374403,
+      "test_macro_f1_improvement": 0.19523254133555237,
+      "thresholds": {
+        "convergence_warnings_are_errors": true,
+        "decision_global_offsets": [
+          -0.3,
+          -0.2,
+          -0.1,
+          0.0,
+          0.1,
+          0.2,
+          0.3
+        ],
+        "decision_policy_maximum_fold_weighted_drop": 0.015,
+        "decision_policy_minimum_improved_fold_ratio": 0.5,
+        "decision_policy_minimum_macro_improvement": 0.01,
+        "decision_policy_minimum_weighted_improvement": 0.0,
+        "decision_ticker_minimum_improvement": 0.015,
+        "decision_ticker_minimum_records": 12,
+        "decision_ticker_offsets": [
+          0.0
+        ],
+        "development_confirmation_ratio": 0.09,
+        "enable_ticker_offsets": false,
+        "focused_test_mode": false,
+        "forest_estimators": 500,
+        "logistic_max_iterations": 5000,
+        "logistic_solver": "lbfgs",
+        "logistic_tolerance": 0.0001,
+        "minimum_class_support": 5,
+        "minimum_confirmation_dates": 60,
+        "minimum_fold_macro_f1": 0.25,
+        "minimum_fold_weighted_f1": 0.3,
+        "minimum_per_ticker_macro_f1": 0.1,
+        "minimum_predicted_classes": 3,
+        "minimum_test_macro_f1": 0.3,
+        "minimum_test_weighted_f1": 0.4,
+        "minimum_validation_improvement": 0.015,
+        "minimum_validation_macro_f1": 0.34,
+        "per_ticker_minimum_records": 8,
+        "permutation_repeats": 8,
+        "probability_tolerance": 1e-06,
+        "random_seed": 42,
+        "rolling_initial_train_ratio": 0.55,
+        "rolling_purge_dates": 1,
+        "rolling_recency_weight_power": 1.0,
+        "rolling_validation_folds": 4,
+        "terminal_shortlist_max_per_family": 2,
+        "terminal_shortlist_size": 5,
+        "text_max_features": 750
+      },
+      "validation_baseline_macro_f1": 0.19810795770728992,
+      "validation_champion_macro_f1": 0.3881760524535464,
+      "validation_macro_f1_improvement": 0.1900680947462565,
+      "weak_tickers": []
+    },
+    "terminal_confirmation_scope": "purged terminal development tournament over a fixed shortlist"
+  },
+  "sources": {
+    "events": "SEC EDGAR official company disclosures",
+    "movement_model": "stability_soft_vote_rf_sgd",
+    "prices": "Tiingo EOD authenticated internal-use adjusted historical data",
+    "sentiment": "existing local DistilBERT deployment champion"
+  },
+  "status": "provenance_verified"
+}

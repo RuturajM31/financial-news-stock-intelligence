@@ -1,0 +1,12 @@
+The Financial News Intelligence chart rendered successfully.
+
+The API is intentionally ClusterIP-only. The optional Ingress exposes only the
+Streamlit service. Before installation, create the API-key Secret named:
+
+  {{ include "financial-news-intelligence.apiKeySecretName" . }}
+
+The Secret key must be:
+
+  {{ .Values.apiKey.key }}
+
+Never place the API key in values.yaml, a command-line --set argument, or Git.

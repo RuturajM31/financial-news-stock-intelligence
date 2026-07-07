@@ -1,0 +1,13 @@
+# Streamlit Community Cloud public UI dependency file.
+# This file intentionally stays beside app/streamlit_app.py so Community Cloud
+# uses it instead of the heavy repository-root requirements.txt.
+# Keep these packages Python-version-flexible: Community Cloud can default to
+# newer Python runtimes such as 3.14, where old binary pins do not have wheels.
+streamlit
+plotly
+numpy
+pandas
+pyarrow
+requests
+PyYAML
+reportlab

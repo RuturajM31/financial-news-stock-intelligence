@@ -1,0 +1,35 @@
+{
+  "base_python_image": "python:3.10.20-slim-bookworm",
+  "branch": "project-foundation-streamlit-closure",
+  "image_publication_authorized": false,
+  "name": "Docker Production Strike Package",
+  "payload_files": [
+    ".dockerignore",
+    "docker/Dockerfile.fastapi",
+    "docker/Dockerfile.streamlit",
+    "docker/compose.yaml",
+    "docker/docker.env.example",
+    "docker/entrypoint-fastapi.sh",
+    "docker/entrypoint-streamlit.sh",
+    "docker/healthcheck.py",
+    "docker/requirements-streamlit-container.txt",
+    "docker/smoke_test.py",
+    "docs/DOCKER_PRODUCTION_CONTRACT.md",
+    "scripts/verify_docker_production.py",
+    "src/financial_news_intelligence/api/artifacts.py",
+    "tests/test_docker_production.py",
+    "tests/test_docker_smoke_retry.py",
+    "DOCKER_PRODUCTION_PACKAGE_MANIFEST.json"
+  ],
+  "persistent_containers_authorized": false,
+  "precondition_sha256": {
+    ".gitignore": "8ee55d529af08ed7554aa41b1d44a6cfe52d8da9d86beed0cf471f307b243cae",
+    "requirements-streamlit-runtime.txt": "b804e9a32392d18614289b69aa1e668f5a5c9c84ac3686babf91984974fbd166",
+    "requirements.txt": "269508edadda35670e2f07b131813b3281dd1c0f35d94599dd3993ce2f90f5fa",
+    "src/financial_news_intelligence/api/app.py": "b8cc8956b64adb2d117b339652442437b2ffc208c3cfa7c47cff29a963d0537e",
+    "src/financial_news_intelligence/api/artifacts.py": "e942fad28968b1a8468ca58a2b53f1ce77fe794b98688722199d243c14ba003b",
+    "src/financial_news_intelligence/api/monitoring.py": "a0bac74a8fa725b496a753a406f302899362686df5cd88b5af3a61dd8fc93a90"
+  },
+  "public_deployment_changed": false,
+  "version": "11.7"
+}

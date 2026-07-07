@@ -1,0 +1,41 @@
+# syntax=docker/dockerfile:1.7
+FROM python:3.10.20-slim-bookworm
+
+ARG APP_UID=10001
+ARG APP_GID=10001
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONNOUSERSITE=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    HOME=/tmp/fni-home \
+    FNI_PROJECT_ROOT=/opt/fni/project \
+    PYTHONPATH=/opt/fni/project
+
+RUN groupadd --gid "${APP_GID}" fni \
+    && useradd --uid "${APP_UID}" --gid "${APP_GID}" --create-home --shell /usr/sbin/nologin fni
+
+WORKDIR /opt/fni/project
+COPY docker/requirements-streamlit-container.txt /tmp/requirements-streamlit-container.txt
+RUN python -m venv /opt/fni/project/.venv-streamlit \
+    && /opt/fni/project/.venv-streamlit/bin/pip install -r /tmp/requirements-streamlit-container.txt
+
+COPY --chown=fni:fni app /opt/fni/project/app
+COPY --chown=fni:fni .streamlit /opt/fni/project/.streamlit
+COPY --chown=fni:fni reports /opt/fni/project/reports
+COPY --chown=fni:fni artifacts/manifests /opt/fni/project/artifacts/manifests
+COPY --chown=fni:fni data/reference /opt/fni/project/data/reference
+COPY --chown=fni:fni docs/financial_news_system_scheme.png /opt/fni/project/docs/financial_news_system_scheme.png
+COPY --chown=fni:fni docker/entrypoint-streamlit.sh docker/healthcheck.py /opt/fni/project/docker/
+
+RUN chmod 0755 docker/entrypoint-streamlit.sh docker/healthcheck.py \
+    && chown -R fni:fni /opt/fni/project/.venv-streamlit
+
+USER fni
+EXPOSE 8501
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=10 \
+    CMD ["/opt/fni/project/.venv-streamlit/bin/python", "/opt/fni/project/docker/healthcheck.py", "--url", "http://127.0.0.1:8501/_stcore/health", "--expect", "ok"]
+
+ENTRYPOINT ["/opt/fni/project/docker/entrypoint-streamlit.sh"]
