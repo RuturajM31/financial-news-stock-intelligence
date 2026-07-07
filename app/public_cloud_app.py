@@ -8726,6 +8726,533 @@ def _render_3d_intelligence_page() -> None:
     )
 
 
+def _render_about_project_purpose_page() -> None:
+    """Render the About / Project Purpose page without exposing private personal details."""
+
+    import html
+
+    st.markdown(
+        """
+        <style>
+          .ap-hero {
+            display:grid;
+            grid-template-columns:1.08fr .92fr;
+            gap:1rem;
+            padding:1.35rem;
+            border-radius:24px;
+            border:1px solid rgba(34,211,238,.34);
+            background:
+              radial-gradient(circle at 8% 8%, rgba(34,211,238,.20), transparent 22rem),
+              radial-gradient(circle at 76% 8%, rgba(139,92,246,.23), transparent 24rem),
+              radial-gradient(circle at 88% 94%, rgba(34,197,94,.13), transparent 22rem),
+              linear-gradient(145deg, rgba(8,47,73,.72), rgba(8,13,28,.96));
+            box-shadow:0 30px 90px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.07);
+            margin-bottom:.9rem;
+          }
+          .ap-kicker {
+            color:#67e8f9;
+            font-size:.70rem;
+            font-weight:950;
+            letter-spacing:.13em;
+            text-transform:uppercase;
+          }
+          .ap-title {
+            color:white;
+            font-size:2.58rem;
+            line-height:1;
+            font-weight:950;
+            letter-spacing:-.06em;
+            margin:.42rem 0 .55rem 0;
+          }
+          .ap-subtitle {
+            color:#dbeafe;
+            font-size:1rem;
+            line-height:1.55;
+          }
+          .ap-chip-row {
+            display:flex;
+            flex-wrap:wrap;
+            gap:.48rem;
+            margin-top:.9rem;
+          }
+          .ap-chip {
+            padding:.43rem .68rem;
+            border-radius:999px;
+            font-size:.72rem;
+            font-weight:850;
+            color:#bfdbfe;
+            border:1px solid rgba(96,165,250,.25);
+            background:rgba(15,23,42,.65);
+          }
+          .ap-pitch {
+            padding:1rem;
+            border-radius:20px;
+            border:1px solid rgba(34,197,94,.30);
+            background:
+              radial-gradient(circle at 8% 0%, rgba(34,197,94,.13), transparent 16rem),
+              linear-gradient(160deg, rgba(15,23,42,.92), rgba(2,6,23,.96));
+          }
+          .ap-pitch h3 {
+            margin:.15rem 0 .35rem 0;
+            color:white;
+            font-size:1.35rem;
+            letter-spacing:-.04em;
+          }
+          .ap-pitch .big {
+            color:#86efac;
+            font-size:2rem;
+            font-weight:950;
+            letter-spacing:-.05em;
+            line-height:1.05;
+            margin:.35rem 0;
+          }
+          .ap-pitch p, .ap-pitch li {
+            color:#cbd5e1;
+            font-size:.78rem;
+            line-height:1.42;
+          }
+          .ap-pitch ul {
+            margin:.45rem 0 0 1rem;
+            padding:0;
+          }
+          .ap-panel {
+            margin:.95rem 0;
+            padding:1.1rem;
+            border-radius:22px;
+            border:1px solid rgba(34,211,238,.24);
+            background:
+              radial-gradient(circle at 6% 0%, rgba(34,211,238,.11), transparent 18rem),
+              radial-gradient(circle at 94% 30%, rgba(139,92,246,.13), transparent 20rem),
+              linear-gradient(145deg, rgba(15,23,42,.88), rgba(8,13,28,.96));
+            box-shadow:0 22px 60px rgba(0,0,0,.25);
+          }
+          .ap-section-title {
+            color:white;
+            font-size:1.25rem;
+            font-weight:950;
+            letter-spacing:-.04em;
+            margin:.2rem 0 .35rem 0;
+          }
+          .ap-copy {
+            color:#cbd5e1;
+            font-size:.84rem;
+            line-height:1.48;
+            margin:0;
+          }
+          .ap-metrics {
+            display:grid;
+            grid-template-columns:repeat(5,minmax(0,1fr));
+            gap:.68rem;
+            margin:.85rem 0 .9rem 0;
+          }
+          .ap-metric {
+            padding:1rem;
+            border-radius:18px;
+            border:1px solid rgba(148,163,184,.16);
+            background:rgba(15,23,42,.82);
+          }
+          .ap-metric strong {
+            color:white;
+            font-size:1.35rem;
+            font-weight:950;
+            display:block;
+          }
+          .ap-metric span {
+            color:#cbd5e1;
+            font-size:.74rem;
+            font-weight:760;
+          }
+          .ap-grid-2 {
+            display:grid;
+            grid-template-columns:repeat(2,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .ap-grid-3 {
+            display:grid;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .ap-grid-4 {
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .ap-card {
+            padding:.95rem;
+            border-radius:17px;
+            border:1px solid rgba(148,163,184,.16);
+            background:rgba(15,23,42,.74);
+          }
+          .ap-card strong {
+            color:white;
+            display:block;
+            font-size:.96rem;
+            margin-bottom:.32rem;
+          }
+          .ap-card span, .ap-card li {
+            color:#cbd5e1;
+            font-size:.75rem;
+            line-height:1.38;
+          }
+          .ap-card ul {
+            margin:.2rem 0 0 1rem;
+            padding:0;
+          }
+          .ap-route {
+            padding:.85rem;
+            border-radius:17px;
+            border:1px solid rgba(34,211,238,.18);
+            background:rgba(15,23,42,.74);
+          }
+          .ap-route strong {
+            color:#67e8f9;
+            display:block;
+            font-size:.86rem;
+            margin-bottom:.22rem;
+          }
+          .ap-route span {
+            color:#dbeafe;
+            display:block;
+            font-size:.72rem;
+            line-height:1.36;
+          }
+          .ap-table {
+            width:100%;
+            border-collapse:separate;
+            border-spacing:0 .45rem;
+            margin-top:.75rem;
+          }
+          .ap-table th {
+            color:#94a3b8;
+            font-size:.70rem;
+            text-align:left;
+            padding:.35rem .5rem;
+            text-transform:uppercase;
+            letter-spacing:.08em;
+          }
+          .ap-table td {
+            color:#e5e7eb;
+            font-size:.78rem;
+            padding:.62rem .5rem;
+            background:rgba(15,23,42,.72);
+            border-top:1px solid rgba(148,163,184,.13);
+            border-bottom:1px solid rgba(148,163,184,.13);
+          }
+          .ap-table td:first-child {
+            border-left:1px solid rgba(148,163,184,.13);
+            border-radius:12px 0 0 12px;
+            font-weight:900;
+          }
+          .ap-table td:last-child {
+            border-right:1px solid rgba(148,163,184,.13);
+            border-radius:0 12px 12px 0;
+          }
+          .ap-boundary {
+            padding:1rem;
+            border-radius:18px;
+            border:1px solid rgba(251,191,36,.30);
+            background:
+              radial-gradient(circle at 0% 0%, rgba(251,191,36,.12), transparent 14rem),
+              rgba(15,23,42,.74);
+          }
+          .ap-boundary strong {
+            color:#fbbf24;
+            display:block;
+            font-size:1.05rem;
+            margin-bottom:.25rem;
+          }
+          .ap-boundary span {
+            color:#dbeafe;
+            font-size:.8rem;
+            line-height:1.42;
+          }
+          .ap-good { color:#86efac !important; }
+          .ap-warn { color:#fbbf24 !important; }
+          @media (max-width:1100px) {
+            .ap-hero,.ap-metrics,.ap-grid-2,.ap-grid-3,.ap-grid-4 { grid-template-columns:1fr; }
+            .ap-title { font-size:2.05rem; }
+          }
+        </style>
+
+        <section class="ap-hero">
+          <div>
+            <div class="ap-kicker">Portfolio Project Story</div>
+            <div class="ap-title">Why This<br/>Financial AI Product Matters</div>
+            <div class="ap-subtitle">
+              Financial News Stock Intelligence is an end-to-end AI product that turns financial news into structured intelligence:
+              article analysis, forecasts, scenarios, historical context, explainability, evidence, provenance, architecture, and deployment readiness.
+            </div>
+            <div class="ap-chip-row">
+              <span class="ap-chip">ML product</span>
+              <span class="ap-chip">Financial NLP</span>
+              <span class="ap-chip">Business intelligence</span>
+              <span class="ap-chip">Explainability</span>
+              <span class="ap-chip">MLOps evidence</span>
+              <span class="ap-chip">Public deployment</span>
+            </div>
+          </div>
+
+          <div class="ap-pitch">
+            <div class="ap-kicker">Project Purpose</div>
+            <h3>End-to-end AI product portfolio</h3>
+            <div class="big">PRODUCT + ML + ENGINEERING</div>
+            <p>
+              The project demonstrates the full path from problem framing to deployed public dashboard.
+              It is designed to show applied data science, model reasoning, AI product thinking, testing,
+              source boundaries, architecture, and deployment discipline.
+            </p>
+            <ul>
+              <li>No private personal details are added on this page.</li>
+              <li>The focus stays on the project, skills, and product value.</li>
+              <li>Public mode remains honest about demo-safe boundaries.</li>
+            </ul>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    page_focus = st.selectbox(
+        "Reviewer focus",
+        [
+            "Full project story",
+            "Recruiter quick review",
+            "ML / AI depth",
+            "Engineering / deployment depth",
+            "Business intelligence value",
+        ],
+        index=0,
+    )
+
+    focus_map = {
+        "Full project story": ("End-to-end portfolio proof", "Shows product, ML, evidence, architecture, and deployment together."),
+        "Recruiter quick review": ("Fast reviewer path", "Guides reviewers to the strongest pages without requiring code knowledge."),
+        "ML / AI depth": ("Model reasoning proof", "Highlights NLP, movement intelligence, explainability, comparison, and evaluation."),
+        "Engineering / deployment depth": ("Production thinking proof", "Highlights testing, architecture, public deployment, security, and fallback design."),
+        "Business intelligence value": ("Decision-support proof", "Shows how noisy financial news becomes structured business intelligence."),
+    }
+
+    st.markdown(
+        f"""
+        <div class="ap-metrics">
+          <div class="ap-metric"><strong>{html.escape(focus_map[page_focus][0])}</strong><span>selected reviewer lens</span></div>
+          <div class="ap-metric"><strong>13 pages</strong><span>public dashboard sections</span></div>
+          <div class="ap-metric"><strong>5 layers</strong><span>product, ML, BI, MLOps, deployment</span></div>
+          <div class="ap-metric"><strong>0 private details</strong><span>privacy-safe project page</span></div>
+          <div class="ap-metric"><strong>Public-ready</strong><span>portfolio deployment mode</span></div>
+        </div>
+
+        <section class="ap-panel">
+          <div class="ap-kicker">Problem → Solution → Outcome</div>
+          <div class="ap-section-title">The project story in one view</div>
+          <div class="ap-grid-3">
+            <div class="ap-card">
+              <strong>Problem</strong>
+              <span>Financial news is noisy, fast-moving, and difficult to interpret consistently across sentiment, risk, movement, and market context.</span>
+            </div>
+            <div class="ap-card">
+              <strong>Solution</strong>
+              <span>The dashboard converts articles into structured intelligence: article analysis, movement pressure, forecasts, scenarios, historical context, and explanations.</span>
+            </div>
+            <div class="ap-card">
+              <strong>Outcome</strong>
+              <span>A reviewer can see not only the model-style output, but also why it happened, how it is bounded, how it is tested, and how it is deployed.</span>
+            </div>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    try:
+        import plotly.graph_objects as go
+
+        value_rows = [
+            {"area": "Product thinking", "score": 94, "proof": "End-to-end article intelligence workflow."},
+            {"area": "ML reasoning", "score": 91, "proof": "Model comparison, explainability, movement layer."},
+            {"area": "Business intelligence", "score": 90, "proof": "Forecast, scenario, historical, and risk views."},
+            {"area": "MLOps evidence", "score": 88, "proof": "Training evidence, tests, provenance, promotion gates."},
+            {"area": "Deployment engineering", "score": 89, "proof": "Public Streamlit deployment and production architecture path."},
+            {"area": "UX storytelling", "score": 92, "proof": "Readable pages, chart explanations, dashboard navigation."},
+        ]
+
+        value_fig = go.Figure(
+            go.Bar(
+                x=[row["score"] for row in value_rows],
+                y=[row["area"] for row in value_rows],
+                orientation="h",
+                customdata=[row["proof"] for row in value_rows],
+                hovertemplate="<b>%{y}</b><br>Strength: %{x}/100<br>%{customdata}<extra></extra>",
+            )
+        )
+        value_fig.update_layout(
+            title="Portfolio Value Map · What The Project Demonstrates",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,.35)",
+            height=410,
+            margin=dict(l=0, r=0, t=55, b=0),
+            xaxis=dict(title="Demonstrated strength", range=[0, 105]),
+            yaxis_title="",
+        )
+        st.plotly_chart(value_fig, use_container_width=True, config={"displayModeBar": False})
+
+    except Exception as exc:
+        st.warning(f"About page portfolio chart could not render. Reason: {exc}")
+
+    st.markdown(
+        """
+        <section class="ap-panel">
+          <div class="ap-kicker">What This Project Proves</div>
+          <div class="ap-section-title">Portfolio capabilities demonstrated</div>
+          <div class="ap-grid-4">
+            <div class="ap-card"><strong>ML product thinking</strong><span>Turns a complex AI workflow into a usable public product, not just a notebook or model file.</span></div>
+            <div class="ap-card"><strong>Financial NLP</strong><span>Processes financial-news text into sentiment, risk, movement, and explanation signals.</span></div>
+            <div class="ap-card"><strong>Model evaluation</strong><span>Compares model tradeoffs, champion selection, metrics, validation, and deployment fit.</span></div>
+            <div class="ap-card"><strong>Explainability</strong><span>Shows drivers, phrase impact, sentence impact, risk language, and user-readable reasoning.</span></div>
+            <div class="ap-card"><strong>Scenario design</strong><span>Builds what-if cases for upside, base, downside, risk pressure, and opportunity pressure.</span></div>
+            <div class="ap-card"><strong>Historical context</strong><span>Shows how similar news events behaved in comparable situations using public-demo examples.</span></div>
+            <div class="ap-card"><strong>MLOps discipline</strong><span>Includes testing, validation, evidence trail, provenance, promotion rules, and failure boundaries.</span></div>
+            <div class="ap-card"><strong>Deployment engineering</strong><span>Separates public Streamlit mode from production architecture with FastAPI, Docker, Kubernetes, and CI/CD paths.</span></div>
+          </div>
+        </section>
+
+        <section class="ap-panel">
+          <div class="ap-kicker">Reviewer Navigation Guide</div>
+          <div class="ap-section-title">Where to click depending on what the reviewer wants to see</div>
+          <div class="ap-grid-3">
+            <div class="ap-route"><strong>Product overview</strong><span>Executive Overview</span></div>
+            <div class="ap-route"><strong>Try an article</strong><span>Analyze Article</span></div>
+            <div class="ap-route"><strong>Forecast view</strong><span>Forecasts</span></div>
+            <div class="ap-route"><strong>Historical context</strong><span>Historical Intelligence</span></div>
+            <div class="ap-route"><strong>Model reasoning</strong><span>Explainability</span></div>
+            <div class="ap-route"><strong>What-if analysis</strong><span>Scenario Analysis</span></div>
+            <div class="ap-route"><strong>Model selection</strong><span>Model Comparison</span></div>
+            <div class="ap-route"><strong>Training and tests</strong><span>Model Training / Evidence</span></div>
+            <div class="ap-route"><strong>Source boundaries</strong><span>Provenance</span></div>
+            <div class="ap-route"><strong>System design</strong><span>Architecture / System Design</span></div>
+            <div class="ap-route"><strong>Visual synthesis</strong><span>3D Intelligence</span></div>
+            <div class="ap-route"><strong>Quality review</strong><span>Visual QA / Page Audit</span></div>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    skills = [
+        ("Python", "Core implementation and data workflow logic."),
+        ("Streamlit", "Public dashboard interface and portfolio deployment."),
+        ("Plotly", "Interactive charts, 3D signal visuals, evidence views."),
+        ("Financial NLP", "Article text interpretation, sentiment, risk, and movement cues."),
+        ("Transformer reasoning", "DistilBERT-style language-model product layer."),
+        ("Movement intelligence", "Financial direction layer beyond simple sentiment."),
+        ("Model evaluation", "Metrics, model comparison, champion-selection story."),
+        ("Testing / QA", "Compile checks, route checks, page contracts, visual validation."),
+        ("MLOps evidence", "Training proof, validation gates, artifact tables, promotion controls."),
+        ("Architecture design", "Public vs production paths, service boundaries, CI/CD gates."),
+        ("Git / GitHub", "Branch-based development, commits, pushes, controlled release workflow."),
+        ("Deployment", "Public Streamlit Cloud readiness and production deployment planning."),
+    ]
+
+    skill_rows = ""
+    for skill, proof in skills:
+        skill_rows += (
+            "<tr>"
+            f"<td>{html.escape(skill)}</td>"
+            f"<td>{html.escape(proof)}</td>"
+            "</tr>"
+        )
+
+    value_rows = [
+        ("Business value", "Converts noisy financial-news articles into structured decision-support views."),
+        ("ML value", "Compares model choices and explains predictions rather than hiding behind a black box."),
+        ("Engineering value", "Runs as a public Streamlit product with a documented production architecture path."),
+        ("MLOps value", "Shows evidence, tests, validation, provenance, reproducibility, and promotion gates."),
+        ("UX value", "Makes complex financial AI outputs readable through focused pages and chart explanations."),
+    ]
+
+    value_table_rows = ""
+    for value_type, explanation in value_rows:
+        value_table_rows += (
+            "<tr>"
+            f"<td>{html.escape(value_type)}</td>"
+            f"<td>{html.escape(explanation)}</td>"
+            "</tr>"
+        )
+
+    st.markdown(
+        f"""
+        <section class="ap-panel">
+          <div class="ap-kicker">Skills Demonstrated</div>
+          <div class="ap-section-title">What the project shows technically</div>
+          <table class="ap-table">
+            <thead>
+              <tr>
+                <th>Skill / area</th>
+                <th>How it appears in this project</th>
+              </tr>
+            </thead>
+            <tbody>{skill_rows}</tbody>
+          </table>
+        </section>
+
+        <section class="ap-panel">
+          <div class="ap-kicker">Project Value Matrix</div>
+          <div class="ap-section-title">Why the project matters</div>
+          <table class="ap-table">
+            <thead>
+              <tr>
+                <th>Value area</th>
+                <th>Project contribution</th>
+              </tr>
+            </thead>
+            <tbody>{value_table_rows}</tbody>
+          </table>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <section class="ap-panel">
+          <div class="ap-kicker">Scope And Trust Boundary</div>
+          <div class="ap-grid-2">
+            <div class="ap-boundary">
+              <strong>Public demonstration boundary</strong>
+              <span>
+                This is a portfolio and public demonstration project. Some public-mode values are demo-safe unless connected to
+                private training artifacts, live market data, model registry services, or production infrastructure.
+              </span>
+            </div>
+            <div class="ap-boundary">
+              <strong>Not investment advice</strong>
+              <span>
+                The dashboard is for educational and analytical demonstration. It is not personalized investment advice,
+                trading instruction, or a guarantee of future market movement.
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <section class="ap-panel">
+          <div class="ap-kicker">Final Portfolio Pitch</div>
+          <div class="ap-section-title">The project in one paragraph</div>
+          <p class="ap-copy">
+            This project demonstrates the full path from idea to deployed AI product: problem framing, article ingestion,
+            model reasoning, visual intelligence, testing, provenance, architecture, and public cloud delivery. It is not only a
+            model demo; it is an end-to-end financial AI product built to show product thinking, ML reasoning, business intelligence,
+            MLOps discipline, explainability, and deployment engineering.
+          </p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _render_public_placeholder_page(page_title: str) -> None:
     """Render a real routed public page outside Executive Overview."""
 
@@ -10093,6 +10620,10 @@ def render_public_streamlit_cloud_app(project_root: Path | str | None = None) ->
 
     if selected_page == "3D Intelligence":
         _render_3d_intelligence_page()
+        return
+
+    if selected_page == "About / Project Purpose":
+        _render_about_project_purpose_page()
         return
 
     _render_public_placeholder_page(selected_page)
