@@ -888,10 +888,10 @@ def _input_form() -> tuple[str, str, str]:
 
     if not analyze_clicked:
         st.markdown(
-            '<div class="info-strip">ⓘ Showing the executive sample dashboard. Enter a URL, upload, paste text, or click Analyze to run your own article.</div>',
+            '<div class="info-strip">ⓘ Showing sample article intelligence. Enter a URL, upload, paste text, or click Analyze to run your own article.</div>',
             unsafe_allow_html=True,
         )
-        return _BASE_EXAMPLE, "sample executive overview", ""
+        return _BASE_EXAMPLE, "sample article intelligence", ""
 
     clean_url = _clean_text(article_url)
     clean_pasted = _clean_text(pasted_text)
@@ -1278,6 +1278,549 @@ def _render_public_placeholder_page(page_title: str) -> None:
     )
 
 
+def _analysis_pct(value: float) -> str:
+    """Format public analysis probabilities as percentages."""
+
+    return f"{value * 100:.0f}%"
+
+
+def _article_sentences(text: str, limit: int = 8) -> list[str]:
+    """Split article text into readable sentence snippets for the public cockpit."""
+
+    import re
+
+    chunks = re.split(r"(?<=[.!?])\s+", _clean_text(text))
+    sentences = [chunk.strip() for chunk in chunks if len(chunk.strip()) >= 35]
+    return sentences[:limit]
+
+
+def _sentence_impact_rows(text: str) -> list[tuple[str, float, str]]:
+    """Score visible sentence snippets using transparent public-mode keyword logic."""
+
+    rows: list[tuple[str, float, str]] = []
+    for sentence in _article_sentences(text, limit=10):
+        lower = sentence.lower()
+        pos = sum(1 for term in _POSITIVE_TERMS if term in lower)
+        neg = sum(1 for term in _NEGATIVE_TERMS if term in lower)
+        risk = sum(1 for term in _RISK_TERMS if term in lower)
+        score = (pos * 0.22) - (neg * 0.20) - (risk * 0.12)
+        label = "Bullish" if score > 0.08 else "Risk" if score < -0.08 else "Context"
+        rows.append((sentence[:220], max(-1.0, min(1.0, score)), label))
+    return rows[:6]
+
+
+def _token_cloud_terms(text: str, signal: ArticleSignal) -> list[tuple[str, int, str]]:
+    """Build clean finance tokens for the Analyze Article cloud."""
+
+    import re
+    from collections import Counter
+
+    lower_text = text.lower()
+
+    stopwords = {
+        "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has",
+        "have", "in", "into", "is", "it", "its", "of", "on", "or", "said",
+        "says", "that", "the", "their", "this", "to", "was", "were", "will",
+        "with", "about", "after", "again", "against", "also", "article",
+        "because", "before", "between", "could", "hours", "monday", "more",
+        "news", "over", "than", "there", "these", "those", "through", "under",
+        "week", "which", "while", "would", "year", "years", "being", "they",
+        "them", "then", "when", "next", "quarter",
+    }
+
+    finance_terms = {
+        "ai", "stock", "stocks", "shares", "earnings", "revenue", "profit",
+        "growth", "margin", "margins", "guidance", "forecast", "demand",
+        "supply", "chip", "chips", "cloud", "data", "center", "price",
+        "target", "upgrade", "downgrade", "cut", "beat", "miss", "risk",
+        "strong", "stronger", "weak", "record", "positive", "negative",
+        "bullish", "bearish", "investors", "market", "competition", "export",
+        "exports", "controls", "policy", "regulation", "volatility", "tech",
+        "constraints", "pressure", "management",
+    }
+
+    scored: dict[str, tuple[int, str]] = {}
+
+    def add(term: str, weight: int, group: str) -> None:
+        clean = term.strip().lower()
+        if not clean or clean in stopwords or len(clean) < 2:
+            return
+        previous = scored.get(clean)
+        if previous is None or weight > previous[0]:
+            scored[clean] = (weight, group)
+
+    for term in signal.positive_hits:
+        add(term, lower_text.count(term.lower()) + 8, "positive")
+    for term in signal.negative_hits:
+        add(term, lower_text.count(term.lower()) + 8, "negative")
+    for term in signal.risk_hits:
+        add(term, lower_text.count(term.lower()) + 8, "risk")
+
+    words = re.findall(r"[A-Za-z][A-Za-z\-]{2,}", lower_text)
+    counts = Counter(word for word in words if word not in stopwords)
+
+    for word, count in counts.most_common(100):
+        if word not in finance_terms and count < 2:
+            continue
+
+        group = "neutral"
+        if word in {"growth", "strong", "stronger", "record", "beat", "profit", "revenue", "bullish", "upgrade", "demand"}:
+            group = "positive"
+        elif word in {"cut", "downgrade", "miss", "weak", "negative", "bearish"}:
+            group = "negative"
+        elif word in {"risk", "margin", "margins", "competition", "export", "exports", "controls", "policy", "regulation", "volatility", "supply", "constraints", "pressure"}:
+            group = "risk"
+
+        add(word, count + 3, group)
+
+    return [
+        (term, weight, group)
+        for term, (weight, group) in sorted(
+            scored.items(),
+            key=lambda row: row[1][0],
+            reverse=True,
+        )[:26]
+    ]
+
+def _render_article_extraction_preview(text: str, signal: ArticleSignal, source_url: str) -> None:
+    """Show article extraction details before charts."""
+
+    sentences = _article_sentences(text, limit=5)
+    preview = "<br>".join(f"• {_safe(sentence[:190])}" for sentence in sentences) or "No clean sentence preview was available."
+    source_link = source_url if source_url else "Local sample, paste, or upload"
+
+    st.markdown(
+        f"""
+        <div class="two-col">
+          <div class="card" style="padding:1rem;">
+            <div class="tiny-label">EXTRACTION PREVIEW</div>
+            <div class="strong" style="margin-top:.35rem;">{_safe(signal.headline)}</div>
+            <div class="muted" style="margin-top:.55rem;">{preview}</div>
+          </div>
+          <div class="card" style="padding:1rem;">
+            <div class="tiny-label">ARTICLE CONTEXT</div>
+            <div class="strong" style="margin-top:.35rem;">{_safe(signal.company)} · {signal.ticker}</div>
+            <div class="muted" style="margin-top:.45rem;">Source: {_safe(signal.source)}</div>
+            <div class="muted">URL: {_safe(source_link)}</div>
+            <div class="muted">Characters analyzed: {len(text):,}</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_signal_summary_cards(signal: ArticleSignal) -> None:
+    """Render compact signal cards for the Analyze Article cockpit."""
+
+    risk_label = "High" if signal.risk_score >= 0.62 else "Medium" if signal.risk_score >= 0.34 else "Low"
+
+    st.markdown(
+        f"""
+        <div class="kpi-grid">
+          <div class="card kpi teal">
+            <div class="kpi-title">Sentiment</div>
+            <div class="kpi-value">{signal.sentiment_score:+.2f}</div>
+            <div class="kpi-sub">{_safe(signal.label)}</div>
+          </div>
+          <div class="card kpi green">
+            <div class="kpi-title">Up Probability</div>
+            <div class="kpi-value">{_analysis_pct(signal.movement_up)}</div>
+            <div class="kpi-sub">Movement estimate</div>
+          </div>
+          <div class="card kpi orange">
+            <div class="kpi-title">Risk Pressure</div>
+            <div class="kpi-value">{_analysis_pct(signal.risk_score)}</div>
+            <div class="kpi-sub">{risk_label} risk</div>
+          </div>
+          <div class="card kpi violet">
+            <div class="kpi-title">Confidence</div>
+            <div class="kpi-value">{_analysis_pct(signal.confidence)}</div>
+            <div class="kpi-sub">Public-mode confidence</div>
+          </div>
+          <div class="card kpi purple">
+            <div class="kpi-title">Ticker</div>
+            <div class="kpi-value">{signal.ticker}</div>
+            <div class="kpi-sub">{_safe(signal.company)}</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_keyword_cloud(text: str, signal: ArticleSignal) -> None:
+    """Render an interactive Plotly token bubble cloud with no raw HTML risk."""
+
+    try:
+        import math
+        import plotly.graph_objects as go
+
+        terms = _token_cloud_terms(text, signal)
+        if not terms:
+            st.info("No meaningful finance tokens were detected for the cloud.")
+            return
+
+        color_map = {
+            "positive": "#22c55e",
+            "negative": "#ef4444",
+            "risk": "#f97316",
+            "neutral": "#60a5fa",
+        }
+        label_map = {
+            "positive": "Positive",
+            "negative": "Negative",
+            "risk": "Risk",
+            "neutral": "Context",
+        }
+
+        xs: list[float] = []
+        ys: list[float] = []
+        sizes: list[float] = []
+        colors: list[str] = []
+        labels: list[str] = []
+        groups: list[str] = []
+        weights: list[int] = []
+
+        for index, (term, weight, group) in enumerate(terms):
+            angle = math.radians((index * 137.5) % 360)
+            radius = 0.12 + 0.82 * ((index % 9) + 1) / 9
+            xs.append(math.cos(angle) * radius)
+            ys.append(math.sin(angle) * radius)
+            sizes.append(min(72, 24 + weight * 4.5))
+            colors.append(color_map.get(group, color_map["neutral"]))
+            labels.append(term.upper() if len(term) <= 4 else term)
+            groups.append(label_map.get(group, "Context"))
+            weights.append(weight)
+
+        st.markdown(
+            """
+            <div class="card" style="padding:1rem;margin-bottom:.5rem;">
+              <div class="tiny-label">KEYWORD / TOKEN CLOUD</div>
+              <div class="strong" style="margin:.25rem 0;">Interactive article language fingerprint</div>
+              <div class="muted">Bubble size shows term strength. Color shows positive, negative, risk, or context language.</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        fig = go.Figure(
+            go.Scatter(
+                x=xs,
+                y=ys,
+                mode="markers+text",
+                text=labels,
+                textposition="middle center",
+                marker=dict(
+                    size=sizes,
+                    color=colors,
+                    opacity=0.78,
+                    line=dict(width=1, color="rgba(255,255,255,.35)"),
+                ),
+                customdata=list(zip(groups, weights)),
+                hovertemplate="<b>%{text}</b><br>Group: %{customdata[0]}<br>Weight: %{customdata[1]}<extra></extra>",
+            )
+        )
+
+        fig.update_layout(
+            title="Token Cloud · Positive / Negative / Risk / Context",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,.35)",
+            height=430,
+            margin=dict(l=10, r=10, t=55, b=10),
+            showlegend=False,
+        )
+        fig.update_xaxes(visible=False, range=[-1.15, 1.15])
+        fig.update_yaxes(visible=False, range=[-1.05, 1.05], scaleanchor="x", scaleratio=1)
+
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    except Exception as exc:
+        st.warning(f"Token cloud could not render. Reason: {exc}")
+
+def _render_token_impact_chart(text: str, signal: ArticleSignal) -> None:
+    """Show ranked token impact using a Plotly horizontal bar chart."""
+
+    try:
+        import plotly.graph_objects as go
+
+        rows: list[tuple[str, float]] = []
+        for term in signal.positive_hits[:6]:
+            rows.append((term, 0.18 + text.lower().count(term.lower()) * 0.04))
+        for term in signal.negative_hits[:6]:
+            rows.append((term, -0.16 - text.lower().count(term.lower()) * 0.04))
+        for term in signal.risk_hits[:6]:
+            rows.append((term, -0.10 - text.lower().count(term.lower()) * 0.03))
+
+        if not rows:
+            rows = [("article tone", signal.sentiment_score), ("risk pressure", -signal.risk_score), ("confidence", signal.confidence / 2)]
+
+        rows = sorted(rows, key=lambda item: abs(item[1]))[-10:]
+
+        fig = go.Figure(go.Bar(
+            x=[value for _, value in rows],
+            y=[label for label, _ in rows],
+            orientation="h",
+        ))
+        fig.update_layout(
+            title="Token Impact Ranking",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,.45)",
+            height=330,
+            margin=dict(l=20, r=20, t=55, b=35),
+        )
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    except Exception:
+        st.info("Token impact chart fallback: Plotly is unavailable in this runtime.")
+
+
+def _render_forecast_trend_chart(signal: ArticleSignal) -> None:
+    """Render bull/base/bear forecast trend preview derived from public signals."""
+
+    try:
+        import plotly.graph_objects as go
+
+        periods = ["Now", "1D", "3D", "1W", "2W"]
+        movement_bias = signal.movement_up - signal.movement_down
+        risk_drag = signal.risk_score * 1.6
+
+        base = []
+        bull = []
+        bear = []
+        for idx, scale in enumerate([0, 0.35, 0.70, 1.00, 1.25]):
+            base_value = 100 + (movement_bias * 7.0 * scale) - (risk_drag * scale)
+            bull_value = base_value + (signal.confidence * 2.6 * scale)
+            bear_value = base_value - ((signal.risk_score + signal.movement_down) * 3.0 * scale)
+            base.append(round(base_value, 2))
+            bull.append(round(bull_value, 2))
+            bear.append(round(bear_value, 2))
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=periods, y=bull, mode="lines+markers", name="Bull case"))
+        fig.add_trace(go.Scatter(x=periods, y=base, mode="lines+markers", name="Base case"))
+        fig.add_trace(go.Scatter(x=periods, y=bear, mode="lines+markers", name="Bear case"))
+        fig.update_layout(
+            title="Forecast Trend Preview",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,.45)",
+            yaxis_title="Indexed reaction path",
+            height=340,
+            margin=dict(l=20, r=20, t=55, b=35),
+        )
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    except Exception:
+        st.info("Forecast trend fallback: Plotly is unavailable in this runtime.")
+
+
+def _render_risk_reward_matrix(signal: ArticleSignal) -> None:
+    """Place the article on a sentiment-versus-risk quadrant chart."""
+
+    try:
+        import plotly.graph_objects as go
+
+        x_value = round(signal.sentiment_score * 100, 1)
+        y_value = round(signal.risk_score * 100, 1)
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=[x_value],
+            y=[y_value],
+            mode="markers+text",
+            text=[signal.ticker],
+            textposition="top center",
+            marker=dict(size=24),
+            name="Current article",
+        ))
+        fig.add_vline(x=0, line_dash="dash")
+        fig.add_hline(y=50, line_dash="dash")
+        fig.update_xaxes(range=[-100, 100], title="Sentiment strength")
+        fig.update_yaxes(range=[0, 100], title="Risk pressure")
+        fig.update_layout(
+            title="Risk vs Reward Matrix",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,.45)",
+            height=340,
+            margin=dict(l=20, r=20, t=55, b=35),
+        )
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    except Exception:
+        st.info("Risk/reward matrix fallback: Plotly is unavailable in this runtime.")
+
+
+def _render_driver_waterfall(signal: ArticleSignal) -> None:
+    """Show how positive, negative, and risk drivers shape the final bias."""
+
+    try:
+        import plotly.graph_objects as go
+
+        positive = len(signal.positive_hits) * 0.16
+        negative = -len(signal.negative_hits) * 0.14
+        risk = -len(signal.risk_hits) * 0.09
+        net = positive + negative + risk
+
+        fig = go.Figure(go.Waterfall(
+            name="Driver impact",
+            orientation="v",
+            measure=["relative", "relative", "relative", "total"],
+            x=["Positive", "Negative", "Risk", "Net Bias"],
+            y=[positive, negative, risk, net],
+        ))
+        fig.update_layout(
+            title="Driver Impact Waterfall",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,.45)",
+            height=340,
+            margin=dict(l=20, r=20, t=55, b=35),
+        )
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    except Exception:
+        st.info("Driver waterfall fallback: Plotly is unavailable in this runtime.")
+
+
+def _render_sentence_impact_timeline(text: str) -> None:
+    """Render sentence-level article impact cards without leaking raw HTML."""
+
+    rows = _sentence_impact_rows(text)
+    if not rows:
+        st.info("Sentence impact timeline could not find enough clean article sentences.")
+        return
+
+    st.markdown(
+        """
+        <div class="card" style="padding:1.05rem;margin-bottom:.7rem;">
+          <div class="tiny-label">SENTENCE IMPACT TIMELINE</div>
+          <div class="strong" style="margin:.25rem 0 .25rem 0;">Where the article turns bullish, risky, or neutral</div>
+          <div class="muted">Each sentence is scored with the same transparent public keyword logic.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    for idx, (sentence, score, label) in enumerate(rows, start=1):
+        tone = "#86efac" if label == "Bullish" else "#fdba74" if label == "Risk" else "#bfdbfe"
+        st.markdown(
+            f"""
+            <div class="card" style="padding:.85rem .95rem;margin-bottom:.5rem;">
+              <div class="tiny-label" style="color:{tone};">SENTENCE {idx} · {_safe(label)} · {score:+.2f}</div>
+              <div class="muted" style="margin-top:.35rem;">{_safe(sentence)}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+def _analyst_summary_markdown(signal: ArticleSignal) -> str:
+    """Create a copy-ready analyst summary for download."""
+
+    return f"""# Financial News Article Intelligence Summary
+
+Ticker: {signal.ticker}
+Company: {signal.company}
+Headline: {signal.headline}
+Source: {signal.source}
+
+## Signal
+- Sentiment score: {signal.sentiment_score:+.2f}
+- Movement label: {signal.label}
+- Up probability: {_analysis_pct(signal.movement_up)}
+- Flat probability: {_analysis_pct(signal.movement_flat)}
+- Down probability: {_analysis_pct(signal.movement_down)}
+- Risk pressure: {_analysis_pct(signal.risk_score)}
+- Confidence: {_analysis_pct(signal.confidence)}
+
+## Positive drivers
+{chr(10).join(f"- {item}" for item in signal.positive_hits) or "- No strong positive drivers detected."}
+
+## Negative drivers
+{chr(10).join(f"- {item}" for item in signal.negative_hits) or "- No strong negative drivers detected."}
+
+## Risk drivers
+{chr(10).join(f"- {item}" for item in signal.risk_hits) or "- No strong risk drivers detected."}
+
+## Disclaimer
+Public demo output for research and portfolio review only. Not investment advice.
+"""
+
+
+def _render_analyst_verdict(signal: ArticleSignal) -> None:
+    """Render final analyst verdict and export button."""
+
+    risk_label = "elevated" if signal.risk_score >= 0.62 else "moderate" if signal.risk_score >= 0.34 else "contained"
+    interpretation = (
+        "The article leans bullish with supportive language."
+        if signal.label == "Bullish"
+        else "The article leans bearish or cautious."
+        if signal.label == "Bearish"
+        else "The article is mixed and requires monitoring."
+    )
+
+    st.markdown(
+        f"""
+        <div class="card insight" style="padding:1.1rem;margin-bottom:.7rem;">
+          <div class="tiny-label">ANALYST VERDICT</div>
+          <h3 style="color:white;margin:.25rem 0;">{_safe(interpretation)}</h3>
+          <p class="muted"><strong>Market reaction risk:</strong> {_safe(risk_label)}.</p>
+          <p class="muted"><strong>Confidence caveat:</strong> This is a public-mode deterministic explanation, not a hidden live trading model.</p>
+          <p class="muted"><strong>Monitor next:</strong> guidance revisions, margin pressure, regulatory language, and follow-through price action.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.download_button(
+        "Download analyst summary (.md)",
+        data=_analyst_summary_markdown(signal),
+        file_name=f"{signal.ticker.lower()}_article_intelligence_summary.md",
+        mime="text/markdown",
+        use_container_width=True,
+    )
+
+
+def _render_analyze_article_page() -> None:
+    """Render the Article Intelligence Cockpit."""
+
+    st.markdown(
+        """
+        <div class="card insight" style="padding:1.1rem;margin-bottom:.75rem;">
+          <div class="tiny-label">ARTICLE INTELLIGENCE COCKPIT</div>
+          <h2 style="color:white;margin:.25rem 0;">Analyze a financial news article like an analyst terminal</h2>
+          <p style="color:#cbd5e1;margin-bottom:0;">
+            Enter a URL, upload a file, paste article text, or use the sample. This page extracts context,
+            scores sentiment and movement, maps drivers, previews forecast paths, and exports a summary.
+          </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    text, source, source_url = _input_form()
+    signal = _score_article(text, source)
+
+    _render_article_extraction_preview(text, signal, source_url)
+    _render_signal_summary_cards(signal)
+
+    chart_left, chart_right = st.columns(2, gap="medium")
+    with chart_left:
+        _render_forecast_trend_chart(signal)
+    with chart_right:
+        _render_risk_reward_matrix(signal)
+
+    _render_driver_waterfall(signal)
+    _render_keyword_cloud(text, signal)
+
+    col_a, col_b = st.columns([1.0, 1.0], gap="medium")
+    with col_a:
+        _render_token_impact_chart(text, signal)
+    with col_b:
+        _render_sentence_impact_timeline(text)
+
+    _render_analyst_verdict(signal)
+
+
 def render_public_streamlit_cloud_app(project_root: Path | str | None = None) -> None:
     """Render the public Streamlit Cloud app with real page routing."""
 
@@ -1289,6 +1832,10 @@ def render_public_streamlit_cloud_app(project_root: Path | str | None = None) ->
         text, source, source_url = _input_form()
         signal = _score_article(text, source)
         _render_dashboard(signal, source_url)
+        return
+
+    if selected_page == "Analyze Article":
+        _render_analyze_article_page()
         return
 
     _render_public_placeholder_page(selected_page)
