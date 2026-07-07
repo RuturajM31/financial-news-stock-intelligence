@@ -3136,6 +3136,759 @@ def _render_historical_intelligence_page() -> None:
         unsafe_allow_html=True,
     )
 
+def _render_explainability_page() -> None:
+    """Render the Explainability page as an article-driven model explanation cockpit."""
+
+    import html
+    import re
+    from urllib.parse import urlparse
+
+    def _clamp(value: float, low: float, high: float) -> float:
+        return max(low, min(high, value))
+
+    def _extract_article_from_url(url: str) -> tuple[str, str, str]:
+        """Try to extract article title and body from URL for the public explainability demo."""
+        clean_url = url.strip()
+        if not clean_url:
+            return "No URL provided.", "", ""
+
+        parsed = urlparse(clean_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            return "Invalid URL. Paste a full URL starting with http:// or https://.", "", ""
+
+        try:
+            import requests
+            from bs4 import BeautifulSoup
+
+            response = requests.get(
+                clean_url,
+                timeout=8,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Macintosh; Intel Mac OS X) "
+                        "AppleWebKit/537.36 Chrome/120 Safari/537.36"
+                    )
+                },
+            )
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.text, "html.parser")
+            for tag in soup(["script", "style", "noscript", "svg", "form", "nav", "footer", "header"]):
+                tag.decompose()
+
+            title = ""
+            if soup.find("h1"):
+                title = soup.find("h1").get_text(" ", strip=True)
+            if not title and soup.title:
+                title = soup.title.get_text(" ", strip=True)
+
+            paragraphs = [
+                p_tag.get_text(" ", strip=True)
+                for p_tag in soup.find_all("p")
+                if len(p_tag.get_text(" ", strip=True).split()) >= 8
+            ]
+            body = "\n\n".join(paragraphs[:12]).strip()
+
+            if not body:
+                return "URL loaded, but article text could not be extracted. Paste article text manually.", title, ""
+
+            return "URL article text extracted.", title, body
+
+        except Exception as exc:
+            return f"URL extraction failed. Paste article text manually. Reason: {exc}", "", ""
+
+    explain_patterns = [
+        {"pattern": r"\bjumps?\b", "label": "jumps / strong upward move", "category": "Sentiment driver", "impact": 1.25, "effect": "Lifts bullish sentiment and movement pressure."},
+        {"pattern": r"\brises?\b|\brose\b|\badvanced\b", "label": "rises / advances", "category": "Sentiment driver", "impact": 1.05, "effect": "Supports positive article tone."},
+        {"pattern": r"\brebounds?\b|\brebounded\b", "label": "rebound language", "category": "Movement driver", "impact": 1.15, "effect": "Suggests recovery momentum after prior weakness."},
+        {"pattern": r"\bcloses?\s+above\b|\bfirst\s+close\s+above\b", "label": "close above key level", "category": "Movement driver", "impact": 1.30, "effect": "Signals technical or psychological market strength."},
+        {"pattern": r"\brecord\s+(close|high)\b|\ball[- ]time high\b", "label": "record high / record close", "category": "Movement driver", "impact": 1.35, "effect": "Adds strong continuation pressure."},
+        {"pattern": r"\bchips?\s+rebound\b|\bsemiconductors?\s+rebound\b|\bchip\s+stocks\b", "label": "chip / semiconductor strength", "category": "Sector driver", "impact": 1.20, "effect": "Shows sector leadership behind the move."},
+        {"pattern": r"\bbeat(s|ing)?\b|\bbeats?\s+estimates\b", "label": "beat estimates", "category": "Sentiment driver", "impact": 1.35, "effect": "Improves earnings-quality signal."},
+        {"pattern": r"\braises?\s+guidance\b|\braised\s+guidance\b", "label": "raised guidance", "category": "Movement driver", "impact": 1.45, "effect": "Supports forward-looking upside."},
+        {"pattern": r"\bupgrade(d|s)?\b|\banalyst\s+upgrade\b", "label": "analyst upgrade", "category": "Sentiment driver", "impact": 1.05, "effect": "Adds external validation to the bullish case."},
+        {"pattern": r"\bpositive\s+momentum\b|\bstrong\s+week\b|\brisk\s+appetite\b", "label": "positive momentum", "category": "Movement driver", "impact": 0.95, "effect": "Supports follow-through continuation."},
+
+        {"pattern": r"\bdrops?\b|\bfalls?\b|\bfell\b", "label": "drops / falls", "category": "Negative driver", "impact": -1.20, "effect": "Pulls sentiment and movement pressure lower."},
+        {"pattern": r"\bslides?\b|\bslid\b|\btumbles?\b", "label": "slide / tumble language", "category": "Negative driver", "impact": -1.30, "effect": "Indicates sharp downside reaction."},
+        {"pattern": r"\bmiss(es|ed)?\b|\bmisses?\s+estimates\b", "label": "missed estimates", "category": "Negative driver", "impact": -1.35, "effect": "Weakens earnings-quality signal."},
+        {"pattern": r"\bcuts?\s+guidance\b|\bcut\s+guidance\b", "label": "cut guidance", "category": "Negative driver", "impact": -1.45, "effect": "Creates forward-looking downside pressure."},
+        {"pattern": r"\bdowngrade(d|s)?\b|\banalyst\s+downgrade\b", "label": "analyst downgrade", "category": "Negative driver", "impact": -1.10, "effect": "Adds external negative validation."},
+
+        {"pattern": r"\brisk(s)?\b", "label": "explicit risk language", "category": "Risk driver", "impact": -0.80, "effect": "Increases uncertainty and lowers confidence."},
+        {"pattern": r"\buncertain(ty)?\b|\buncertainties\b", "label": "uncertainty language", "category": "Risk driver", "impact": -0.90, "effect": "Widens possible outcome range."},
+        {"pattern": r"\bvolatil(e|ity)\b", "label": "volatility language", "category": "Risk driver", "impact": -1.00, "effect": "Raises downside and confidence risk."},
+        {"pattern": r"\bregulatory\b|\bregulation\b|\blawsuit\b|\bprobe\b", "label": "regulatory / legal pressure", "category": "Risk driver", "impact": -1.15, "effect": "Adds structural risk to the signal."},
+        {"pattern": r"\binflation\b|\brates?\b|\bfed\b|\brecession\b|\bmacro\b", "label": "macro / rates risk", "category": "Risk driver", "impact": -0.95, "effect": "Adds market-wide uncertainty."},
+    ]
+
+    def _find_driver_rows(text: str) -> list[dict[str, str | float]]:
+        lowered = text.lower()
+        rows: list[dict[str, str | float]] = []
+        seen: set[str] = set()
+
+        for item in explain_patterns:
+            if re.search(str(item["pattern"]), lowered, flags=re.IGNORECASE) and str(item["label"]) not in seen:
+                rows.append(
+                    {
+                        "label": str(item["label"]),
+                        "category": str(item["category"]),
+                        "impact": float(item["impact"]),
+                        "effect": str(item["effect"]),
+                    }
+                )
+                seen.add(str(item["label"]))
+
+        return rows
+
+    def _score_segment(segment: str) -> float:
+        score = 0.0
+        for item in explain_patterns:
+            if re.search(str(item["pattern"]), segment.lower(), flags=re.IGNORECASE):
+                score += float(item["impact"])
+        return round(score, 2)
+
+    def _detect_target(text: str, user_target: str) -> tuple[str, str]:
+        lowered = text.lower()
+        entities: list[str] = []
+
+        if re.search(r"\bdow\b|\bdjia\b", lowered):
+            entities.append("Dow")
+        if re.search(r"\bnasdaq\b|\bqqq\b", lowered):
+            entities.append("Nasdaq")
+        if re.search(r"\bs&p\b|\bsp500\b|\bspx\b|\bspy\b", lowered):
+            entities.append("S&P 500")
+        if re.search(r"\bchip\b|\bchips\b|\bsemiconductor\b|\bsemiconductors\b|\bnvidia\b|\bnvda\b|\bamd\b|\bintel\b", lowered):
+            entities.append("Chips / semiconductors")
+        if re.search(r"\brates?\b|\bfed\b|\binflation\b|\btreasury\b", lowered):
+            entities.append("Macro / rates")
+
+        ticker_matches = re.findall(r"\$?[A-Z]{2,5}\b", text)
+        ticker_matches = [x.replace("$", "") for x in ticker_matches if x not in {"LIVE", "CEO", "CFO", "EPS", "THE"}]
+        for ticker in ticker_matches[:4]:
+            if ticker not in entities and ticker not in {"DOW"}:
+                entities.append(ticker)
+
+        if user_target.strip():
+            return "User-selected target", user_target.strip()
+
+        if "Dow" in entities or "Nasdaq" in entities or "S&P 500" in entities:
+            if "Chips / semiconductors" in entities:
+                return "Broad market + sector", ", ".join(entities)
+            return "Broad market / index", ", ".join(entities)
+
+        if "Chips / semiconductors" in entities:
+            return "Sector / theme", ", ".join(entities)
+
+        if ticker_matches:
+            return "Ticker / company", ", ".join(entities) if entities else ", ".join(ticker_matches[:4])
+
+        return "General financial news", "No specific ticker or index detected"
+
+    sample_headline = "Dow jumps 150 points for first close above 53,000; Nasdaq rises as chips rebound"
+    sample_body = (
+        "Stocks maintained positive momentum after a strong week on Wall Street. "
+        "The S&P 500 gained 0.72%, while the Nasdaq Composite advanced 1.12% as chip stocks rebounded. "
+        "Investors pointed to stronger technology momentum, improving risk appetite, and broad-market strength, "
+        "while macro uncertainty remained limited."
+    )
+
+    if "ex_url" not in st.session_state:
+        st.session_state.ex_url = ""
+    if "ex_headline" not in st.session_state:
+        st.session_state.ex_headline = sample_headline
+    if "ex_body" not in st.session_state:
+        st.session_state.ex_body = sample_body
+    if "ex_target" not in st.session_state:
+        st.session_state.ex_target = "Broad market"
+    if "ex_status" not in st.session_state:
+        st.session_state.ex_status = "Sample article loaded for public demo."
+
+    st.markdown(
+        """
+        <style>
+          .ex-hero {
+            display:grid;
+            grid-template-columns:1.08fr .92fr;
+            gap:1rem;
+            padding:1.35rem;
+            border-radius:24px;
+            border:1px solid rgba(34,211,238,.34);
+            background:
+              radial-gradient(circle at 8% 8%, rgba(34,211,238,.20), transparent 22rem),
+              radial-gradient(circle at 76% 8%, rgba(139,92,246,.22), transparent 24rem),
+              radial-gradient(circle at 90% 92%, rgba(34,197,94,.12), transparent 22rem),
+              linear-gradient(145deg, rgba(8,47,73,.72), rgba(8,13,28,.96));
+            box-shadow:0 30px 90px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.07);
+            margin-bottom:.9rem;
+          }
+          .ex-kicker {
+            color:#67e8f9;
+            font-size:.70rem;
+            font-weight:950;
+            letter-spacing:.13em;
+            text-transform:uppercase;
+          }
+          .ex-title {
+            color:white;
+            font-size:2.6rem;
+            line-height:1;
+            font-weight:950;
+            letter-spacing:-.06em;
+            margin:.42rem 0 .55rem 0;
+          }
+          .ex-subtitle {
+            color:#dbeafe;
+            font-size:1rem;
+            line-height:1.55;
+          }
+          .ex-chip-row {
+            display:flex;
+            flex-wrap:wrap;
+            gap:.48rem;
+            margin-top:.9rem;
+          }
+          .ex-chip {
+            padding:.43rem .68rem;
+            border-radius:999px;
+            font-size:.72rem;
+            font-weight:850;
+            color:#bfdbfe;
+            border:1px solid rgba(96,165,250,.25);
+            background:rgba(15,23,42,.65);
+          }
+          .ex-engine {
+            padding:1rem;
+            border-radius:20px;
+            border:1px solid rgba(148,163,184,.18);
+            background:linear-gradient(160deg, rgba(15,23,42,.92), rgba(2,6,23,.96));
+          }
+          .ex-step {
+            display:grid;
+            grid-template-columns:34px 1fr;
+            gap:.65rem;
+            align-items:center;
+            padding:.54rem;
+            margin-bottom:.45rem;
+            border-radius:13px;
+            border:1px solid rgba(96,165,250,.18);
+            background:rgba(15,23,42,.70);
+          }
+          .ex-num {
+            width:34px;
+            height:34px;
+            display:grid;
+            place-items:center;
+            border-radius:11px;
+            color:#67e8f9;
+            background:rgba(14,165,233,.13);
+            border:1px solid rgba(34,211,238,.25);
+            font-weight:950;
+          }
+          .ex-step strong {
+            display:block;
+            color:white;
+            font-size:.82rem;
+          }
+          .ex-step span {
+            display:block;
+            color:#94a3b8;
+            font-size:.70rem;
+            margin-top:.08rem;
+          }
+          .ex-panel {
+            margin:.95rem 0;
+            padding:1.1rem;
+            border-radius:22px;
+            border:1px solid rgba(34,211,238,.24);
+            background:
+              radial-gradient(circle at 6% 0%, rgba(34,211,238,.11), transparent 18rem),
+              radial-gradient(circle at 94% 30%, rgba(139,92,246,.13), transparent 20rem),
+              linear-gradient(145deg, rgba(15,23,42,.88), rgba(8,13,28,.96));
+            box-shadow:0 22px 60px rgba(0,0,0,.25);
+          }
+          .ex-section-title {
+            color:white;
+            font-size:1.25rem;
+            font-weight:950;
+            letter-spacing:-.04em;
+            margin:.2rem 0 .35rem 0;
+          }
+          .ex-copy {
+            color:#cbd5e1;
+            font-size:.84rem;
+            line-height:1.48;
+            margin:0;
+          }
+          .ex-metrics {
+            display:grid;
+            grid-template-columns:repeat(5,minmax(0,1fr));
+            gap:.68rem;
+            margin:.85rem 0 .9rem 0;
+          }
+          .ex-metric {
+            padding:1rem;
+            border-radius:18px;
+            border:1px solid rgba(148,163,184,.16);
+            background:rgba(15,23,42,.82);
+          }
+          .ex-metric strong {
+            color:white;
+            font-size:1.35rem;
+            font-weight:950;
+            display:block;
+          }
+          .ex-metric span {
+            color:#cbd5e1;
+            font-size:.74rem;
+            font-weight:760;
+          }
+          .ex-grid-3 {
+            display:grid;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .ex-grid-4 {
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .ex-card {
+            padding:.95rem;
+            border-radius:17px;
+            border:1px solid rgba(148,163,184,.16);
+            background:rgba(15,23,42,.74);
+          }
+          .ex-card strong {
+            color:white;
+            display:block;
+            font-size:.96rem;
+            margin-bottom:.32rem;
+          }
+          .ex-card span, .ex-card li {
+            color:#cbd5e1;
+            font-size:.75rem;
+            line-height:1.38;
+          }
+          .ex-card ul {
+            margin:.2rem 0 0 1rem;
+            padding:0;
+          }
+          .ex-table {
+            width:100%;
+            border-collapse:separate;
+            border-spacing:0 .45rem;
+            margin-top:.75rem;
+          }
+          .ex-table th {
+            color:#94a3b8;
+            font-size:.70rem;
+            text-align:left;
+            padding:.35rem .5rem;
+            text-transform:uppercase;
+            letter-spacing:.08em;
+          }
+          .ex-table td {
+            color:#e5e7eb;
+            font-size:.78rem;
+            padding:.62rem .5rem;
+            background:rgba(15,23,42,.72);
+            border-top:1px solid rgba(148,163,184,.13);
+            border-bottom:1px solid rgba(148,163,184,.13);
+          }
+          .ex-table td:first-child {
+            border-left:1px solid rgba(148,163,184,.13);
+            border-radius:12px 0 0 12px;
+            font-weight:900;
+          }
+          .ex-table td:last-child {
+            border-right:1px solid rgba(148,163,184,.13);
+            border-radius:0 12px 12px 0;
+          }
+          .ex-explain {
+            margin:.45rem 0 .9rem 0;
+            padding:.9rem 1rem;
+            border-radius:16px;
+            border:1px solid rgba(148,163,184,.15);
+            background:rgba(15,23,42,.66);
+            color:#cbd5e1;
+            font-size:.81rem;
+            line-height:1.48;
+          }
+          .ex-explain strong { color:white; }
+          .ex-good { color:#86efac !important; }
+          .ex-warn { color:#fbbf24 !important; }
+          .ex-bad { color:#fca5a5 !important; }
+          @media (max-width:1100px) {
+            .ex-hero,.ex-metrics,.ex-grid-3,.ex-grid-4 { grid-template-columns:1fr; }
+            .ex-title { font-size:2.05rem; }
+          }
+        </style>
+
+        <section class="ex-hero">
+          <div>
+            <div class="ex-kicker">Explainability Cockpit</div>
+            <div class="ex-title">Why The Model<br/>Said This</div>
+            <div class="ex-subtitle">
+              Enter a financial news URL or paste article text. The page explains which words, phrases,
+              sentences, risks, and driver groups pushed the signal bullish or bearish.
+            </div>
+            <div class="ex-chip-row">
+              <span class="ex-chip">Article URL</span>
+              <span class="ex-chip">Token impact</span>
+              <span class="ex-chip">Sentence impact</span>
+              <span class="ex-chip">Driver groups</span>
+              <span class="ex-chip">Waterfall explanation</span>
+              <span class="ex-chip">Model workflow</span>
+            </div>
+          </div>
+
+          <div class="ex-engine">
+            <div class="ex-kicker">Explanation Layer</div>
+            <div class="ex-step"><div class="ex-num">01</div><div><strong>Read article text</strong><span>URL, headline, body, optional target</span></div></div>
+            <div class="ex-step"><div class="ex-num">02</div><div><strong>Detect phrases</strong><span>Positive, negative, movement, sector, risk cues</span></div></div>
+            <div class="ex-step"><div class="ex-num">03</div><div><strong>Score impact</strong><span>Token, phrase, sentence, and driver-group contribution</span></div></div>
+            <div class="ex-step"><div class="ex-num">04</div><div><strong>Adjust signal</strong><span>Sentiment + movement - risk pressure</span></div></div>
+            <div class="ex-step"><div class="ex-num">05</div><div><strong>Explain verdict</strong><span>Human-readable reasoning and limits</span></div></div>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <section class="ex-panel">
+          <div class="ex-kicker">Explanation Input</div>
+          <div class="ex-section-title">Enter article source and generate model explanation</div>
+          <p class="ex-copy">
+            URL extraction may fail on blocked or paywalled sites. If that happens, paste the headline and article body manually.
+            The explanation is a transparent public-demo reasoning layer, not a hidden black box.
+          </p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    input_left, input_right = st.columns([1.18, .82])
+
+    with input_left:
+        url_value = st.text_input("Article URL", value=st.session_state.ex_url, placeholder="https://...")
+        target_hint = st.text_input(
+            "Optional ticker / index / sector",
+            value=st.session_state.ex_target,
+            placeholder="Examples: NVDA, Nasdaq, Dow, S&P 500, Semiconductors, Broad market",
+        )
+        headline = st.text_input("Article headline", value=st.session_state.ex_headline)
+        article_body = st.text_area("Article body or summary", value=st.session_state.ex_body, height=145)
+
+    with input_right:
+        explanation_mode = st.selectbox(
+            "Explanation focus",
+            ["Full explanation", "Sentiment only", "Movement only", "Risk only"],
+            index=0,
+        )
+        show_workflow = st.checkbox("Show model workflow diagram", value=True)
+        fetch_clicked = st.button("Extract URL text", type="secondary", use_container_width=True)
+        sample_clicked = st.button("Load sample article", type="secondary", use_container_width=True)
+        generate_clicked = st.button("Generate explanation", type="primary", use_container_width=True)
+
+    if fetch_clicked:
+        status, fetched_headline, fetched_body = _extract_article_from_url(url_value)
+        st.session_state.ex_url = url_value
+        st.session_state.ex_status = status
+        if fetched_headline:
+            st.session_state.ex_headline = fetched_headline
+        if fetched_body:
+            st.session_state.ex_body = fetched_body
+        st.rerun()
+
+    if sample_clicked:
+        st.session_state.ex_url = ""
+        st.session_state.ex_headline = sample_headline
+        st.session_state.ex_body = sample_body
+        st.session_state.ex_target = "Broad market"
+        st.session_state.ex_status = "Sample article loaded for public demo."
+        st.rerun()
+
+    st.session_state.ex_url = url_value
+    st.session_state.ex_headline = headline
+    st.session_state.ex_body = article_body
+    st.session_state.ex_target = target_hint
+
+    full_text = f"{headline}\n{article_body}".strip()
+    word_count = len(re.findall(r"\b\w+\b", full_text))
+    target_type, detected_entities = _detect_target(full_text, target_hint)
+
+    driver_rows = _find_driver_rows(full_text)
+    if explanation_mode == "Sentiment only":
+        driver_rows = [row for row in driver_rows if str(row["category"]) in {"Sentiment driver", "Negative driver"}]
+    elif explanation_mode == "Movement only":
+        driver_rows = [row for row in driver_rows if str(row["category"]) in {"Movement driver", "Sector driver"}]
+    elif explanation_mode == "Risk only":
+        driver_rows = [row for row in driver_rows if str(row["category"]) == "Risk driver"]
+
+    if not driver_rows:
+        driver_rows = [
+            {"label": "neutral article language", "category": "Neutral baseline", "impact": 0.0, "effect": "No strong driver phrase was detected in the current input."}
+        ]
+
+    positive_rows = [row for row in driver_rows if float(row["impact"]) > 0]
+    negative_rows = [row for row in driver_rows if float(row["impact"]) < 0]
+    risk_rows = [row for row in driver_rows if str(row["category"]) == "Risk driver"]
+
+    sentiment_total = round(sum(float(row["impact"]) for row in driver_rows if str(row["category"]) in {"Sentiment driver", "Negative driver"}), 2)
+    movement_total = round(sum(float(row["impact"]) for row in driver_rows if str(row["category"]) in {"Movement driver", "Sector driver"}), 2)
+    risk_total = round(sum(float(row["impact"]) for row in driver_rows if str(row["category"]) == "Risk driver"), 2)
+    final_signal = round(sentiment_total + movement_total + risk_total, 2)
+
+    if final_signal >= 1.2:
+        signal_label = "Bullish"
+        verdict_class = "ex-good"
+    elif final_signal <= -1.2:
+        signal_label = "Bearish"
+        verdict_class = "ex-bad"
+    else:
+        signal_label = "Mixed"
+        verdict_class = "ex-warn"
+
+    sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+", full_text) if len(part.strip()) > 12]
+    if not sentences and full_text:
+        sentences = [full_text]
+    sentence_scores = [{"sentence": item, "score": _score_segment(item)} for item in sentences[:10]]
+    explained_sentences = sum(1 for item in sentence_scores if abs(float(item["score"])) > 0)
+    explanation_coverage = round(_clamp((explained_sentences / max(1, len(sentence_scores))) * 100, 0, 100))
+    confidence = round(_clamp(45 + len(driver_rows) * 5 + min(20, word_count / 8) + explanation_coverage * .15 - len(risk_rows) * 3, 35, 92))
+
+    top_positive = positive_rows[0]["label"] if positive_rows else "No positive driver detected"
+    top_risk = risk_rows[0]["label"] if risk_rows else "No major risk driver detected"
+
+    def _list_html(rows: list[dict[str, str | float]], empty_text: str) -> str:
+        if not rows:
+            return f"<span>{html.escape(empty_text)}</span>"
+        items = "".join(f"<li>{html.escape(str(row['label']))}</li>" for row in rows[:6])
+        return f"<ul>{items}</ul>"
+
+    st.markdown(
+        f"""
+        <section class="ex-panel">
+          <div class="ex-kicker">Current Article Signal</div>
+          <div class="ex-section-title">What the explanation engine detected</div>
+          <div class="ex-grid-4">
+            <div class="ex-card"><strong>Target context</strong><span>{html.escape(target_type)} · {html.escape(detected_entities)}</span></div>
+            <div class="ex-card"><strong>Input quality</strong><span>{word_count} words analyzed</span></div>
+            <div class="ex-card"><strong>Explanation focus</strong><span>{html.escape(explanation_mode)}</span></div>
+            <div class="ex-card"><strong>Source status</strong><span>{html.escape(st.session_state.ex_status)}</span></div>
+          </div>
+          <div class="ex-grid-3">
+            <div class="ex-card"><strong class="ex-good">Positive drivers</strong>{_list_html(positive_rows, "No positive drivers detected.")}</div>
+            <div class="ex-card"><strong class="ex-bad">Negative drivers</strong>{_list_html(negative_rows, "No negative drivers detected.")}</div>
+            <div class="ex-card"><strong class="ex-warn">Risk drivers</strong>{_list_html(risk_rows, "No risk drivers detected.")}</div>
+          </div>
+        </section>
+
+        <div class="ex-metrics">
+          <div class="ex-metric"><strong class="{verdict_class}">{signal_label}</strong><span>overall explanation signal</span></div>
+          <div class="ex-metric"><strong>{confidence}%</strong><span>explanation confidence</span></div>
+          <div class="ex-metric"><strong>{final_signal:+.1f}</strong><span>final driver score</span></div>
+          <div class="ex-metric"><strong>{html.escape(str(top_positive))}</strong><span>top positive driver</span></div>
+          <div class="ex-metric"><strong>{html.escape(str(top_risk))}</strong><span>top risk driver</span></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    try:
+        import plotly.graph_objects as go
+
+        sorted_rows = sorted(driver_rows, key=lambda row: abs(float(row["impact"])), reverse=True)[:10]
+
+        token_fig = go.Figure(
+            go.Bar(
+                x=[float(row["impact"]) for row in sorted_rows],
+                y=[str(row["label"]) for row in sorted_rows],
+                orientation="h",
+                customdata=[str(row["effect"]) for row in sorted_rows],
+                hovertemplate="<b>%{y}</b><br>Impact: %{x}<br>%{customdata}<extra></extra>",
+            )
+        )
+        token_fig.update_layout(
+            title="Token Impact Ranking · Words and Phrases Moving the Signal",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,.35)",
+            height=430,
+            margin=dict(l=0, r=0, t=55, b=0),
+            xaxis_title="Explanation impact",
+            yaxis_title="",
+        )
+        st.plotly_chart(token_fig, use_container_width=True, config={"displayModeBar": False})
+
+        st.markdown(
+            """
+            <div class="ex-explain">
+              <strong>How to read this chart:</strong>
+              bars to the right push the model explanation more bullish. Bars to the left pull the explanation bearish
+              or add risk pressure. This is the phrase-level reasoning behind the signal.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            sentence_fig = go.Figure(
+                go.Bar(
+                    x=[f"S{i+1}" for i, _ in enumerate(sentence_scores)],
+                    y=[float(item["score"]) for item in sentence_scores],
+                    customdata=[str(item["sentence"])[:180] for item in sentence_scores],
+                    hovertemplate="<b>%{x}</b><br>Sentence impact: %{y}<br>%{customdata}<extra></extra>",
+                )
+            )
+            sentence_fig.update_layout(
+                title="Sentence Impact Timeline",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=400,
+                margin=dict(l=0, r=0, t=55, b=0),
+                xaxis_title="Sentence order",
+                yaxis_title="Impact score",
+            )
+            st.plotly_chart(sentence_fig, use_container_width=True, config={"displayModeBar": False})
+
+        with col2:
+            waterfall = go.Figure(
+                go.Waterfall(
+                    name="Explanation build-up",
+                    orientation="v",
+                    measure=["absolute", "relative", "relative", "relative", "total"],
+                    x=["Neutral baseline", "Sentiment", "Movement / sector", "Risk adjustment", "Final signal"],
+                    y=[0, sentiment_total, movement_total, risk_total, 0],
+                    hovertemplate="<b>%{x}</b><br>Contribution: %{y}<extra></extra>",
+                )
+            )
+            waterfall.update_layout(
+                title="Explanation Waterfall · How The Final Signal Is Built",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=400,
+                margin=dict(l=0, r=0, t=55, b=0),
+                yaxis_title="Signal contribution",
+                xaxis_title="Explanation stage",
+            )
+            st.plotly_chart(waterfall, use_container_width=True, config={"displayModeBar": False})
+
+        st.markdown(
+            """
+            <div class="ex-explain">
+              <strong>How to read these charts:</strong>
+              the sentence timeline shows which sentence carried the most bullish, bearish, or risk impact.
+              The waterfall shows how neutral baseline becomes the final explanation after sentiment, movement, and risk adjustments.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if show_workflow:
+            workflow = go.Figure(
+                go.Sankey(
+                    arrangement="snap",
+                    node=dict(
+                        pad=18,
+                        thickness=18,
+                        line=dict(color="rgba(255,255,255,.25)", width=1),
+                        label=[
+                            "Article text",
+                            "Token detection",
+                            "Sentence scoring",
+                            "Sentiment drivers",
+                            "Movement drivers",
+                            "Risk drivers",
+                            "Final explanation",
+                            "Analyst verdict",
+                        ],
+                    ),
+                    link=dict(
+                        source=[0, 0, 1, 1, 1, 2, 3, 4, 5, 6],
+                        target=[1, 2, 3, 4, 5, 6, 6, 6, 6, 7],
+                        value=[8, 5, 3, 3, 2, 5, 3, 3, 2, 8],
+                    ),
+                )
+            )
+            workflow.update_layout(
+                title="Model Workflow Diagram · From Article Text To Explanation",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=430,
+                margin=dict(l=10, r=10, t=55, b=10),
+                font=dict(size=12),
+            )
+            st.plotly_chart(workflow, use_container_width=True, config={"displayModeBar": False})
+
+    except Exception as exc:
+        st.warning(f"Explainability charts could not render. Reason: {exc}")
+
+    table_rows = ""
+    for row in sorted(driver_rows, key=lambda item: abs(float(item["impact"])), reverse=True):
+        klass = "ex-good" if float(row["impact"]) > 0 else "ex-bad" if float(row["impact"]) < 0 else "ex-warn"
+        table_rows += (
+            "<tr>"
+            f"<td>{html.escape(str(row['label']))}</td>"
+            f"<td>{html.escape(str(row['category']))}</td>"
+            f"<td class='{klass}'>{float(row['impact']):+.2f}</td>"
+            f"<td>{html.escape(str(row['effect']))}</td>"
+            "</tr>"
+        )
+
+    st.markdown(
+        f"""
+        <section class="ex-panel">
+          <div class="ex-kicker">Evidence Table</div>
+          <div class="ex-section-title">Exact drivers behind the explanation</div>
+          <table class="ex-table">
+            <thead>
+              <tr>
+                <th>Phrase / signal</th>
+                <th>Driver type</th>
+                <th>Impact</th>
+                <th>How it affected the output</th>
+              </tr>
+            </thead>
+            <tbody>{table_rows}</tbody>
+          </table>
+        </section>
+
+        <section class="ex-panel">
+          <div class="ex-kicker">Trust Boundary</div>
+          <div class="ex-grid-3">
+            <div class="ex-card"><strong>What this explains</strong><span>Words, phrases, sentence impact, risk drivers, movement pressure, and final reasoning.</span></div>
+            <div class="ex-card"><strong>What it does not guarantee</strong><span>Exact stock price, guaranteed return, causality, or investment advice.</span></div>
+            <div class="ex-card"><strong>How to use it</strong><span>Use the page to audit why the model-style signal moved before reading forecast or historical pages.</span></div>
+          </div>
+        </section>
+
+        <section class="ex-panel">
+          <div class="ex-kicker">Analyst Explanation</div>
+          <div class="ex-section-title">Model reasoning summary</div>
+          <p class="ex-copy">
+            The current explanation is <strong>{html.escape(signal_label.lower())}</strong> with a final driver score of
+            {final_signal:+.1f}. The main positive contribution is <strong>{html.escape(str(top_positive))}</strong>.
+            The main risk contribution is <strong>{html.escape(str(top_risk))}</strong>. Sentiment contributes
+            {sentiment_total:+.1f}, movement and sector drivers contribute {movement_total:+.1f}, and risk adjustment
+            contributes {risk_total:+.1f}. This page shows why the signal moved; it does not guarantee a market outcome.
+          </p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _render_public_placeholder_page(page_title: str) -> None:
     """Render a real routed public page outside Executive Overview."""
 
@@ -4475,6 +5228,10 @@ def render_public_streamlit_cloud_app(project_root: Path | str | None = None) ->
 
     if selected_page == "Historical Intelligence":
         _render_historical_intelligence_page()
+        return
+
+    if selected_page == "Explainability":
+        _render_explainability_page()
         return
 
     _render_public_placeholder_page(selected_page)
