@@ -4704,6 +4704,717 @@ def _render_scenario_analysis_page() -> None:
         unsafe_allow_html=True,
     )
 
+def _render_model_comparison_page() -> None:
+    """Render the Model Comparison page as a champion-selection command center."""
+
+    import html
+    import math
+
+    st.markdown(
+        """
+        <style>
+          .mc-hero {
+            display:grid;
+            grid-template-columns:1.05fr .95fr;
+            gap:1rem;
+            padding:1.35rem;
+            border-radius:24px;
+            border:1px solid rgba(34,211,238,.34);
+            background:
+              radial-gradient(circle at 8% 8%, rgba(34,211,238,.20), transparent 22rem),
+              radial-gradient(circle at 76% 8%, rgba(139,92,246,.24), transparent 24rem),
+              radial-gradient(circle at 90% 92%, rgba(34,197,94,.13), transparent 22rem),
+              linear-gradient(145deg, rgba(8,47,73,.72), rgba(8,13,28,.96));
+            box-shadow:0 30px 90px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.07);
+            margin-bottom:.9rem;
+          }
+          .mc-kicker {
+            color:#67e8f9;
+            font-size:.70rem;
+            font-weight:950;
+            letter-spacing:.13em;
+            text-transform:uppercase;
+          }
+          .mc-title {
+            color:white;
+            font-size:2.58rem;
+            line-height:1;
+            font-weight:950;
+            letter-spacing:-.06em;
+            margin:.42rem 0 .55rem 0;
+          }
+          .mc-subtitle {
+            color:#dbeafe;
+            font-size:1rem;
+            line-height:1.55;
+          }
+          .mc-chip-row {
+            display:flex;
+            flex-wrap:wrap;
+            gap:.48rem;
+            margin-top:.9rem;
+          }
+          .mc-chip {
+            padding:.43rem .68rem;
+            border-radius:999px;
+            font-size:.72rem;
+            font-weight:850;
+            color:#bfdbfe;
+            border:1px solid rgba(96,165,250,.25);
+            background:rgba(15,23,42,.65);
+          }
+          .mc-champion {
+            padding:1rem;
+            border-radius:20px;
+            border:1px solid rgba(34,197,94,.30);
+            background:
+              radial-gradient(circle at 8% 0%, rgba(34,197,94,.13), transparent 16rem),
+              linear-gradient(160deg, rgba(15,23,42,.92), rgba(2,6,23,.96));
+          }
+          .mc-champion h3 {
+            margin:.15rem 0 .35rem 0;
+            color:white;
+            font-size:1.35rem;
+            letter-spacing:-.04em;
+          }
+          .mc-champion .big {
+            color:#86efac;
+            font-size:2rem;
+            font-weight:950;
+            letter-spacing:-.05em;
+            line-height:1.05;
+            margin:.35rem 0;
+          }
+          .mc-champion p, .mc-champion li {
+            color:#cbd5e1;
+            font-size:.78rem;
+            line-height:1.42;
+          }
+          .mc-champion ul {
+            margin:.45rem 0 0 1rem;
+            padding:0;
+          }
+          .mc-panel {
+            margin:.95rem 0;
+            padding:1.1rem;
+            border-radius:22px;
+            border:1px solid rgba(34,211,238,.24);
+            background:
+              radial-gradient(circle at 6% 0%, rgba(34,211,238,.11), transparent 18rem),
+              radial-gradient(circle at 94% 30%, rgba(139,92,246,.13), transparent 20rem),
+              linear-gradient(145deg, rgba(15,23,42,.88), rgba(8,13,28,.96));
+            box-shadow:0 22px 60px rgba(0,0,0,.25);
+          }
+          .mc-section-title {
+            color:white;
+            font-size:1.25rem;
+            font-weight:950;
+            letter-spacing:-.04em;
+            margin:.2rem 0 .35rem 0;
+          }
+          .mc-copy {
+            color:#cbd5e1;
+            font-size:.84rem;
+            line-height:1.48;
+            margin:0;
+          }
+          .mc-metrics {
+            display:grid;
+            grid-template-columns:repeat(5,minmax(0,1fr));
+            gap:.68rem;
+            margin:.85rem 0 .9rem 0;
+          }
+          .mc-metric {
+            padding:1rem;
+            border-radius:18px;
+            border:1px solid rgba(148,163,184,.16);
+            background:rgba(15,23,42,.82);
+          }
+          .mc-metric strong {
+            color:white;
+            font-size:1.35rem;
+            font-weight:950;
+            display:block;
+          }
+          .mc-metric span {
+            color:#cbd5e1;
+            font-size:.74rem;
+            font-weight:760;
+          }
+          .mc-grid-2 {
+            display:grid;
+            grid-template-columns:repeat(2,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .mc-grid-3 {
+            display:grid;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .mc-grid-4 {
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:.68rem;
+            margin-top:.8rem;
+          }
+          .mc-card {
+            padding:.95rem;
+            border-radius:17px;
+            border:1px solid rgba(148,163,184,.16);
+            background:rgba(15,23,42,.74);
+          }
+          .mc-card strong {
+            color:white;
+            display:block;
+            font-size:.96rem;
+            margin-bottom:.32rem;
+          }
+          .mc-card span, .mc-card li {
+            color:#cbd5e1;
+            font-size:.75rem;
+            line-height:1.38;
+          }
+          .mc-card ul {
+            margin:.2rem 0 0 1rem;
+            padding:0;
+          }
+          .mc-table {
+            width:100%;
+            border-collapse:separate;
+            border-spacing:0 .45rem;
+            margin-top:.75rem;
+          }
+          .mc-table th {
+            color:#94a3b8;
+            font-size:.70rem;
+            text-align:left;
+            padding:.35rem .5rem;
+            text-transform:uppercase;
+            letter-spacing:.08em;
+          }
+          .mc-table td {
+            color:#e5e7eb;
+            font-size:.78rem;
+            padding:.62rem .5rem;
+            background:rgba(15,23,42,.72);
+            border-top:1px solid rgba(148,163,184,.13);
+            border-bottom:1px solid rgba(148,163,184,.13);
+          }
+          .mc-table td:first-child {
+            border-left:1px solid rgba(148,163,184,.13);
+            border-radius:12px 0 0 12px;
+            font-weight:900;
+          }
+          .mc-table td:last-child {
+            border-right:1px solid rgba(148,163,184,.13);
+            border-radius:0 12px 12px 0;
+          }
+          .mc-decision {
+            padding:1rem;
+            border-radius:18px;
+            border:1px solid rgba(34,197,94,.28);
+            background:
+              radial-gradient(circle at 0% 0%, rgba(34,197,94,.12), transparent 14rem),
+              rgba(15,23,42,.74);
+          }
+          .mc-decision strong {
+            color:#86efac;
+            display:block;
+            font-size:1.05rem;
+            margin-bottom:.25rem;
+          }
+          .mc-decision span {
+            color:#dbeafe;
+            font-size:.8rem;
+            line-height:1.42;
+          }
+          .mc-explain {
+            margin:.45rem 0 .9rem 0;
+            padding:.9rem 1rem;
+            border-radius:16px;
+            border:1px solid rgba(148,163,184,.15);
+            background:rgba(15,23,42,.66);
+            color:#cbd5e1;
+            font-size:.81rem;
+            line-height:1.48;
+          }
+          .mc-explain strong { color:white; }
+          .mc-good { color:#86efac !important; }
+          .mc-warn { color:#fbbf24 !important; }
+          .mc-bad { color:#fca5a5 !important; }
+          @media (max-width:1100px) {
+            .mc-hero,.mc-metrics,.mc-grid-2,.mc-grid-3,.mc-grid-4 { grid-template-columns:1fr; }
+            .mc-title { font-size:2.05rem; }
+          }
+        </style>
+
+        <section class="mc-hero">
+          <div>
+            <div class="mc-kicker">Model Comparison Command Center</div>
+            <div class="mc-title">Champion Selection,<br/>Tradeoffs & Deployment Fit</div>
+            <div class="mc-subtitle">
+              This page explains why the final system uses a practical model stack instead of blindly choosing
+              the largest model. It compares quality, latency, explainability, cloud fit, risk control, and production usability.
+            </div>
+            <div class="mc-chip-row">
+              <span class="mc-chip">BERT baseline</span>
+              <span class="mc-chip">DistilBERT champion</span>
+              <span class="mc-chip">Movement model</span>
+              <span class="mc-chip">Final stack</span>
+              <span class="mc-chip">Latency tradeoff</span>
+              <span class="mc-chip">Champion decision</span>
+            </div>
+          </div>
+
+          <div class="mc-champion">
+            <div class="mc-kicker">Selected Champion</div>
+            <h3>DistilBERT + Movement Signal Layer</h3>
+            <div class="big">Best production balance</div>
+            <p>
+              The final public dashboard prioritizes a deployable intelligence stack:
+              strong language understanding, faster inference, explainable movement context,
+              and lower public-cloud risk.
+            </p>
+            <ul>
+              <li>DistilBERT handles efficient article sentiment and tone.</li>
+              <li>Movement layer adds financial direction context.</li>
+              <li>Explanation pages show why the output moved.</li>
+              <li>Public-cloud mode stays fast, stable, and auditable.</li>
+            </ul>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <section class="mc-panel">
+          <div class="mc-kicker">Comparison Controls</div>
+          <div class="mc-section-title">Tune the decision lens</div>
+          <p class="mc-copy">
+            Values below are public-demo comparison values used to explain model-selection logic. Replace them with live MLflow
+            or training-evidence metrics when the private model registry is connected to the public page.
+          </p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    control_left, control_right = st.columns([.9, 1.1])
+    with control_left:
+        decision_lens = st.selectbox(
+            "Decision lens",
+            [
+                "Production balanced",
+                "Maximum model quality",
+                "Lowest latency",
+                "Best explainability",
+                "Public cloud safety",
+            ],
+            index=0,
+        )
+    with control_right:
+        show_demo_note = st.checkbox("Show public-demo metric honesty note", value=True)
+
+    lens_weights = {
+        "Production balanced": {"quality": .25, "latency": .22, "explainability": .18, "cost": .15, "cloud": .20},
+        "Maximum model quality": {"quality": .48, "latency": .12, "explainability": .13, "cost": .10, "cloud": .17},
+        "Lowest latency": {"quality": .18, "latency": .42, "explainability": .12, "cost": .13, "cloud": .15},
+        "Best explainability": {"quality": .18, "latency": .14, "explainability": .42, "cost": .10, "cloud": .16},
+        "Public cloud safety": {"quality": .16, "latency": .22, "explainability": .14, "cost": .16, "cloud": .32},
+    }[decision_lens]
+
+    models = [
+        {
+            "name": "BERT",
+            "role": "Sentiment baseline",
+            "quality": 88,
+            "latency_score": 54,
+            "latency_ms": 780,
+            "explainability": 64,
+            "cost": 48,
+            "cloud": 50,
+            "risk": 70,
+            "f1": .88,
+            "precision": .87,
+            "recall": .89,
+            "notes": "Strong language model, but heavier for free public-cloud deployment.",
+        },
+        {
+            "name": "DistilBERT",
+            "role": "Sentiment champion",
+            "quality": 86,
+            "latency_score": 83,
+            "latency_ms": 310,
+            "explainability": 66,
+            "cost": 78,
+            "cloud": 84,
+            "risk": 38,
+            "f1": .86,
+            "precision": .85,
+            "recall": .87,
+            "notes": "Near-BERT quality with much better speed and deployment practicality.",
+        },
+        {
+            "name": "Movement model",
+            "role": "Directional signal layer",
+            "quality": 81,
+            "latency_score": 90,
+            "latency_ms": 180,
+            "explainability": 86,
+            "cost": 88,
+            "cloud": 88,
+            "risk": 34,
+            "f1": .81,
+            "precision": .82,
+            "recall": .80,
+            "notes": "Adds financial direction context that sentiment-only models do not provide.",
+        },
+        {
+            "name": "Final stack",
+            "role": "Public intelligence layer",
+            "quality": 90,
+            "latency_score": 78,
+            "latency_ms": 420,
+            "explainability": 90,
+            "cost": 78,
+            "cloud": 86,
+            "risk": 30,
+            "f1": .90,
+            "precision": .89,
+            "recall": .90,
+            "notes": "Best balance across quality, speed, explainability, and deployment fit.",
+        },
+    ]
+
+    for row in models:
+        row["decision_score"] = round(
+            row["quality"] * lens_weights["quality"]
+            + row["latency_score"] * lens_weights["latency"]
+            + row["explainability"] * lens_weights["explainability"]
+            + row["cost"] * lens_weights["cost"]
+            + row["cloud"] * lens_weights["cloud"],
+            1,
+        )
+
+    ranked = sorted(models, key=lambda item: item["decision_score"], reverse=True)
+    champion = ranked[0]
+
+    note_html = ""
+    if show_demo_note:
+        note_html = """
+        <div class="mc-explain">
+          <strong>Metric honesty note:</strong>
+          this public page uses curated demonstration metrics to explain the model-selection story.
+          It should not claim live private-registry metrics unless MLflow or training evidence is wired into this page.
+        </div>
+        """
+
+    st.markdown(
+        f"""
+        <div class="mc-metrics">
+          <div class="mc-metric"><strong>{html.escape(champion["name"])}</strong><span>current lens winner</span></div>
+          <div class="mc-metric"><strong>{champion["decision_score"]}</strong><span>decision score</span></div>
+          <div class="mc-metric"><strong>{champion["f1"]:.2f}</strong><span>demo F1 score</span></div>
+          <div class="mc-metric"><strong>{champion["latency_ms"]} ms</strong><span>demo latency</span></div>
+          <div class="mc-metric"><strong>{champion["cloud"]}/100</strong><span>public-cloud fit</span></div>
+        </div>
+        {note_html}
+        """,
+        unsafe_allow_html=True,
+    )
+
+    leaderboard_rows = ""
+    for row in ranked:
+        champion_badge = "Champion" if row["name"] == champion["name"] else "Candidate"
+        leaderboard_rows += (
+            "<tr>"
+            f"<td>{html.escape(row['name'])}</td>"
+            f"<td>{html.escape(row['role'])}</td>"
+            f"<td>{row['f1']:.2f}</td>"
+            f"<td>{row['latency_ms']} ms</td>"
+            f"<td>{row['explainability']}/100</td>"
+            f"<td>{row['cloud']}/100</td>"
+            f"<td>{row['decision_score']}</td>"
+            f"<td>{champion_badge}</td>"
+            "</tr>"
+        )
+
+    st.markdown(
+        f"""
+        <section class="mc-panel">
+          <div class="mc-kicker">Model Leaderboard</div>
+          <div class="mc-section-title">Champion selection under the selected decision lens</div>
+          <table class="mc-table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Role</th>
+                <th>F1</th>
+                <th>Latency</th>
+                <th>Explainability</th>
+                <th>Cloud fit</th>
+                <th>Decision score</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>{leaderboard_rows}</tbody>
+          </table>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    try:
+        import plotly.graph_objects as go
+
+        bubble = go.Figure()
+        bubble.add_trace(
+            go.Scatter(
+                x=[row["latency_ms"] for row in models],
+                y=[row["quality"] for row in models],
+                mode="markers+text",
+                text=[row["name"] for row in models],
+                textposition="top center",
+                marker=dict(
+                    size=[max(18, row["risk"] / 1.8) for row in models],
+                    opacity=.86,
+                    line=dict(width=1, color="rgba(255,255,255,.35)"),
+                ),
+                customdata=[row["notes"] for row in models],
+                hovertemplate="<b>%{text}</b><br>Latency: %{x} ms<br>Quality: %{y}/100<br>%{customdata}<extra></extra>",
+            )
+        )
+        bubble.update_layout(
+            title="Performance vs Latency · Bigger Bubble Means Higher Deployment Risk",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,.35)",
+            height=450,
+            margin=dict(l=0, r=0, t=55, b=0),
+            xaxis_title="Latency, lower is better",
+            yaxis_title="Model quality score",
+        )
+        st.plotly_chart(bubble, use_container_width=True, config={"displayModeBar": False})
+
+        st.markdown(
+            """
+            <div class="mc-explain">
+              <strong>How to read this chart:</strong>
+              BERT sits higher on model strength but carries heavier latency and deployment risk. DistilBERT gives a better
+              deployment tradeoff. The movement model is fastest and explains direction. The final stack balances these strengths.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        col1, col2 = st.columns(2)
+
+        categories = ["Quality", "Latency", "Explainability", "Cost efficiency", "Cloud fit", "Risk control"]
+
+        with col1:
+            radar = go.Figure()
+            for row in models:
+                values = [
+                    row["quality"],
+                    row["latency_score"],
+                    row["explainability"],
+                    row["cost"],
+                    row["cloud"],
+                    100 - row["risk"],
+                ]
+                radar.add_trace(
+                    go.Scatterpolar(
+                        r=values + [values[0]],
+                        theta=categories + [categories[0]],
+                        fill="toself",
+                        name=row["name"],
+                    )
+                )
+            radar.update_layout(
+                title="Champion Selection Radar",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+                height=460,
+                margin=dict(l=10, r=10, t=55, b=10),
+                legend=dict(orientation="h", yanchor="bottom", y=-.1, xanchor="center", x=.5),
+            )
+            st.plotly_chart(radar, use_container_width=True, config={"displayModeBar": False})
+
+        with col2:
+            heatmap = go.Figure(
+                data=go.Heatmap(
+                    z=[
+                        [88, 8, 4],
+                        [9, 82, 9],
+                        [5, 10, 85],
+                    ],
+                    x=["Predicted Positive", "Predicted Neutral", "Predicted Negative"],
+                    y=["Actual Positive", "Actual Neutral", "Actual Negative"],
+                    text=[
+                        ["88", "8", "4"],
+                        ["9", "82", "9"],
+                        ["5", "10", "85"],
+                    ],
+                    texttemplate="%{text}",
+                    hovertemplate="%{y}<br>%{x}<br>Count: %{z}<extra></extra>",
+                )
+            )
+            heatmap.update_layout(
+                title="Demo Sentiment Confusion Matrix",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=460,
+                margin=dict(l=0, r=0, t=55, b=0),
+            )
+            st.plotly_chart(heatmap, use_container_width=True, config={"displayModeBar": False})
+
+        col3, col4 = st.columns(2)
+
+        with col3:
+            decision_bar = go.Figure(
+                go.Bar(
+                    x=[row["decision_score"] for row in ranked],
+                    y=[row["name"] for row in ranked],
+                    orientation="h",
+                    customdata=[row["role"] for row in ranked],
+                    hovertemplate="<b>%{y}</b><br>Decision score: %{x}<br>%{customdata}<extra></extra>",
+                )
+            )
+            decision_bar.update_layout(
+                title=f"Decision Score Ranking · {decision_lens}",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=390,
+                margin=dict(l=0, r=0, t=55, b=0),
+                xaxis_title="Weighted decision score",
+                yaxis_title="",
+            )
+            st.plotly_chart(decision_bar, use_container_width=True, config={"displayModeBar": False})
+
+        with col4:
+            role_flow = go.Figure(
+                go.Sankey(
+                    arrangement="snap",
+                    node=dict(
+                        pad=18,
+                        thickness=18,
+                        line=dict(color="rgba(255,255,255,.25)", width=1),
+                        label=[
+                            "Financial article",
+                            "BERT baseline",
+                            "DistilBERT champion",
+                            "Movement model",
+                            "Risk adjustment",
+                            "Explanation layer",
+                            "Forecasts",
+                            "Scenario / Historical pages",
+                            "Public dashboard output",
+                        ],
+                    ),
+                    link=dict(
+                        source=[0, 0, 0, 2, 3, 4, 5, 5, 6, 7],
+                        target=[1, 2, 3, 5, 4, 5, 6, 7, 8, 8],
+                        value=[2, 5, 4, 5, 4, 4, 3, 3, 3, 3],
+                    ),
+                )
+            )
+            role_flow.update_layout(
+                title="Model Role Map · Models Are Complementary, Not Redundant",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,.35)",
+                height=390,
+                margin=dict(l=10, r=10, t=55, b=10),
+                font=dict(size=11),
+            )
+            st.plotly_chart(role_flow, use_container_width=True, config={"displayModeBar": False})
+
+    except Exception as exc:
+        st.warning(f"Model Comparison charts could not render. Reason: {exc}")
+
+    st.markdown(
+        """
+        <section class="mc-panel">
+          <div class="mc-kicker">Tradeoff Story</div>
+          <div class="mc-section-title">Why the project does not blindly choose the biggest model</div>
+          <div class="mc-grid-3">
+            <div class="mc-card">
+              <strong>Why not just BERT?</strong>
+              <span>
+                BERT is strong, but heavier. For a public Streamlit deployment, large-model latency and runtime risk can damage
+                the user experience even when offline metrics look attractive.
+              </span>
+            </div>
+            <div class="mc-card">
+              <strong>Why DistilBERT?</strong>
+              <span>
+                DistilBERT keeps much of the language quality while improving speed, memory behavior, and public-cloud practicality.
+                It is a better product-layer champion.
+              </span>
+            </div>
+            <div class="mc-card">
+              <strong>Why movement model?</strong>
+              <span>
+                Sentiment alone does not answer market direction. The movement layer adds a financial signal so the dashboard can
+                reason about Up, Flat, Down, scenarios, and reaction paths.
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <section class="mc-panel">
+          <div class="mc-kicker">Metric Glossary</div>
+          <div class="mc-section-title">How to explain the evaluation in an interview</div>
+          <div class="mc-grid-4">
+            <div class="mc-card"><strong>F1 score</strong><span>Balances precision and recall, useful when classes are not equally easy to predict.</span></div>
+            <div class="mc-card"><strong>Precision</strong><span>When the model predicts a class, how often that prediction is correct.</span></div>
+            <div class="mc-card"><strong>Recall</strong><span>How many real examples of a class the model successfully catches.</span></div>
+            <div class="mc-card"><strong>Latency</strong><span>How fast the model can respond inside the user-facing dashboard.</span></div>
+          </div>
+        </section>
+
+        <section class="mc-panel">
+          <div class="mc-kicker">Production Decision</div>
+          <div class="mc-section-title">Final model-selection answer</div>
+          <div class="mc-grid-2">
+            <div class="mc-decision">
+              <strong>Decision</strong>
+              <span>
+                Use a practical model stack: DistilBERT for efficient article understanding, movement model for directional market
+                context, and explanation layers for user trust.
+              </span>
+            </div>
+            <div class="mc-decision">
+              <strong>Reason</strong>
+              <span>
+                The project optimizes not only model score, but also speed, explainability, public-cloud reliability,
+                maintainability, and dashboard user experience.
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <section class="mc-panel">
+          <div class="mc-kicker">Reviewer Takeaway</div>
+          <div class="mc-section-title">What this page proves</div>
+          <p class="mc-copy">
+            This dashboard does not treat model choice as a beauty contest. It shows that a production ML system must compare
+            accuracy, latency, interpretability, deployment cost, risk, and user value. The selected champion stack is the model
+            architecture that best supports the public financial-news intelligence product.
+          </p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _render_public_placeholder_page(page_title: str) -> None:
     """Render a real routed public page outside Executive Overview."""
 
@@ -6051,6 +6762,10 @@ def render_public_streamlit_cloud_app(project_root: Path | str | None = None) ->
 
     if selected_page == "Scenario Analysis":
         _render_scenario_analysis_page()
+        return
+
+    if selected_page == "Model Comparison":
+        _render_model_comparison_page()
         return
 
     _render_public_placeholder_page(selected_page)
