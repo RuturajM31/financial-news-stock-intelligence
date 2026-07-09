@@ -1,0 +1,14 @@
+# Keep Linux shell scripts executable-compatible in Docker/Linux containers.
+*.sh text eol=lf
+
+# Keep Docker/Linux deployment files normalized.
+Dockerfile text eol=lf
+Dockerfile.* text eol=lf
+docker/Dockerfile.* text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# Keep source/docs normalized.
+*.py text eol=lf
+*.toml text eol=lf
+*.md text eol=lf

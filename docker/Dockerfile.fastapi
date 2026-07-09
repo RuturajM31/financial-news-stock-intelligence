@@ -47,7 +47,8 @@ RUN python -m venv /opt/fni/project/.venv \
 
 COPY --chown=fni:fni . /opt/fni/project
 
-RUN find artifacts data/processed reports -type f -exec chmod 0600 {} + \
+RUN mkdir -p artifacts data/processed reports \
+    && find artifacts data/processed reports -type f -exec chmod 0600 {} + \
     && chmod 0755 docker/entrypoint-fastapi.sh docker/healthcheck.py \
     && chown -R fni:fni /opt/fni/project/.venv
 
