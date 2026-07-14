@@ -10089,6 +10089,12 @@ def _render_risk_reward_matrix(signal: ArticleSignal) -> None:
 
         x_value = round(signal.sentiment_score * 100, 1)
         y_value = round(signal.risk_score * 100, 1)
+        if x_value >= 75:
+            text_position = "top left"
+        elif x_value <= -75:
+            text_position = "top right"
+        else:
+            text_position = "top center"
 
         fig = go.Figure()
         fig.add_trace(go.Scatter(
@@ -10096,16 +10102,29 @@ def _render_risk_reward_matrix(signal: ArticleSignal) -> None:
             y=[y_value],
             mode="markers+text",
             text=[signal.ticker],
-            textposition="top center",
-            marker=dict(size=24),
+            textposition=text_position,
+            marker=dict(
+                size=28,
+                line=dict(width=2, color="rgba(255,255,255,.9)"),
+            ),
+            customdata=[[signal.ticker, x_value, y_value]],
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"
+                "Sentiment score: %{customdata[1]:.1f}<br>"
+                "Risk pressure: %{customdata[2]:.1f}<extra></extra>"
+            ),
             name="Current article",
         ))
         fig.add_vline(x=0, line_dash="dash")
         fig.add_hline(y=50, line_dash="dash")
-        fig.update_xaxes(range=[-100, 100], title="Sentiment strength")
-        fig.update_yaxes(range=[0, 100], title="Risk pressure")
+        fig.add_annotation(x=55, y=92, text="Positive sentiment / higher risk", showarrow=False)
+        fig.add_annotation(x=55, y=8, text="Positive sentiment / lower risk", showarrow=False)
+        fig.add_annotation(x=-55, y=92, text="Negative sentiment / higher risk", showarrow=False)
+        fig.add_annotation(x=-55, y=8, text="Negative sentiment / lower risk", showarrow=False)
+        fig.update_xaxes(range=[-110, 110], title="Article sentiment score")
+        fig.update_yaxes(range=[0, 105], title="Article risk pressure")
         fig.update_layout(
-            title="Risk vs Reward Matrix",
+            title="Article Sentiment vs Risk Matrix",
             template="plotly_dark",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(15,23,42,.45)",
@@ -10113,6 +10132,26 @@ def _render_risk_reward_matrix(signal: ArticleSignal) -> None:
             margin=dict(l=20, r=20, t=55, b=35),
         )
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        st.caption(
+            "This chart measures article sentiment against article-level risk language. "
+            "It does not represent predicted investment return."
+        )
+        with st.expander(
+            "How this chart is calculated and where the data comes from",
+            expanded=False,
+        ):
+            st.markdown(
+                """
+- Article sentiment is calculated from positive and negative keyword matches in the submitted article.
+- Sentiment is normalized to a scale from -100 to +100.
+- Risk pressure is calculated from risk-term matches and negative keyword matches.
+- Risk pressure is normalized to a scale from 0 to 100.
+- The ticker is inferred from company and ticker keywords found in the article.
+- The underlying article can come from a fetched URL, uploaded file, pasted text, or the built-in sample article.
+- No live stock-price data is used in this chart.
+- This is article intelligence and not investment advice.
+                """
+            )
     except Exception:
         st.info("Risk/reward matrix fallback: Plotly is unavailable in this runtime.")
 
@@ -11071,3 +11110,7 @@ def render_public_streamlit_cloud_app(project_root: Path | str | None = None) ->
         return
 
     _render_public_placeholder_page(selected_page)
+
+
+if __name__ == "__main__":
+    render_public_streamlit_cloud_app()
