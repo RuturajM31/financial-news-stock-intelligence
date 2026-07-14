@@ -1241,7 +1241,7 @@ def _render_forecasts_page() -> None:
 
     def _format_date(value: date) -> str:
         """Format forecast dates in a compact dashboard-friendly form."""
-        return value.strftime("%b %-d") if "%" in "%-d" else value.strftime("%b %d")
+        return value.strftime("%b %d").replace(" 0", " ")
 
     def _find_cues(text: str, cue_patterns: list[tuple[str, str, float]]) -> list[dict[str, str | float]]:
         """Find financial cue phrases in user input and return matched evidence rows."""
@@ -2013,6 +2013,11 @@ def _render_forecasts_page() -> None:
         upper = [round(v + uncertainty_width * (0.30 + d / horizon_days), 2) for d, v in zip(days, base)]
         lower = [round(v - uncertainty_width * (0.30 + d / horizon_days), 2) for d, v in zip(days, base)]
 
+        weekly_tick_days = list(range(0, horizon_days + 1, 7))
+        if weekly_tick_days[-1] != horizon_days:
+            weekly_tick_days.append(horizon_days)
+        weekly_tick_labels = [labels[d] for d in weekly_tick_days]
+
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=labels, y=upper, mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"))
         fig.add_trace(
@@ -2023,39 +2028,139 @@ def _render_forecasts_page() -> None:
                 fill="tonexty",
                 fillcolor="rgba(34,211,238,.13)",
                 line=dict(width=0),
-                name="Confidence band",
+                name="Heuristic uncertainty range",
                 hoverinfo="skip",
             )
         )
-        fig.add_trace(go.Scatter(x=labels, y=bull, mode="lines", name="Bull scenario", line=dict(width=4)))
-        fig.add_trace(go.Scatter(x=labels, y=base, mode="lines", name="Base scenario", line=dict(width=5)))
-        fig.add_trace(go.Scatter(x=labels, y=bear, mode="lines", name="Bear scenario", line=dict(width=4)))
+        fig.add_trace(go.Scatter(
+            x=labels,
+            y=bull,
+            mode="lines",
+            name="Bull scenario",
+            line=dict(width=4),
+            hovertemplate="<b>Bull scenario</b><br>Forecast date: %{x}<br>Projected movement: %{y:+.2f}%<extra></extra>",
+        ))
+        fig.add_trace(go.Scatter(
+            x=labels,
+            y=base,
+            mode="lines",
+            name="Base scenario",
+            line=dict(width=5),
+            hovertemplate="<b>Base scenario</b><br>Forecast date: %{x}<br>Projected movement: %{y:+.2f}%<extra></extra>",
+        ))
+        fig.add_trace(go.Scatter(
+            x=labels,
+            y=bear,
+            mode="lines",
+            name="Bear scenario",
+            line=dict(width=4),
+            hovertemplate="<b>Bear scenario</b><br>Forecast date: %{x}<br>Projected movement: %{y:+.2f}%<extra></extra>",
+        ))
+        fig.add_hline(y=0, line_dash="dash", line_color="rgba(226,232,240,.65)")
+        for scenario_name, endpoint in (("Bull", bull[-1]), ("Base", base[-1]), ("Bear", bear[-1])):
+            fig.add_annotation(
+                x=labels[-1],
+                y=endpoint,
+                text=f"{scenario_name} {endpoint:+.2f}%",
+                showarrow=False,
+                xanchor="right",
+                xshift=-8,
+                bgcolor="rgba(15,23,42,.82)",
+                bordercolor="rgba(148,163,184,.45)",
+                borderwidth=1,
+            )
 
         fig.update_layout(
-            title=f"Dated Forecast Fan Chart · {_format_date(forecast_start)} to {_format_date(forecast_end)}",
+            title=(
+                f"{horizon_days}-Day Article-Signal Scenario Projection · "
+                f"{_format_date(forecast_start)} to {_format_date(forecast_end)}"
+            ),
             template="plotly_dark",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(15,23,42,.35)",
             height=520,
-            margin=dict(l=0, r=0, t=55, b=0),
+            margin=dict(l=0, r=20, t=55, b=0),
             xaxis_title="Forecast date",
             yaxis_title="Projected movement %",
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         )
+        fig.update_xaxes(
+            tickmode="array",
+            tickvals=weekly_tick_labels,
+            ticktext=weekly_tick_labels,
+        )
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-        st.markdown(
-            """
-            <div class="fc-explain">
-              <strong>How to read this chart:</strong>
-              the x-axis now uses forecast dates. The Bull line shows upside if detected positive cues continue.
-              The Base line shows the central dated path. The Bear line shows downside risk. The shaded band widens
-              as uncertainty increases across the horizon.
-            </div>
-            """,
-            unsafe_allow_html=True,
+        st.caption(
+            "Rule-based scenario projection generated from the current article text. No live or historical "
+            "stock-price data is used. The shaded range is heuristic and is not a statistically calibrated "
+            "prediction interval."
         )
+        with st.expander(
+            "How this projection is calculated and where the data comes from",
+            expanded=False,
+        ):
+            st.markdown(
+                f"""
+### What this chart shows
 
+- Bull, Base and Bear are possible article-driven scenarios.
+- Values show projected percentage movement relative to the starting point.
+- The dates run from today through the selected forecast horizon.
+- These are scenarios, not guaranteed future stock returns.
+
+### Data source
+
+- Inputs are the headline and article body currently loaded on the Forecasts page.
+- Text can come from manual entry, URL extraction or the built-in sample.
+- Bullish, bearish and risk phrases are matched using predefined regular-expression rules and fixed weights.
+- No historical prices, live prices, market volatility, trading volume or market-data API are used.
+- The displayed ticker or optional target does not affect the scenario paths.
+
+### Signals used
+
+| Signal | Current value |
+|---|---:|
+| Input quality | {input_quality}/100 |
+| Sentiment signal | {sentiment_signal:.1f}/100 |
+| Movement pressure | {movement_pressure:.1f}/100 |
+| Risk pressure | {risk_pressure:.1f}/100 |
+| Driver strength | {driver_strength:.1f}/100 |
+| Rule-based confidence | {confidence}% |
+| Manual adjustment | {manual_adjustment:+d} |
+| Forecast horizon | {horizon_days} days |
+
+### Scenario calculation
+
+**Base endpoint:** `base_end` is `forecast_pressure` scaled by the selected horizon and `quality_factor`, then limited to -7.5% through +7.5%.
+
+Forecast pressure combines:
+
+- `sentiment_signal` with weight 0.033
+- `movement_pressure` with weight 0.038
+- `driver_strength` with weight 0.020
+- `risk_pressure` with negative weight 0.035
+- `manual_adjustment` with weight 0.025
+
+**Bull endpoint:** `base_end + 1.20 + driver_strength / 42`, limited to -5% through +10%.
+
+**Bear endpoint:** `base_end` minus `1.45 + risk_pressure / 30 + (100 - input_quality) / 95`, limited to -10% through +4%. The existing calculation forces the Bear endpoint to remain negative when necessary.
+
+**Daily paths:** Each scenario moves progressively toward its endpoint and includes a small deterministic sine adjustment to make the path less linear.
+
+### Heuristic uncertainty range
+
+- `uncertainty_width = max(0.55, (100 - confidence) / 18)`
+- The range is centred around the Base path.
+- It expands gradually as the horizon increases.
+- It is not based on historical forecast errors, volatility, residuals, quantiles or an 80%/95% statistical coverage level.
+- The confidence value is itself a rule-based quality score, not a calibrated probability.
+
+### Interpretation warning
+
+This visualization is for article-intelligence scenario analysis and educational use. It is not investment advice or a statistically validated price forecast.
+                """
+            )
         col_prob, col_decay = st.columns(2)
 
         with col_prob:
