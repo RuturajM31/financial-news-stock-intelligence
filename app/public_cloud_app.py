@@ -1302,7 +1302,7 @@ def _render_forecasts_page() -> None:
 
         parsed = urlparse(clean_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            return "Invalid URL. Paste a full URL starting with http:// or https://.", "", ""
+            return "Add a full article link that starts with http:// or https://.", "", ""
 
         try:
             import requests
@@ -1338,12 +1338,22 @@ def _render_forecasts_page() -> None:
             body = "\n\n".join(paragraphs[:12]).strip()
 
             if not body:
-                return "URL loaded, but article text could not be extracted. Paste article text manually.", title, ""
+                return "We found the page, but could not find enough article text. Paste the article manually.", title, ""
 
-            return "URL article text extracted.", title, body
+            return "Article text was loaded successfully.", title, body
 
-        except Exception as exc:
-            return f"URL extraction failed. Paste article text manually. Reason: {exc}", "", ""
+        except ImportError:
+            return "Article extraction is not available because a required application package is missing.", "", ""
+        except requests.Timeout:
+            return "The website took too long to respond. Try again or paste the article manually.", "", ""
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code in {401, 403, 429}:
+                return "This website blocked automatic article access. Paste the headline and article text below.", "", ""
+            return "We could not load this article. Try again or paste the article manually.", "", ""
+        except requests.RequestException:
+            return "A network or website error stopped the article from loading. Try again or paste the article manually.", "", ""
+        except Exception:
+            return "This page layout is not supported for automatic extraction. Paste the article manually.", "", ""
 
     bullish_patterns = [
         (r"\bjumps?\b", "Jumps / strong upward move", 1.35),
@@ -1398,8 +1408,81 @@ def _render_forecasts_page() -> None:
     if "forecast_target" not in st.session_state:
         st.session_state.forecast_target = ""
     if "forecast_status" not in st.session_state:
-        st.session_state.forecast_status = "Enter a URL or paste text, then generate a forecast."
+        st.session_state.forecast_status = "Add an article link, paste article text, or use the sample article."
+    if "forecast_workflow_state" not in st.session_state:
+        st.session_state.forecast_workflow_state = "no_source"
+    if "forecast_source_type" not in st.session_state:
+        st.session_state.forecast_source_type = "No source added"
+    if "forecast_extraction_method" not in st.session_state:
+        st.session_state.forecast_extraction_method = "Not started"
+    if "forecast_source_url" not in st.session_state:
+        st.session_state.forecast_source_url = ""
+    if "forecast_content_snapshot" not in st.session_state:
+        st.session_state.forecast_content_snapshot = ""
+    if "forecast_results_generated" not in st.session_state:
+        st.session_state.forecast_results_generated = False
+    if "forecast_results_signature" not in st.session_state:
+        st.session_state.forecast_results_signature = ""
 
+    if "forecast_url_input" not in st.session_state:
+        st.session_state.forecast_url_input = st.session_state.forecast_url
+    if "forecast_headline_input" not in st.session_state:
+        st.session_state.forecast_headline_input = st.session_state.forecast_headline
+    if "forecast_body_input" not in st.session_state:
+        st.session_state.forecast_body_input = st.session_state.forecast_body
+    if "forecast_target_input" not in st.session_state:
+        st.session_state.forecast_target_input = st.session_state.forecast_target
+
+    def _request_scenario_generation() -> None:
+        st.session_state.forecast_generation_requested = True
+
+    def _load_url_article() -> None:
+        current_url = st.session_state.get("forecast_url_input", "").strip()
+        st.session_state.forecast_url = current_url
+        st.session_state.forecast_source_url = current_url
+        st.session_state.forecast_workflow_state = "extracting"
+        st.session_state.forecast_status = "Loading article text..."
+        st.session_state.forecast_results_generated = False
+        st.session_state.forecast_results_signature = ""
+        with st.spinner("Loading article text..."):
+            status, fetched_headline, fetched_body = _extract_article_from_url(current_url)
+        st.session_state.forecast_status = status
+        if fetched_body:
+            st.session_state.forecast_headline = fetched_headline
+            st.session_state.forecast_headline_input = fetched_headline
+            st.session_state.forecast_body = fetched_body
+            st.session_state.forecast_body_input = fetched_body
+            st.session_state.forecast_workflow_state = "extraction_successful"
+            st.session_state.forecast_source_type = "Article link"
+            st.session_state.forecast_extraction_method = "Automatic article extraction"
+            st.session_state.forecast_content_snapshot = f"{fetched_headline}\n{fetched_body}".strip()
+        else:
+            st.session_state.forecast_headline = ""
+            st.session_state.forecast_headline_input = ""
+            st.session_state.forecast_body = ""
+            st.session_state.forecast_body_input = ""
+            st.session_state.forecast_workflow_state = "extraction_failed"
+            st.session_state.forecast_source_type = "Article link"
+            st.session_state.forecast_extraction_method = "Automatic extraction failed"
+            st.session_state.forecast_content_snapshot = ""
+
+    def _load_sample_article() -> None:
+        st.session_state.forecast_url = ""
+        st.session_state.forecast_url_input = ""
+        st.session_state.forecast_headline = sample_headline
+        st.session_state.forecast_headline_input = sample_headline
+        st.session_state.forecast_body = sample_body
+        st.session_state.forecast_body_input = sample_body
+        st.session_state.forecast_target = "Broad market"
+        st.session_state.forecast_target_input = "Broad market"
+        st.session_state.forecast_status = "Sample article ready."
+        st.session_state.forecast_workflow_state = "sample_article_ready"
+        st.session_state.forecast_source_type = "Built-in sample article"
+        st.session_state.forecast_extraction_method = "Built-in sample"
+        st.session_state.forecast_source_url = ""
+        st.session_state.forecast_content_snapshot = f"{sample_headline}\n{sample_body}".strip()
+        st.session_state.forecast_results_generated = False
+        st.session_state.forecast_results_signature = ""
     st.markdown(
         """
         <style>
@@ -1655,29 +1738,28 @@ def _render_forecasts_page() -> None:
 
         <section class="fc-hero">
           <div>
-            <div class="fc-kicker">Forecast Intelligence Cockpit</div>
-            <div class="fc-title">Date-Based News<br/>Movement Forecasts</div>
+            <div class="fc-kicker">Article-based market view</div>
+            <div class="fc-title">News-Based Market Scenarios</div>
             <div class="fc-subtitle">
-              Enter a financial news URL or paste article text. The page detects market cues, target context,
-              input quality, risk pressure, and driver strength before generating dated Bull, Base, and Bear scenarios.
+              Add a financial-news article. The page checks the language in the article, identifies positive and negative signals, and creates possible Bull, Base and Bear market scenarios.
             </div>
             <div class="fc-chip-row">
-              <span class="fc-chip">Article URL input</span>
-              <span class="fc-chip">Paste fallback</span>
-              <span class="fc-chip">Forecast dates</span>
-              <span class="fc-chip">Up / Flat / Down</span>
-              <span class="fc-chip">Scenario probabilities</span>
-              <span class="fc-chip">Analyst explanation</span>
+              <span class="fc-chip">Article link or pasted text</span>
+              <span class="fc-chip">Built-in sample</span>
+              <span class="fc-chip">Clear dates</span>
+              <span class="fc-chip">Bull / Base / Bear</span>
+              <span class="fc-chip">Possible outcomes</span>
+              <span class="fc-chip">Simple explanation</span>
             </div>
           </div>
 
           <div class="fc-engine">
-            <div class="fc-kicker">Financial News Forecast Engine</div>
-            <div class="fc-flow-step"><div class="fc-flow-num">01</div><div><strong>Source</strong><span>Article URL, headline, body, optional ticker</span></div></div>
-            <div class="fc-flow-step"><div class="fc-flow-num">02</div><div><strong>Signals</strong><span>Bullish, bearish, risk, target, sector, index</span></div></div>
-            <div class="fc-flow-step"><div class="fc-flow-num">03</div><div><strong>Forecast calendar</strong><span>1D, 7D, 14D, 30D dated movement paths</span></div></div>
-            <div class="fc-flow-step"><div class="fc-flow-num">04</div><div><strong>Probabilities</strong><span>Up, Flat, Down and Bull/Base/Bear scenario mix</span></div></div>
-            <div class="fc-flow-step"><div class="fc-flow-num">05</div><div><strong>Explanation</strong><span>Detected drivers and analyst-readable summary</span></div></div>
+            <div class="fc-kicker">How the page works</div>
+            <div class="fc-flow-step"><div class="fc-flow-num">01</div><div><strong>Add the article</strong><span>Use a link, paste text, or load the sample</span></div></div>
+            <div class="fc-flow-step"><div class="fc-flow-num">02</div><div><strong>Check the words</strong><span>Find positive, negative, and risk language</span></div></div>
+            <div class="fc-flow-step"><div class="fc-flow-num">03</div><div><strong>Create outcomes</strong><span>Build Bull, Base, and Bear cases</span></div></div>
+            <div class="fc-flow-step"><div class="fc-flow-num">04</div><div><strong>Show the dates</strong><span>View how each case changes over time</span></div></div>
+            <div class="fc-flow-step"><div class="fc-flow-num">05</div><div><strong>Explain the result</strong><span>See what shaped each outcome</span></div></div>
           </div>
         </section>
         """,
@@ -1687,83 +1769,189 @@ def _render_forecasts_page() -> None:
     st.markdown(
         """
         <section class="fc-panel">
-          <div class="fc-kicker">Forecast Input</div>
-          <div class="fc-section-title">Enter a URL first, or paste article text manually</div>
-          <p class="fc-copy">
-            URL extraction may fail on some news sites because of paywalls, bot protection, or blocked article markup.
-            If that happens, paste the headline and article body manually. The forecast will still work.
-          </p>
+          <div class="fc-section-title">Add an article</div>
+          <p class="fc-copy">Choose a link, paste the text, or load the sample.</p>
         </section>
         """,
         unsafe_allow_html=True,
     )
 
-    input_left, input_right = st.columns([1.18, .82])
+    link_tab, paste_tab, sample_tab = st.tabs(["Use article link", "Paste article", "Use sample article"])
 
-    with input_left:
-        url_value = st.text_input(
-            "Article URL",
-            value=st.session_state.forecast_url,
-            placeholder="https://...",
-            key="forecast_url_input",
+    with link_tab:
+        url_value = st.text_input("Article URL", placeholder="https://...", key="forecast_url_input")
+        st.button("Get article text", type="secondary", use_container_width=True, on_click=_load_url_article)
+
+    with paste_tab:
+        headline = st.text_input("Article headline", placeholder="Paste the financial-news headline here", key="forecast_headline_input")
+        article_body = st.text_area("Article body", height=155, placeholder="Paste the article text or a clear summary.", key="forecast_body_input")
+
+    with sample_tab:
+        st.write("Load a built-in example to see how the page works.")
+        st.button("Load sample article", type="secondary", use_container_width=True, on_click=_load_sample_article)
+
+    target_hint = st.text_input("Optional ticker or market target", placeholder="Examples: NVDA, Nasdaq, semiconductors, or broad market", key="forecast_target_input")
+
+    draft_full_text = f"{headline}\n{article_body}".strip()
+    draft_word_count = len(re.findall(r"\b\w+\b", draft_full_text))
+    workflow_state = st.session_state.forecast_workflow_state
+
+    if (
+        not draft_full_text
+        and url_value.strip()
+        and workflow_state not in {"extracting", "extraction_failed"}
+    ):
+        workflow_state = "url_entered_not_extracted"
+        st.session_state.forecast_workflow_state = workflow_state
+        st.session_state.forecast_source_type = "Article link"
+        st.session_state.forecast_extraction_method = "Not started"
+        st.session_state.forecast_status = "Article link added. Select 'Get article text' to load the article."
+        st.session_state.forecast_results_generated = False
+        st.session_state.forecast_results_signature = ""
+    elif (
+        workflow_state in {"extraction_successful", "scenario_results_generated"}
+        and url_value.strip() != st.session_state.forecast_source_url
+    ):
+        workflow_state = "url_entered_not_extracted" if url_value.strip() else "no_source"
+        st.session_state.forecast_workflow_state = workflow_state
+        st.session_state.forecast_results_generated = False
+        st.session_state.forecast_results_signature = ""
+    elif draft_full_text != st.session_state.forecast_content_snapshot:
+        st.session_state.forecast_results_generated = False
+        st.session_state.forecast_results_signature = ""
+        if draft_word_count >= 25:
+            workflow_state = "manual_article_ready"
+            st.session_state.forecast_source_type = "Pasted article text"
+            st.session_state.forecast_extraction_method = "Manual entry"
+            st.session_state.forecast_status = "Manual article ready."
+            st.session_state.forecast_content_snapshot = draft_full_text
+        elif draft_full_text:
+            workflow_state = "text_too_short"
+            st.session_state.forecast_source_type = "Pasted article text"
+            st.session_state.forecast_extraction_method = "Manual entry"
+            st.session_state.forecast_status = "More article text is needed."
+        elif url_value.strip() and workflow_state != "extraction_failed":
+            workflow_state = "url_entered_not_extracted"
+            st.session_state.forecast_source_type = "Article link"
+            st.session_state.forecast_extraction_method = "Not started"
+            st.session_state.forecast_status = "Article link added. Select 'Get article text' to load the article."
+        elif workflow_state != "extraction_failed":
+            workflow_state = "no_source"
+            st.session_state.forecast_source_type = "No source added"
+            st.session_state.forecast_extraction_method = "Not started"
+            st.session_state.forecast_status = "Add an article link, paste article text, or use the sample article."
+        st.session_state.forecast_workflow_state = workflow_state
+
+    content_ready = workflow_state in {
+        "extraction_successful",
+        "manual_article_ready",
+        "sample_article_ready",
+        "scenario_results_generated",
+    } and draft_word_count >= 25
+
+    control_left, control_right = st.columns(2)
+    with control_left:
+        horizon_days = st.slider("Number of days", min_value=7, max_value=60, value=30, step=1)
+        manual_adjustment = st.slider("Optional manual adjustment", min_value=-20, max_value=20, value=0, step=1)
+    with control_right:
+        show_3d = st.checkbox("Show an extra 3D view", value=False)
+        st.button(
+            "Create market scenarios",
+            type="primary",
+            use_container_width=True,
+            disabled=not content_ready,
+            key="forecast_generate_top",
+            on_click=_request_scenario_generation,
         )
-
-        target_hint = st.text_input(
-            "Optional ticker / asset / market target",
-            value=st.session_state.forecast_target,
-            placeholder="Examples: NVDA, AAPL, Nasdaq, Dow, Semiconductors, Broad market",
-            key="forecast_target_input",
-        )
-
-        headline = st.text_input(
-            "Article headline",
-            value=st.session_state.forecast_headline,
-            placeholder="Paste the financial-news headline here",
-            key="forecast_headline_input",
-        )
-
-        article_body = st.text_area(
-            "Article body or summary",
-            value=st.session_state.forecast_body,
-            height=155,
-            placeholder="Paste article body or summary here for stronger forecast quality.",
-            key="forecast_body_input",
-        )
-
-    with input_right:
-        horizon_days = st.slider("Forecast horizon, days", min_value=7, max_value=60, value=30, step=1)
-        manual_adjustment = st.slider("Manual analyst adjustment", min_value=-20, max_value=20, value=0, step=1)
-        show_3d = st.checkbox("Show optional 3D forecast surface", value=False)
-
-        fetch_clicked = st.button("Extract URL text", type="secondary", use_container_width=True)
-        sample_clicked = st.button("Load sample article", type="secondary", use_container_width=True)
-        generate_clicked = st.button("Generate forecast", type="primary", use_container_width=True)
-
-    if fetch_clicked:
-        status, fetched_headline, fetched_body = _extract_article_from_url(url_value)
-        st.session_state.forecast_url = url_value
-        st.session_state.forecast_status = status
-        if fetched_headline:
-            st.session_state.forecast_headline = fetched_headline
-        if fetched_body:
-            st.session_state.forecast_body = fetched_body
-        st.rerun()
-
-    if sample_clicked:
-        st.session_state.forecast_url = ""
-        st.session_state.forecast_headline = sample_headline
-        st.session_state.forecast_body = sample_body
-        st.session_state.forecast_target = "Broad market"
-        st.session_state.forecast_status = "Sample article loaded."
-        st.rerun()
 
     st.session_state.forecast_url = url_value
     st.session_state.forecast_headline = headline
     st.session_state.forecast_body = article_body
     st.session_state.forecast_target = target_hint
 
-    full_text = f"{headline}\n{article_body}".strip()
-    word_count = len(re.findall(r"\b\w+\b", full_text))
+    analysis_signature = "|".join(
+        [draft_full_text, target_hint.strip(), str(horizon_days), str(manual_adjustment)]
+    )
+    if (
+        st.session_state.forecast_results_generated
+        and st.session_state.forecast_results_signature != analysis_signature
+    ):
+        st.session_state.forecast_results_generated = False
+        if workflow_state == "scenario_results_generated":
+            workflow_state = "manual_article_ready" if st.session_state.forecast_source_type == "Pasted article text" else "sample_article_ready" if st.session_state.forecast_source_type == "Built-in sample article" else "extraction_successful"
+            st.session_state.forecast_workflow_state = workflow_state
+
+    generation_requested = st.session_state.pop("forecast_generation_requested", False)
+    if generation_requested and content_ready:
+        st.session_state.forecast_results_generated = True
+        st.session_state.forecast_results_signature = analysis_signature
+        st.session_state.forecast_workflow_state = "scenario_results_generated"
+        workflow_state = "scenario_results_generated"
+
+    if workflow_state == "url_entered_not_extracted":
+        st.info("Article link added. Select 'Get article text' to load the article.")
+        st.warning("Select 'Get article text' before creating market scenarios.")
+    elif workflow_state == "extracting":
+        st.info("Loading article text...")
+    elif workflow_state == "extraction_failed":
+        st.error(st.session_state.forecast_status)
+        st.info("You can still use this article by opening the Paste article tab and pasting the headline and article text.")
+        st.warning("We could not load this article automatically. Paste the headline and article text instead.")
+    elif workflow_state == "no_source":
+        st.warning("Add an article link, paste article text, or use the sample article.")
+    elif workflow_state == "text_too_short":
+        st.warning("Add more article text before creating market scenarios.")
+    elif workflow_state == "extraction_successful":
+        st.success("Article text was loaded successfully.")
+    elif workflow_state == "manual_article_ready":
+        st.success("Manual article ready.")
+    elif workflow_state == "sample_article_ready":
+        st.success("Sample article ready.")
+    elif workflow_state == "scenario_results_generated":
+        st.success("Market scenarios were created.")
+
+    if not content_ready:
+        return
+
+    preview_target_type, preview_detected_entities = _detect_target(draft_full_text, target_hint)
+    source_url_text = st.session_state.forecast_source_url or "Not used"
+    st.markdown(
+        f"""
+        <section class="fc-panel">
+          <div class="fc-section-title">What will be analyzed</div>
+          <div class="fc-grid-3">
+            <div class="fc-card"><strong>Input source</strong><span>{html.escape(st.session_state.forecast_source_type)}</span></div>
+            <div class="fc-card"><strong>Source URL</strong><span>{html.escape(source_url_text)}</span></div>
+            <div class="fc-card"><strong>Extraction method</strong><span>{html.escape(st.session_state.forecast_extraction_method)}</span></div>
+            <div class="fc-card"><strong>User-entered target</strong><span>{html.escape(target_hint.strip() or "Not provided")}</span></div>
+            <div class="fc-card"><strong>Inferred target</strong><span>{html.escape(preview_detected_entities or preview_target_type)}</span></div>
+            <div class="fc-card"><strong>Article headline</strong><span>{html.escape(headline or "Not provided")}</span></div>
+            <div class="fc-card"><strong>Article length</strong><span>{draft_word_count} words</span></div>
+            <div class="fc-card"><strong>Number of days</strong><span>{horizon_days}</span></div>
+            <div class="fc-card"><strong>Manual adjustment</strong><span>{manual_adjustment:+d}</span></div>
+            <div class="fc-card"><strong>Extraction status</strong><span>{html.escape(st.session_state.forecast_status)}</span></div>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+    with st.expander("View the article text being analyzed", expanded=False):
+        st.markdown(f"**Headline:** {headline or 'Not provided'}")
+        st.write(article_body)
+
+    if not st.session_state.forecast_results_generated:
+        st.info("The article is ready. Select 'Create market scenarios' to see the results.")
+        st.button(
+            "Create market scenarios",
+            type="primary",
+            use_container_width=True,
+            key="forecast_generate_ready",
+            on_click=_request_scenario_generation,
+        )
+        return
+
+    full_text = draft_full_text
+    word_count = draft_word_count
 
     bullish_cues = _find_cues(full_text, bullish_patterns)
     bearish_cues = _find_cues(full_text, bearish_patterns)
@@ -1869,74 +2057,85 @@ def _render_forecasts_page() -> None:
         items = "".join(f"<li>{html.escape(str(c['label']))}</li>" for c in cues[:6])
         return f"<ul>{items}</ul>"
 
+    evidence_rows = []
+    for cue in bullish_cues:
+        evidence_rows.append((str(cue["label"]), "Positive", float(cue["weight"]), "Supports a positive outlook"))
+    for cue in bearish_cues:
+        evidence_rows.append((str(cue["label"]), "Negative", float(cue["weight"]), "Supports a negative outlook"))
+    for cue in risk_cues:
+        evidence_rows.append((str(cue["label"]), "Risk", float(cue["weight"]), "Increases risk"))
+
+    evidence_table_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(label)}</td>"
+        f"<td>{html.escape(signal_type)}</td>"
+        f"<td>{importance:.2f}</td>"
+        f"<td>{html.escape(effect)}</td>"
+        "</tr>"
+        for label, signal_type, importance, effect in evidence_rows
+    )
+    if not evidence_table_rows:
+        evidence_table_rows = '<tr><td colspan="4">No clear positive, negative, or risk phrases were found.</td></tr>'
+
     status_text = html.escape(st.session_state.forecast_status)
     escaped_target_type = html.escape(target_type)
     escaped_entities = html.escape(detected_entities)
     escaped_quality = html.escape(input_quality_label)
-
-    source_label = "Article URL" if url_value.strip() else "Pasted text / manual input"
+    source_label = "Article link" if url_value.strip() else "Pasted text or sample article"
 
     st.markdown(
         f"""
         <section class="fc-panel">
-          <div class="fc-kicker">Forecast Source</div>
-          <div class="fc-section-title">Forecast generated from selected article signal</div>
+          <div class="fc-section-title">Where the information comes from</div>
           <div class="fc-grid-4">
-            <div class="fc-card"><strong>Source</strong><span>{html.escape(source_label)}</span></div>
-            <div class="fc-card"><strong>Generated</strong><span>{html.escape(_format_date(forecast_start))}</span></div>
-            <div class="fc-card"><strong>Horizon end</strong><span>{html.escape(_format_date(forecast_end))}</span></div>
-            <div class="fc-card"><strong>Status</strong><span>{status_text}</span></div>
+            <div class="fc-card"><strong>Article source</strong><span>{html.escape(source_label)}</span></div>
+            <div class="fc-card"><strong>Start date</strong><span>{html.escape(_format_date(forecast_start))}</span></div>
+            <div class="fc-card"><strong>End date</strong><span>{html.escape(_format_date(forecast_end))}</span></div>
+            <div class="fc-card"><strong>Article status</strong><span>{status_text}</span></div>
           </div>
-          <div class="fc-grid-4">
-            <div class="fc-card"><strong>Target type</strong><span>{escaped_target_type}</span></div>
-            <div class="fc-card"><strong>Detected entities</strong><span>{escaped_entities}</span></div>
-            <div class="fc-card"><strong>Input quality</strong><span>{escaped_quality} · {word_count} words</span></div>
-            <div class="fc-card"><strong>Forecast type</strong><span>News-conditioned movement scenario</span></div>
+          <div class="fc-grid-3">
+            <div class="fc-card"><strong>Market focus</strong><span>{escaped_target_type}</span></div>
+            <div class="fc-card"><strong>Names found</strong><span>{escaped_entities}</span></div>
+            <div class="fc-card"><strong>Article length</strong><span>{escaped_quality} · {word_count} words</span></div>
           </div>
         </section>
 
         <section class="fc-panel">
-          <div class="fc-kicker">Detected Signals</div>
-          <div class="fc-section-title">What the forecast engine found in the input</div>
-          <div class="fc-grid-3">
-            <div class="fc-card">
-              <strong class="fc-good">Bullish cues</strong>
-              {_cue_list_html(bullish_cues, "No clear bullish cues detected.")}
-            </div>
-            <div class="fc-card">
-              <strong class="fc-bad">Bearish cues</strong>
-              {_cue_list_html(bearish_cues, "No clear bearish cues detected.")}
-            </div>
-            <div class="fc-card">
-              <strong class="fc-warn">Risk cues</strong>
-              {_cue_list_html(risk_cues, "No clear risk cues detected.")}
-            </div>
-          </div>
-          <div class="fc-formula">
-            Forecast pressure = sentiment signal + movement pressure + driver strength - risk pressure ± analyst adjustment.
-            Confidence decays over time and is reduced when the input is headline-only or limited.
+          <div class="fc-section-title">What the article says</div>
+          <table class="fc-table">
+            <thead><tr>
+              <th>Detected words or phrase</th>
+              <th>Signal type</th>
+              <th>Importance</th>
+              <th>How it affects the result</th>
+            </tr></thead>
+            <tbody>{evidence_table_rows}</tbody>
+          </table>
+        </section>
+
+        <section class="fc-panel">
+          <div class="fc-section-title">Analysis scores</div>
+          <div class="fc-metrics">
+            <div class="fc-metric"><strong>{input_quality}</strong><span>Article quality</span></div>
+            <div class="fc-metric"><strong>{sentiment_label}</strong><span>Positive or negative tone</span></div>
+            <div class="fc-metric"><strong>{direction_label}</strong><span>Expected direction</span></div>
+            <div class="fc-metric"><strong>{risk_label}</strong><span>Risk level</span></div>
+            <div class="fc-metric"><strong>{driver_strength:.0f}</strong><span>Strength of detected signals</span></div>
+            <div class="fc-metric"><strong>{confidence}%</strong><span>Result confidence</span></div>
           </div>
         </section>
 
-        <div class="fc-metrics">
-          <div class="fc-metric"><strong>{direction_label}</strong><span>Direction forecast</span></div>
-          <div class="fc-metric"><strong>{up_prob}%</strong><span>Up probability</span></div>
-          <div class="fc-metric"><strong>{flat_prob}%</strong><span>Flat probability</span></div>
-          <div class="fc-metric"><strong>{down_prob}%</strong><span>Down probability</span></div>
-          <div class="fc-metric"><strong>{confidence}%</strong><span>Confidence today</span></div>
-        </div>
-
-        <div class="fc-metrics">
-          <div class="fc-metric"><strong>{bull_end:+.1f}%</strong><span>Bull scenario by {html.escape(_format_date(forecast_end))}</span></div>
-          <div class="fc-metric"><strong>{base_end:+.1f}%</strong><span>Base scenario by {html.escape(_format_date(forecast_end))}</span></div>
-          <div class="fc-metric"><strong>{bear_end:+.1f}%</strong><span>Bear scenario by {html.escape(_format_date(forecast_end))}</span></div>
-          <div class="fc-metric"><strong>{bull_prob}/{base_prob}/{bear_prob}</strong><span>Bull/Base/Bear probability mix</span></div>
-          <div class="fc-metric"><strong>{risk_label}</strong><span>Risk pressure</span></div>
-        </div>
+        <section class="fc-panel">
+          <div class="fc-section-title">Possible market outcomes</div>
+          <div class="fc-grid-3">
+            <div class="fc-card"><strong class="fc-good">Bull case · {bull_end:+.1f}%</strong><span>Positive article signals continue.</span></div>
+            <div class="fc-card"><strong>Base case · {base_end:+.1f}%</strong><span>The central outcome from the article.</span></div>
+            <div class="fc-card"><strong class="fc-bad">Bear case · {bear_end:+.1f}%</strong><span>Negative or risk signals become more important.</span></div>
+          </div>
+        </section>
         """,
         unsafe_allow_html=True,
     )
-
     table_rows = ""
     for row in forecast_rows:
         table_rows += (
@@ -1953,10 +2152,10 @@ def _render_forecasts_page() -> None:
     st.markdown(
         f"""
         <section class="fc-panel">
-          <div class="fc-kicker">Forecast Calendar</div>
-          <div class="fc-section-title">Dated Bull / Base / Bear movement outlook</div>
+          <div class="fc-kicker">Possible market outcomes</div>
+          <div class="fc-section-title">Possible outcomes by date</div>
           <p class="fc-copy">
-            This table makes the forecast time-based. Each row shows the expected scenario movement by a calendar date.
+            Each row shows how the Bull, Base, and Bear cases could change by that date.
           </p>
           <table class="fc-table">
             <thead>
@@ -1966,7 +2165,7 @@ def _render_forecasts_page() -> None:
                 <th>Bull</th>
                 <th>Base</th>
                 <th>Bear</th>
-                <th>Confidence</th>
+                <th>Result confidence</th>
               </tr>
             </thead>
             <tbody>
@@ -1984,19 +2183,19 @@ def _render_forecasts_page() -> None:
         signal_fig = go.Figure(
             go.Bar(
                 x=[sentiment_signal, movement_pressure, risk_pressure, driver_strength, input_quality],
-                y=["Sentiment", "Movement", "Risk", "Driver strength", "Input quality"],
+                y=["Positive or negative tone", "Expected direction", "Risk level", "Strength of detected signals", "Article quality"],
                 orientation="h",
                 hovertemplate="<b>%{y}</b><br>Score: %{x:.0f}/100<extra></extra>",
             )
         )
         signal_fig.update_layout(
-            title="Input Signal Breakdown",
+            title="Analysis scores",
             template="plotly_dark",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(15,23,42,.35)",
             height=340,
             margin=dict(l=0, r=0, t=55, b=0),
-            xaxis=dict(title="Signal score", range=[0, 100]),
+            xaxis=dict(title="Score", range=[0, 100]),
             yaxis_title="",
         )
         st.plotly_chart(signal_fig, use_container_width=True, config={"displayModeBar": False})
@@ -2028,7 +2227,7 @@ def _render_forecasts_page() -> None:
                 fill="tonexty",
                 fillcolor="rgba(34,211,238,.13)",
                 line=dict(width=0),
-                name="Heuristic uncertainty range",
+                name="Uncertainty range",
                 hoverinfo="skip",
             )
         )
@@ -2071,10 +2270,7 @@ def _render_forecasts_page() -> None:
             )
 
         fig.update_layout(
-            title=(
-                f"{horizon_days}-Day Article-Signal Scenario Projection · "
-                f"{_format_date(forecast_start)} to {_format_date(forecast_end)}"
-            ),
+            title=f"{horizon_days}-Day News-Based Market Scenarios",
             template="plotly_dark",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(15,23,42,.35)",
@@ -2092,73 +2288,47 @@ def _render_forecasts_page() -> None:
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
         st.caption(
-            "Rule-based scenario projection generated from the current article text. No live or historical "
-            "stock-price data is used. The shaded range is heuristic and is not a statistically calibrated "
-            "prediction interval."
+            "These scenarios are based only on the words and signals found in the article. "
+            "They do not use live or historical stock prices."
         )
-        with st.expander(
-            "How this projection is calculated and where the data comes from",
-            expanded=False,
-        ):
+        with st.expander("How the scenarios are created", expanded=False):
+            st.markdown(
+                """
+The page reads the current headline and article body. It looks for positive, negative, and risk language.
+
+The Bull case shows a more positive outcome. The Base case shows the central outcome. The Bear case shows a more negative outcome.
+
+The shaded area shows that results become less certain farther into the future. It is a guide only. It is not a statistical prediction range.
+                """
+            )
+
+        with st.expander("Advanced calculation details", expanded=False):
             st.markdown(
                 f"""
-### What this chart shows
+### Current calculation inputs
 
-- Bull, Base and Bear are possible article-driven scenarios.
-- Values show projected percentage movement relative to the starting point.
-- The dates run from today through the selected forecast horizon.
-- These are scenarios, not guaranteed future stock returns.
-
-### Data source
-
-- Inputs are the headline and article body currently loaded on the Forecasts page.
-- Text can come from manual entry, URL extraction or the built-in sample.
-- Bullish, bearish and risk phrases are matched using predefined regular-expression rules and fixed weights.
-- No historical prices, live prices, market volatility, trading volume or market-data API are used.
-- The displayed ticker or optional target does not affect the scenario paths.
-
-### Signals used
-
-| Signal | Current value |
+| Measure | Value |
 |---|---:|
-| Input quality | {input_quality}/100 |
-| Sentiment signal | {sentiment_signal:.1f}/100 |
-| Movement pressure | {movement_pressure:.1f}/100 |
-| Risk pressure | {risk_pressure:.1f}/100 |
-| Driver strength | {driver_strength:.1f}/100 |
-| Rule-based confidence | {confidence}% |
+| Article quality | {input_quality}/100 |
+| Positive or negative tone | {sentiment_signal:.1f}/100 |
+| Expected direction | {movement_pressure:.1f}/100 |
+| Risk level | {risk_pressure:.1f}/100 |
+| Strength of detected signals | {driver_strength:.1f}/100 |
+| Result confidence | {confidence}% |
 | Manual adjustment | {manual_adjustment:+d} |
-| Forecast horizon | {horizon_days} days |
+| Number of days | {horizon_days} |
 
-### Scenario calculation
+The base endpoint uses `forecast_pressure`, the selected horizon, and `quality_factor`. It is limited to -7.5% through +7.5%.
 
-**Base endpoint:** `base_end` is `forecast_pressure` scaled by the selected horizon and `quality_factor`, then limited to -7.5% through +7.5%.
+`forecast_pressure` combines the tone score at 0.033, direction score at 0.038, signal strength at 0.020, risk score at -0.035, and manual adjustment at 0.025.
 
-Forecast pressure combines:
+The Bull endpoint is `base_end + 1.20 + driver_strength / 42`. It is limited to -5% through +10%.
 
-- `sentiment_signal` with weight 0.033
-- `movement_pressure` with weight 0.038
-- `driver_strength` with weight 0.020
-- `risk_pressure` with negative weight 0.035
-- `manual_adjustment` with weight 0.025
+The Bear endpoint subtracts `1.45 + risk_pressure / 30 + (100 - input_quality) / 95` from the base endpoint. It is limited to -10% through +4%. The code keeps the Bear endpoint negative when needed.
 
-**Bull endpoint:** `base_end + 1.20 + driver_strength / 42`, limited to -5% through +10%.
+Each daily path moves toward its endpoint. A small deterministic sine adjustment makes the line less straight.
 
-**Bear endpoint:** `base_end` minus `1.45 + risk_pressure / 30 + (100 - input_quality) / 95`, limited to -10% through +4%. The existing calculation forces the Bear endpoint to remain negative when necessary.
-
-**Daily paths:** Each scenario moves progressively toward its endpoint and includes a small deterministic sine adjustment to make the path less linear.
-
-### Heuristic uncertainty range
-
-- `uncertainty_width = max(0.55, (100 - confidence) / 18)`
-- The range is centred around the Base path.
-- It expands gradually as the horizon increases.
-- It is not based on historical forecast errors, volatility, residuals, quantiles or an 80%/95% statistical coverage level.
-- The confidence value is itself a rule-based quality score, not a calibrated probability.
-
-### Interpretation warning
-
-This visualization is for article-intelligence scenario analysis and educational use. It is not investment advice or a statistically validated price forecast.
+The uncertainty width is `max(0.55, (100 - confidence) / 18)`. It is centred on the Base path and grows over time. It is not based on past forecast errors, market volatility, residuals, quantiles, or an 80%/95% coverage level. The confidence value is a rule-based quality score, not a calibrated probability.
                 """
             )
         col_prob, col_decay = st.columns(2)
@@ -2172,7 +2342,7 @@ This visualization is for article-intelligence scenario analysis and educational
                 )
             )
             prob_fig.update_layout(
-                title="Scenario Probability Forecast",
+                title="Chance of each outcome",
                 template="plotly_dark",
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(15,23,42,.35)",
@@ -2195,7 +2365,7 @@ This visualization is for article-intelligence scenario analysis and educational
                 )
             )
             decay_fig.update_layout(
-                title="Confidence Decay Forecast",
+                title="How confidence changes over time",
                 template="plotly_dark",
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(15,23,42,.35)",
@@ -2240,7 +2410,7 @@ This visualization is for article-intelligence scenario analysis and educational
                 ]
             )
             surface.update_layout(
-                title="Optional 3D Forecast Surface · Horizon × Market Pressure × Movement",
+                title="Extra 3D view of possible outcomes",
                 template="plotly_dark",
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(15,23,42,.35)",
@@ -2281,7 +2451,7 @@ This visualization is for article-intelligence scenario analysis and educational
                 )
             )
             risk_reward.update_layout(
-                title="Risk / Reward Scenario Matrix",
+                title="Outcome balance",
                 template="plotly_dark",
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(15,23,42,.35)",
@@ -2295,28 +2465,28 @@ This visualization is for article-intelligence scenario analysis and educational
 
         with col2:
             impact_rows = [
-                ("Bullish cue pressure", round(pos_score * 0.42, 2)),
-                ("Bearish cue pressure", round(-neg_score * 0.46, 2)),
-                ("Risk language pressure", round(-risk_score * 0.42, 2)),
-                ("Input quality support", round((input_quality - 50) / 45, 2)),
-                ("Analyst adjustment", round(manual_adjustment / 20, 2)),
+                ("Positive words", round(pos_score * 0.42, 2)),
+                ("Negative words", round(-neg_score * 0.46, 2)),
+                ("Risk words", round(-risk_score * 0.42, 2)),
+                ("Article quality", round((input_quality - 50) / 45, 2)),
+                ("Manual adjustment", round(manual_adjustment / 20, 2)),
             ]
             driver_fig = go.Figure(
                 go.Bar(
                     x=[row[1] for row in impact_rows],
                     y=[row[0] for row in impact_rows],
                     orientation="h",
-                    hovertemplate="<b>%{y}</b><br>Forecast contribution: %{x}<extra></extra>",
+                    hovertemplate="<b>%{y}</b><br>Effect on the result: %{x}<extra></extra>",
                 )
             )
             driver_fig.update_layout(
-                title="Forecast Driver Impact",
+                title="How article signals affect the result",
                 template="plotly_dark",
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(15,23,42,.35)",
                 height=430,
                 margin=dict(l=0, r=0, t=55, b=0),
-                xaxis_title="Forecast contribution",
+                xaxis_title="Effect on the result",
                 yaxis_title="",
             )
             st.plotly_chart(driver_fig, use_container_width=True, config={"displayModeBar": False})
@@ -2333,7 +2503,7 @@ This visualization is for article-intelligence scenario analysis and educational
         )
 
     except Exception as exc:
-        st.warning(f"Forecast charts could not render. Reason: {exc}")
+        st.warning(f"The charts could not be shown. Details: {exc}")
 
     if base_end >= 1.0:
         base_text = "moderate upside"
@@ -2345,45 +2515,26 @@ This visualization is for article-intelligence scenario analysis and educational
     st.markdown(
         f"""
         <section class="fc-panel">
-          <div class="fc-kicker">Scenario Interpretation</div>
+          <div class="fc-section-title">Possible market outcomes</div>
           <div class="fc-grid-3">
             <div class="fc-card">
-              <strong class="fc-good">Bull Scenario · {bull_end:+.1f}% by {html.escape(_format_date(forecast_end))}</strong>
-              <span>Upside case if detected positive cues continue and risk pressure stays contained.</span>
+              <strong class="fc-good">Bull case · {bull_end:+.1f}% by {html.escape(_format_date(forecast_end))}</strong>
+              <span>Positive signals in the article remain important.</span>
             </div>
             <div class="fc-card">
-              <strong>Base Scenario · {base_end:+.1f}% by {html.escape(_format_date(forecast_end))}</strong>
-              <span>Central case for the selected input. Current profile indicates {base_text} with {risk_label.lower()} risk pressure.</span>
+              <strong>Base case · {base_end:+.1f}% by {html.escape(_format_date(forecast_end))}</strong>
+              <span>This is the central outcome based on the current article.</span>
             </div>
             <div class="fc-card">
-              <strong class="fc-bad">Bear Scenario · {bear_end:+.1f}% by {html.escape(_format_date(forecast_end))}</strong>
-              <span>Downside case if the move fades, risk language increases, or market pressure reverses.</span>
+              <strong class="fc-bad">Bear case · {bear_end:+.1f}% by {html.escape(_format_date(forecast_end))}</strong>
+              <span>Negative or risk signals become more important.</span>
             </div>
           </div>
         </section>
 
         <section class="fc-panel">
-          <div class="fc-kicker">Forecast Method</div>
-          <div class="fc-section-title">Active engine: Financial News Stock Intelligence Scenario Forecast Layer</div>
-          <p class="fc-copy">
-            This page forecasts news-driven movement pressure. It is not mainly a historical price time-series app.
-            ARIMA, Prophet, and LSTM are useful forecasting concepts, but they are not claimed as active public-demo
-            engines here. The active page connects article language, sentiment pressure, movement pressure, risk terms,
-            input quality, dates, scenario probabilities, and explainability into Bull, Base, and Bear forecasts.
-          </p>
-        </section>
-
-        <section class="fc-panel">
-          <div class="fc-kicker">Analyst Explanation</div>
-          <div class="fc-section-title">Forecast summary</div>
-          <p class="fc-copy">
-            Selected target context: {html.escape(target_type)} ({html.escape(detected_entities)}).
-            Direction forecast is {html.escape(direction_label.lower())}, with Up / Flat / Down probabilities of
-            {up_prob}% / {flat_prob}% / {down_prob}%. The dated forecast runs from {html.escape(_format_date(forecast_start))}
-            to {html.escape(_format_date(forecast_end))}. Sentiment is {html.escape(sentiment_label.lower())},
-            risk pressure is {html.escape(risk_label.lower())}, input quality is {html.escape(input_quality_label.lower())},
-            and the base case shows {base_text}. Read this as a scenario forecast, not investment advice.
-          </p>
+          <div class="fc-section-title">Important</div>
+          <p class="fc-copy">This page shows possible outcomes based on one news article. It is not a proven stock-price forecast and is not investment advice.</p>
         </section>
         """,
         unsafe_allow_html=True,
