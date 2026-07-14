@@ -1338,6 +1338,23 @@ def _render_forecasts_page() -> None:
             body = "\n\n".join(paragraphs[:12]).strip()
 
             if not body:
+                return "We found the page, but could not find enough article text.", title, ""
+
+            return "Article text was loaded successfully.", title, body
+
+        except ImportError:
+            return "Article extraction is not available because a required application package is missing.", "", ""
+        except requests.Timeout:
+            return "The website took too long to respond.", "", ""
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code in {401, 403, 429}:
+                return "This website blocked automatic article access.", "", ""
+            return "An HTTP error stopped the article from loading.", "", ""
+        except requests.RequestException:
+            return "A network error stopped the article from loading.", "", ""
+        except Exception:
+            return "This page layout is not supported for automatic extraction.", "", ""
+            if not body:
                 return "We found the page, but could not find enough article text. Paste the article manually.", title, ""
 
             return "Article text was loaded successfully.", title, body
@@ -2549,15 +2566,13 @@ def _render_historical_intelligence_page() -> None:
     from urllib.parse import urlparse
 
     def _find_cues(text: str, cue_patterns: list[tuple[str, str, float]]) -> list[dict[str, str | float]]:
-        lowered = text.lower()
         found: list[dict[str, str | float]] = []
         seen: set[str] = set()
-
         for pattern, label, weight in cue_patterns:
-            if re.search(pattern, lowered, flags=re.IGNORECASE) and label not in seen:
-                found.append({"label": label, "weight": weight})
+            match = re.search(pattern, text, flags=re.IGNORECASE)
+            if match and label not in seen:
+                found.append({"label": label, "phrase": match.group(0), "weight": weight})
                 seen.add(label)
-
         return found
 
     def _extract_article_from_url(url: str) -> tuple[str, str, str]:
@@ -2603,74 +2618,113 @@ def _render_historical_intelligence_page() -> None:
             body = "\n\n".join(paragraphs[:12]).strip()
 
             if not body:
-                return "URL loaded, but article text could not be extracted. Paste article text manually.", title, ""
+                return "We found the page, but could not find enough article text.", title, ""
 
-            return "URL article text extracted.", title, body
+            return "Article text was loaded successfully.", title, body
 
-        except Exception as exc:
-            return f"URL extraction failed. Paste article text manually. Reason: {exc}", "", ""
+        except ImportError:
+            return "Article extraction is not available because a required application package is missing.", "", ""
+        except requests.Timeout:
+            return "The website took too long to respond.", "", ""
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code in {401, 403, 429}:
+                return "This website blocked automatic article access.", "", ""
+            return "An HTTP error stopped the article from loading.", "", ""
+        except requests.RequestException:
+            return "A network error stopped the article from loading.", "", ""
+        except Exception:
+            return "This page layout is not supported for automatic extraction.", "", ""
 
-    def _detect_target(text: str, user_target: str) -> tuple[str, str]:
-        lowered = text.lower()
-        entities: list[str] = []
+    def _detect_target(text: str, user_target: str) -> dict[str, str]:
+        def contains(term: str) -> bool:
+            return bool(re.search(rf"(?<!\w){re.escape(term)}(?!\w)", text, flags=re.IGNORECASE))
 
-        if re.search(r"\bdow\b|\bdjia\b", lowered):
-            entities.append("Dow")
-        if re.search(r"\bnasdaq\b|\bqqq\b", lowered):
-            entities.append("Nasdaq")
-        if re.search(r"\bs&p\b|\bsp500\b|\bspx\b|\bspy\b", lowered):
-            entities.append("S&P 500")
-        if re.search(r"\bchip\b|\bchips\b|\bsemiconductor\b|\bsemiconductors\b|\bnvidia\b|\bnvda\b|\bamd\b|\bintel\b", lowered):
-            entities.append("Chips / semiconductors")
-        if re.search(r"\brates?\b|\bfed\b|\binflation\b|\btreasury\b", lowered):
-            entities.append("Macro / rates")
-        if re.search(r"\bcredit\b|\bdebt\b|\bdowngrade\b|\bregulatory\b|\blawsuit\b", lowered):
-            entities.append("Credit / regulatory risk")
+        company = ""
+        ticker = ""
+        partner = ""
+        sector = ""
+        index = ""
 
-        ticker_matches = re.findall(r"\$?[A-Z]{2,5}\b", text)
-        ticker_matches = [x.replace("$", "") for x in ticker_matches if x not in {"LIVE", "CEO", "CFO", "EPS", "THE"}]
-        for ticker in ticker_matches[:4]:
-            if ticker not in entities and ticker not in {"DOW"}:
-                entities.append(ticker)
+        company_rules = [
+            ("NVIDIA Corporation", ("NVIDIA Corporation", "NVIDIA"), "NVDA", "Technology / semiconductors"),
+            ("Insulet", ("Insulet Corporation", "Insulet"), "PODD", "Healthcare / medical devices"),
+        ]
+        for company_name, names, mapped_ticker, mapped_sector in company_rules:
+            if any(contains(name) for name in sorted(names, key=len, reverse=True)):
+                company = company_name
+                ticker = mapped_ticker
+                sector = mapped_sector
+                break
+
+        known_tickers = {"PODD", "NVDA", "AMD", "INTC", "QQQ", "SPY", "SPX", "DJIA"}
+        explicit_symbols = re.findall(r"(?<![A-Za-z0-9])\$?([A-Z]{2,5})(?![A-Za-z0-9])", text)
+        explicit_symbols = [symbol for symbol in explicit_symbols if symbol in known_tickers]
+        if explicit_symbols and not ticker:
+            ticker = explicit_symbols[0]
+
+        if contains("Calm") and re.search(r"\b(partnership|partners?\s+with|collaboration|strategic\s+alliance|joint\s+initiative|launch(?:es|ed)?\s+with)\b", text, flags=re.IGNORECASE):
+            partner = "Calm"
+
+        if not sector:
+            if re.search(r"\b(medical devices?|healthcare|diabetes|insulin|omnipod)\b", text, flags=re.IGNORECASE):
+                sector = "Healthcare / medical devices"
+            elif re.search(r"\b(chips?|semiconductors?)\b", text, flags=re.IGNORECASE):
+                sector = "Technology / semiconductors"
+
+        index_rules = [("S&P 500", ("S&P 500", "S&P", "SPX", "SPY")), ("Nasdaq", ("Nasdaq", "QQQ")), ("Dow", ("Dow Jones", "DJIA", "Dow"))]
+        for index_name, names in index_rules:
+            if any(contains(name) for name in sorted(names, key=len, reverse=True)):
+                index = index_name
+                break
 
         if user_target.strip():
-            return "User-selected target", user_target.strip()
+            target_type = "User-entered target"
+            target_display = user_target.strip()
+        elif company:
+            target_type = "Company"
+            target_display = company
+        elif index:
+            target_type = "Market index"
+            target_display = index
+        elif sector:
+            target_type = "Sector"
+            target_display = sector
+        else:
+            target_type = "Not detected"
+            target_display = "Not detected"
 
-        if "Dow" in entities or "Nasdaq" in entities or "S&P 500" in entities:
-            if "Chips / semiconductors" in entities:
-                return "Broad market + sector", ", ".join(entities)
-            return "Broad market / index", ", ".join(entities)
+        return {"company": company or "Not detected", "ticker": ticker or "Not detected", "partner": partner or "Not detected", "sector": sector or "Not detected", "index": index or "Not detected", "target_type": target_type, "target_display": target_display}
 
-        if "Chips / semiconductors" in entities:
-            return "Sector / theme", ", ".join(entities)
+    def _detect_event_family(text: str) -> tuple[str, str]:
+        partnership_patterns = [
+            r"\bcustomer[-\s]+support initiative\b",
+            r"\bstrategic alliance\b",
+            r"\bjoint initiative\b",
+            r"\bpartners?\s+with\s+[A-Za-z][A-Za-z&.-]*",
+            r"\blaunch(?:es|ed)?\s+with\s+[A-Za-z][A-Za-z&.-]*",
+            r"\bpartnership\b",
+            r"\bcollaboration\b",
+        ]
+        for pattern in partnership_patterns:
+            match = re.search(pattern, text, flags=re.IGNORECASE)
+            if match:
+                return "Strategic partnership", match.group(0)
 
-        if ticker_matches:
-            return "Ticker / company", ", ".join(entities) if entities else ", ".join(ticker_matches[:4])
-
-        return "General financial news", "No specific ticker or index detected"
-
-    def _detect_event_family(text: str) -> str:
-        lowered = text.lower()
-
-        if re.search(r"\bchip\b|\bchips\b|\bsemiconductor\b|\bsemiconductors\b|\bnvidia\b|\bnvda\b|\bamd\b|\bintel\b", lowered) and re.search(r"\brebound\b|\brise\b|\brises\b|\brally\b|\bgain\b|\bjump\b", lowered):
-            return "Semiconductor rebound"
-
-        if re.search(r"\bbeat(s|ing)?\b|\bbeats?\s+estimates\b|\bearnings\s+beat\b|\bstrong\s+earnings\b", lowered):
-            return "Earnings beat"
-
-        if re.search(r"\braises?\s+guidance\b|\braised\s+guidance\b|\bguidance\s+raise\b|\boutlook\s+raised\b", lowered):
-            return "Guidance raise"
-
-        if re.search(r"\bregulatory\b|\blawsuit\b|\bprobe\b|\bcredit\b|\bdebt\b|\bdowngrade\b|\bliquidity\b", lowered):
-            return "Regulatory / credit risk"
-
-        if re.search(r"\bfed\b|\brates?\b|\binflation\b|\brecession\b|\btreasury\b|\bmacro\b", lowered):
-            return "Macro shock"
-
-        if re.search(r"\bdow\b|\bnasdaq\b|\bs&p\b|\bsp500\b|\bmarket\b", lowered) and re.search(r"\bjumps?\b|\brises?\b|\bgains?\b|\brall(y|ies|ied)\b|\bcloses?\s+above\b", lowered):
-            return "Broad market rally"
-
-        return "Broad market rally"
+        family_rules = [
+            ("Semiconductor rebound", r"\b(?:chip|chips|semiconductor|semiconductors|nvidia|nvda|amd|intel)\b", r"\b(?:rebound|rise|rises|rally|gain|jump)\b"),
+            ("Earnings beat", r"\b(?:beat(?:s|ing)?|beats?\s+estimates|earnings\s+beat|strong\s+earnings)\b", None),
+            ("Guidance raise", r"\b(?:raises?\s+guidance|raised\s+guidance|guidance\s+raise|outlook\s+raised)\b", None),
+            ("Regulatory / credit risk", r"\b(?:regulatory|lawsuit|probe|credit|debt|downgrade|liquidity)\b", None),
+            ("Macro shock", r"\b(?:fed|rates?|inflation|recession|treasury|macro)\b", None),
+            ("Broad market rally", r"\b(?:dow|nasdaq|s&p|sp500|market)\b", r"\b(?:jumps?|rises?|gains?|rall(?:y|ies|ied)|closes?\s+above)\b"),
+        ]
+        for family, primary_pattern, secondary_pattern in family_rules:
+            primary = re.search(primary_pattern, text, flags=re.IGNORECASE)
+            secondary = re.search(secondary_pattern, text, flags=re.IGNORECASE) if secondary_pattern else None
+            if primary and (secondary_pattern is None or secondary):
+                evidence = f"{primary.group(0)} / {secondary.group(0)}" if secondary else primary.group(0)
+                return family, evidence
+        return "", ""
 
     bullish_patterns = [
         (r"\bjumps?\b", "Jumps / strong upward move", 1.35),
@@ -2741,16 +2795,64 @@ def _render_historical_intelligence_page() -> None:
         "Investors pointed to stronger technology momentum, improving risk appetite, and broad-market strength."
     )
 
-    if "hi_url" not in st.session_state:
-        st.session_state.hi_url = ""
-    if "hi_headline" not in st.session_state:
-        st.session_state.hi_headline = sample_headline
-    if "hi_body" not in st.session_state:
-        st.session_state.hi_body = sample_body
-    if "hi_target" not in st.session_state:
-        st.session_state.hi_target = "Broad market"
-    if "hi_status" not in st.session_state:
-        st.session_state.hi_status = "Sample article loaded for public demo. Paste your own article or URL."
+    state_defaults = {
+        "hi_url_input": "",
+        "hi_loaded_headline": "",
+        "hi_loaded_body": "",
+        "hi_loaded_url": "",
+        "hi_manual_headline": "",
+        "hi_manual_body": "",
+        "hi_target_input": "",
+        "hi_matching_mode": "Auto-detect from article",
+        "hi_min_similarity": 60,
+        "hi_reference_outlook": "Moderately bullish",
+        "hi_workflow_state": "no_source",
+        "hi_source_type": "No source added",
+        "hi_source_url": "",
+        "hi_last_url": "",
+        "hi_extraction_status": "No article has been added.",
+        "hi_extraction_method": "Not started",
+        "hi_results_generated": False,
+        "hi_result_signature": "",
+        "hi_detected_target": "Not detected",
+        "hi_fallback_requested": False,
+    }
+    for key, default_value in state_defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = default_value
+
+    def _invalidate_results(state: str = "results_outdated") -> None:
+        if st.session_state.hi_results_generated:
+            st.session_state.hi_workflow_state = state
+        st.session_state.hi_results_generated = False
+        st.session_state.hi_result_signature = ""
+        st.session_state.hi_fallback_requested = False
+
+    def _on_manual_article_change() -> None:
+        had_results = st.session_state.hi_results_generated
+        text = f"{st.session_state.hi_manual_headline}\n{st.session_state.hi_manual_body}".strip()
+        words = len(re.findall(r"\b\w+\b", text))
+        _invalidate_results()
+        st.session_state.hi_source_type = "Pasted article"
+        st.session_state.hi_extraction_method = "Manual entry"
+        st.session_state.hi_extraction_status = "Manual article is ready." if words >= 25 else "More article text is needed."
+        st.session_state.hi_workflow_state = "results_outdated" if had_results else "manual_article_ready" if words >= 25 else "text_too_short" if text else "no_source"
+
+    def _on_settings_change() -> None:
+        had_results = st.session_state.hi_results_generated
+        _invalidate_results()
+        if had_results:
+            st.session_state.hi_workflow_state = "results_outdated"
+
+    def _load_sample_article() -> None:
+        st.session_state.hi_url_input = ""
+        st.session_state.hi_source_url = ""
+        st.session_state.hi_source_type = "Built-in sample article"
+        st.session_state.hi_extraction_method = "Built-in sample"
+        st.session_state.hi_extraction_status = "Sample article is ready."
+        st.session_state.hi_detected_target = "Not detected"
+        _invalidate_results("sample_article_ready")
+        st.session_state.hi_workflow_state = "sample_article_ready"
 
     st.markdown(
         """
@@ -2976,173 +3078,306 @@ def _render_historical_intelligence_page() -> None:
 
         <section class="hi-hero">
           <div>
-            <div class="hi-kicker">Historical Intelligence Cockpit</div>
-            <div class="hi-title">Article-Driven<br/>Comparable Events</div>
-            <div class="hi-subtitle">
-              Enter a financial news URL or paste article text. The page detects the event family,
-              target context, tone, risk cues, and then compares the article against historically similar market events.
-            </div>
-            <div class="hi-chip-row">
-              <span class="hi-chip">Article URL</span>
-              <span class="hi-chip">Paste fallback</span>
-              <span class="hi-chip">Auto event detection</span>
-              <span class="hi-chip">Similar events</span>
-              <span class="hi-chip">Market reactions</span>
-              <span class="hi-chip">Historical explanation</span>
-            </div>
+            <div class="hi-kicker">Article-driven comparison</div>
+            <div class="hi-title">Compare with Similar Past Events</div>
+            <div class="hi-subtitle">Add a financial-news article. The page identifies the type of event described in the article and compares it with curated demonstration examples.</div>
           </div>
-
           <div class="hi-engine">
-            <div class="hi-kicker">Comparable Event Engine</div>
-            <div class="hi-step"><div class="hi-num">01</div><div><strong>Read article</strong><span>URL, headline, body, optional target</span></div></div>
-            <div class="hi-step"><div class="hi-num">02</div><div><strong>Detect event family</strong><span>Semis, market rally, earnings, macro, credit risk</span></div></div>
-            <div class="hi-step"><div class="hi-num">03</div><div><strong>Match comparable events</strong><span>Only same-family or explicitly selected event group</span></div></div>
-            <div class="hi-step"><div class="hi-num">04</div><div><strong>Measure reaction windows</strong><span>1D, 3D, 7D, 14D, 30D movement</span></div></div>
-            <div class="hi-step"><div class="hi-num">05</div><div><strong>Explain context</strong><span>Why these events matched and what history suggests</span></div></div>
+            <div class="hi-kicker">Important</div>
+            <p class="hi-copy">This page uses a small set of curated demonstration examples. It does not search a live historical-events or stock-price database.</p>
           </div>
         </section>
         """,
         unsafe_allow_html=True,
     )
 
-    st.markdown(
-        """
-        <section class="hi-panel">
-          <div class="hi-kicker">Historical Input</div>
-          <div class="hi-section-title">Enter article source and generate comparable-event history</div>
-          <p class="hi-copy">
-            URL extraction may fail on blocked or paywalled sites. If that happens, paste the headline and article body manually.
-            Public demo mode uses curated comparable-event examples and does not claim live historical database retrieval yet.
-          </p>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown('<section class="hi-panel"><div class="hi-section-title">Add an article</div><p class="hi-copy">Use a link, paste the article, or load the sample.</p></section>', unsafe_allow_html=True)
+    link_tab, paste_tab, sample_tab = st.tabs(["Use article link", "Paste article", "Use sample article"])
 
-    input_left, input_right = st.columns([1.18, .82])
+    with link_tab:
+        with st.form("hi_url_form"):
+            article_url = st.text_input("Article URL", key="hi_url_input")
+            extract_submitted = st.form_submit_button("Get article text", use_container_width=True)
 
-    with input_left:
-        url_value = st.text_input("Article URL", value=st.session_state.hi_url, placeholder="https://...")
-        target_hint = st.text_input(
-            "Optional ticker / index / sector",
-            value=st.session_state.hi_target,
-            placeholder="Examples: NVDA, Nasdaq, Dow, S&P 500, Semiconductors, Broad market",
+        if extract_submitted:
+            current_url = article_url.strip()
+            st.session_state.hi_loaded_headline = ""
+            st.session_state.hi_loaded_body = ""
+            st.session_state.hi_loaded_url = current_url
+            st.session_state.hi_source_url = current_url
+            st.session_state.hi_last_url = current_url
+            st.session_state.hi_detected_target = "Not detected"
+            _invalidate_results("loading_article")
+            if not current_url:
+                st.session_state.hi_source_type = "No source added"
+                st.session_state.hi_extraction_method = "Not started"
+                st.session_state.hi_extraction_status = "Add an article link before loading article text."
+                st.session_state.hi_workflow_state = "extraction_failed"
+            else:
+                st.session_state.hi_source_type = "Article link"
+                st.session_state.hi_extraction_status = "Loading article text..."
+                st.session_state.hi_workflow_state = "loading_article"
+                with st.spinner("Loading article text..."):
+                    status, fetched_headline, fetched_body = _extract_article_from_url(current_url)
+                if fetched_body:
+                    st.session_state.hi_loaded_headline = fetched_headline
+                    st.session_state.hi_loaded_body = fetched_body
+                    st.session_state.hi_extraction_method = "Automatic article extraction"
+                    st.session_state.hi_extraction_status = "Article text was loaded successfully."
+                    st.session_state.hi_workflow_state = "extraction_successful"
+                else:
+                    st.session_state.hi_extraction_method = "Automatic extraction failed"
+                    st.session_state.hi_extraction_status = status
+                    st.session_state.hi_workflow_state = "extraction_failed"
+        elif (
+            article_url.strip() != st.session_state.hi_loaded_url
+            and st.session_state.hi_source_type in {"No source added", "Article link"}
+        ):
+            st.session_state.hi_source_url = article_url.strip()
+            st.session_state.hi_source_type = "Article link" if article_url.strip() else "No source added"
+            st.session_state.hi_extraction_status = "Article link added. Select 'Get article text' to load the article." if article_url.strip() else "No article has been added."
+            st.session_state.hi_workflow_state = "url_entered_not_loaded" if article_url.strip() else "no_source"
+            _invalidate_results(st.session_state.hi_workflow_state)
+
+        if st.session_state.hi_workflow_state == "extraction_successful" and article_url.strip() == st.session_state.hi_loaded_url:
+            st.success(st.session_state.hi_extraction_status)
+        elif st.session_state.hi_workflow_state == "extraction_failed" and article_url.strip() == st.session_state.hi_loaded_url:
+            st.error(st.session_state.hi_extraction_status)
+            st.info("You can still use this article by opening the Paste article tab and adding the headline and article text.")
+        elif article_url.strip() and article_url.strip() != st.session_state.hi_loaded_url:
+            st.info("Article link added. Select 'Get article text' to load the article.")
+
+    with paste_tab:
+        st.text_input("Article headline", key="hi_manual_headline", on_change=_on_manual_article_change)
+        st.text_area("Article body", key="hi_manual_body", height=145, on_change=_on_manual_article_change)
+
+    with sample_tab:
+        st.write("Load a built-in example to see how the page works.")
+        st.button("Load sample article", key="hi_load_sample", type="secondary", use_container_width=True, on_click=_load_sample_article)
+
+    control_left, control_right = st.columns(2)
+    with control_left:
+        st.text_input(
+            "Optional ticker, index, or sector", key="hi_target_input",
+            help="The target is displayed as context. It does not currently change the demonstration-event selection.",
+            on_change=_on_settings_change,
         )
-        headline = st.text_input("Article headline", value=st.session_state.hi_headline)
-        article_body = st.text_area("Article body or summary", value=st.session_state.hi_body, height=145)
-
-    with input_right:
-        event_choice = st.selectbox(
-            "Event matching mode",
-            [
-                "Auto-detect from article",
-                "Semiconductor rebound",
-                "Broad market rally",
-                "Earnings beat",
-                "Guidance raise",
-                "Macro shock",
-                "Regulatory / credit risk",
-                "All comparable events",
-            ],
-            index=0,
+        st.selectbox(
+            "Type of event to compare",
+            ["Auto-detect from article", "Semiconductor rebound", "Broad market rally", "Earnings beat", "Guidance raise", "Macro shock", "Regulatory / credit risk", "All comparable events"],
+            key="hi_matching_mode", on_change=_on_settings_change,
         )
-        min_similarity = st.slider("Minimum similarity", min_value=50, max_value=95, value=60, step=1)
-        current_path = st.selectbox("Current forecast path", ["Moderately bullish", "Neutral / mixed", "Bearish risk"], index=0)
+    with control_right:
+        st.slider("Minimum demonstration match", 50, 95, step=1, key="hi_min_similarity", on_change=_on_settings_change)
+        st.selectbox(
+            "Reference outlook line", ["Moderately bullish", "Neutral / mixed", "Bearish risk"],
+            key="hi_reference_outlook",
+            help="The reference outlook line is shown on the chart for comparison. It does not change which examples are selected.",
+            on_change=_on_settings_change,
+        )
 
-        fetch_clicked = st.button("Extract URL text", type="secondary", use_container_width=True)
-        sample_clicked = st.button("Load sample article", type="secondary", use_container_width=True)
-        generate_clicked = st.button("Generate historical match", type="primary", use_container_width=True)
+    source_type = st.session_state.hi_source_type
+    if (
+        source_type == "Article link"
+        and st.session_state.hi_workflow_state == "extraction_successful"
+        and article_url.strip() == st.session_state.hi_loaded_url
+    ):
+        active_headline = st.session_state.hi_loaded_headline
+        active_body = st.session_state.hi_loaded_body
+    elif source_type == "Pasted article":
+        active_headline = st.session_state.hi_manual_headline
+        active_body = st.session_state.hi_manual_body
+    elif source_type == "Built-in sample article":
+        active_headline = sample_headline
+        active_body = sample_body
+    else:
+        active_headline = ""
+        active_body = ""
 
-    if fetch_clicked:
-        status, fetched_headline, fetched_body = _extract_article_from_url(url_value)
-        st.session_state.hi_url = url_value
-        st.session_state.hi_status = status
-        if fetched_headline:
-            st.session_state.hi_headline = fetched_headline
-        if fetched_body:
-            st.session_state.hi_body = fetched_body
-        st.rerun()
-
-    if sample_clicked:
-        st.session_state.hi_url = ""
-        st.session_state.hi_headline = sample_headline
-        st.session_state.hi_body = sample_body
-        st.session_state.hi_target = "Broad market"
-        st.session_state.hi_status = "Sample article loaded for public demo."
-        st.rerun()
-
-    st.session_state.hi_url = url_value
-    st.session_state.hi_headline = headline
-    st.session_state.hi_body = article_body
-    st.session_state.hi_target = target_hint
-
+    headline = active_headline
+    article_body = active_body
+    target_hint = st.session_state.hi_target_input
+    event_choice = st.session_state.hi_matching_mode
+    min_similarity = st.session_state.hi_min_similarity
+    current_path = st.session_state.hi_reference_outlook
     full_text = f"{headline}\n{article_body}".strip()
     word_count = len(re.findall(r"\b\w+\b", full_text))
-
-    bullish_cues = _find_cues(full_text, bullish_patterns)
-    bearish_cues = _find_cues(full_text, bearish_patterns)
-    risk_cues = _find_cues(full_text, risk_patterns)
-
-    detected_family = _detect_event_family(full_text)
-    selected_family = detected_family if event_choice == "Auto-detect from article" else event_choice
-    target_type, detected_entities = _detect_target(full_text, target_hint)
-
-    if not full_text:
-        input_quality = "Missing"
-    elif word_count < 25:
-        input_quality = "Headline-only / limited"
-    elif word_count < 120:
-        input_quality = "Moderate"
+    content_ready = word_count >= 25
+    if content_ready:
+        detected_family, event_evidence = _detect_event_family(full_text)
+        detected_entities = _detect_target(full_text, target_hint)
     else:
-        input_quality = "Strong"
-
-    def _cue_list_html(cues: list[dict[str, str | float]], empty_text: str) -> str:
-        if not cues:
-            return f"<span>{html.escape(empty_text)}</span>"
-        items = "".join(f"<li>{html.escape(str(c['label']))}</li>" for c in cues[:6])
-        return f"<ul>{items}</ul>"
-
-    st.markdown(
-        f"""
-        <section class="hi-panel">
-          <div class="hi-kicker">Current Article Signal</div>
-          <div class="hi-section-title">What the historical engine detected</div>
-          <div class="hi-grid-4">
-            <div class="hi-card"><strong>Detected event family</strong><span>{html.escape(detected_family)}</span></div>
-            <div class="hi-card"><strong>Selected match group</strong><span>{html.escape(selected_family)}</span></div>
-            <div class="hi-card"><strong>Target context</strong><span>{html.escape(target_type)} · {html.escape(detected_entities)}</span></div>
-            <div class="hi-card"><strong>Input quality</strong><span>{html.escape(input_quality)} · {word_count} words</span></div>
-          </div>
-          <div class="hi-grid-3">
-            <div class="hi-card"><strong class="hi-good">Bullish cues</strong>{_cue_list_html(bullish_cues, "No clear bullish cues detected.")}</div>
-            <div class="hi-card"><strong class="hi-bad">Bearish cues</strong>{_cue_list_html(bearish_cues, "No clear bearish cues detected.")}</div>
-            <div class="hi-card"><strong class="hi-warn">Risk cues</strong>{_cue_list_html(risk_cues, "No clear risk cues detected.")}</div>
-          </div>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
+        detected_family, event_evidence = "", ""
+        detected_entities = {"company": "Not detected", "ticker": "Not detected", "partner": "Not detected", "sector": "Not detected", "index": "Not detected", "target_type": "Not detected", "target_display": "Not detected"}
+    selected_family = detected_family if event_choice == "Auto-detect from article" else event_choice
+    st.session_state.hi_detected_target = detected_entities["target_display"]
+    signature = "|".join([full_text, target_hint.strip(), event_choice, str(min_similarity), current_path])
 
     if selected_family == "All comparable events":
-        filtered = [row for row in comparable_events if row["similarity"] >= min_similarity]
+        group_events = comparable_events
     else:
-        filtered = [row for row in comparable_events if row["family"] == selected_family and row["similarity"] >= min_similarity]
+        group_events = [row for row in comparable_events if row["family"] == selected_family]
+    filtered = [row for row in group_events if row["similarity"] >= min_similarity]
+    comparison_available = bool(content_ready and selected_family and filtered)
+    no_exact_family_examples = bool(content_ready and selected_family and not group_events)
+    ranked_available = sorted(comparable_events, key=lambda row: row["similarity"], reverse=True)
+    fallback_above_threshold = [row for row in ranked_available if row["similarity"] >= min_similarity]
+    if len(fallback_above_threshold) >= 3:
+        fallback_events = fallback_above_threshold[:5]
+    elif fallback_above_threshold:
+        fallback_events = fallback_above_threshold + [
+            row for row in ranked_available if row["similarity"] < min_similarity
+        ][:3 - len(fallback_above_threshold)]
+    else:
+        fallback_events = ranked_available[:3]
+    fallback_below_threshold = any(row["similarity"] < min_similarity for row in fallback_events)
+
+    bullish_cues = _find_cues(full_text, bullish_patterns) if content_ready else []
+    bearish_cues = _find_cues(full_text, bearish_patterns) if content_ready else []
+    risk_cues = _find_cues(full_text, risk_patterns) if content_ready else []
+    evidence: list[dict[str, str]] = []
+    seen_phrases: set[str] = set()
+
+    def _add_evidence(phrase: str, meaning: str, effect: str) -> None:
+        normalized = phrase.strip().lower()
+        if phrase.strip() and normalized not in seen_phrases:
+            evidence.append({"Detected phrase": phrase.strip(), "What it means": meaning, "How it affects comparison": effect})
+            seen_phrases.add(normalized)
+
+    if event_evidence:
+        _add_evidence(event_evidence, detected_family, "Supports this event type")
+    if detected_family == "Strategic partnership":
+        for pattern, meaning in [
+            (r"\bcollection of mindfulness tools\b", "Partnership offering"),
+            (r"\bwill roll out globally\b", "Planned global rollout"),
+            (r"\bpartnership\b", "Partnership language"),
+            (r"\bpartners?\s+with\s+[A-Za-z][A-Za-z&.-]*", "Named partnership"),
+        ]:
+            match = re.search(pattern, full_text, flags=re.IGNORECASE)
+            if match:
+                _add_evidence(match.group(0), meaning, "Adds context to the detected event")
+    for cue in bullish_cues:
+        _add_evidence(str(cue["phrase"]), str(cue["label"]), "Supports a positive tone")
+    for cue in bearish_cues:
+        _add_evidence(str(cue["phrase"]), str(cue["label"]), "Supports a negative tone")
+    for cue in risk_cues:
+        _add_evidence(str(cue["phrase"]), str(cue["label"]), "Increases risk")
+
+    if st.session_state.hi_results_generated and st.session_state.hi_result_signature != signature:
+        _invalidate_results()
+
+    if full_text and not content_ready:
+        st.warning("Add more article text before comparing it with past examples.")
+    if content_ready and not detected_family and event_choice == "Auto-detect from article":
+        st.warning("We found possible event signals, but could not confidently choose a comparison group.")
+
+    compare_clicked = st.button(
+        "Compare with past examples",
+        disabled=not comparison_available,
+        type="primary",
+        use_container_width=True,
+        key="hi_compare_main",
+    )
+    if compare_clicked and comparison_available:
+        st.session_state.hi_results_generated = True
+        st.session_state.hi_result_signature = signature
+        st.session_state.hi_workflow_state = "comparison_results_generated"
+
+    if not content_ready:
+        return
+
+    st.markdown("### What will be analyzed")
+    source_url = st.session_state.hi_source_url or "Not used"
+    summary_rows = {
+        "Input source": st.session_state.hi_source_type,
+        "Source URL": source_url,
+        "Article headline": headline or "Not provided",
+        "Article word count": str(word_count),
+        "User-entered target": target_hint or "Not provided — context only",
+        "Detected company": detected_entities["company"],
+        "Detected ticker": detected_entities["ticker"],
+        "Detected partner": detected_entities["partner"],
+        "Detected sector": detected_entities["sector"],
+        "Detected index": detected_entities["index"],
+        "Matching mode": event_choice,
+        "Minimum match quality": f"{min_similarity}%",
+        "Reference outlook": f"{current_path} — chart only",
+        "Extraction status": st.session_state.hi_extraction_status,
+    }
+    st.markdown("\n".join(f"- **{label}:** {value}" for label, value in summary_rows.items()))
+    with st.expander("View the article text being analyzed", expanded=False):
+        st.markdown(f"**Headline:** {headline or 'Not provided'}")
+        st.write(article_body)
+
+    st.markdown("### What the article says")
+    st.markdown(
+        f"- **Detected event type:** {detected_family or 'Not clearly detected'}\n"
+        f"- **Selected event type:** {selected_family or 'Not selected'}\n"
+        f"- **Detected company:** {detected_entities['company']}\n"
+        f"- **Detected ticker:** {detected_entities['ticker']}\n"
+        f"- **Detected partner:** {detected_entities['partner']}\n"
+        f"- **Detected sector:** {detected_entities['sector']}\n"
+        f"- **Evidence phrase:** {event_evidence or 'Not found'}"
+    )
+    if evidence:
+        st.dataframe(evidence, use_container_width=True, hide_index=True)
+    else:
+        st.info("No matching event, tone, or risk phrases were detected.")
+
+    fallback_mode = no_exact_family_examples and st.session_state.hi_fallback_requested
+    if no_exact_family_examples:
+        st.warning(
+            f"No exact {selected_family} examples are available in the demonstration dataset. "
+            "The charts below use the closest available examples from other event types for general context."
+        )
+        st.info("These are approximate comparisons and should not be treated as same-event historical evidence.")
+        fallback_left, fallback_right = st.columns(2)
+        with fallback_left:
+            show_fallback = st.button(
+                "Show closest available examples", type="primary",
+                use_container_width=True, key="hi_show_fallback",
+            )
+        with fallback_right:
+            choose_event = st.button(
+                "Choose another event type", use_container_width=True, key="hi_choose_event",
+            )
+        if show_fallback:
+            st.session_state.hi_fallback_requested = True
+            st.session_state.hi_results_generated = True
+            st.session_state.hi_result_signature = signature
+            st.session_state.hi_workflow_state = "fallback_results_generated"
+            fallback_mode = True
+        if choose_event:
+            _invalidate_results("choose_event_type")
+            st.info("Use the 'Type of event to compare' selector above to choose a genuinely relevant event type.")
+            return
+        if not fallback_mode:
+            return
+        filtered = fallback_events
+
+    results_ready = (
+        content_ready
+        and st.session_state.hi_results_generated
+        and st.session_state.hi_result_signature == signature
+    )
+    if not results_ready:
+        st.info("The article is ready. Select 'Compare with past examples' to see the results.")
+        compare_ready_clicked = st.button(
+            "Compare with past examples",
+            disabled=not comparison_available,
+            type="primary",
+            use_container_width=True,
+            key="hi_compare_ready",
+        )
+        if compare_ready_clicked and comparison_available:
+            st.session_state.hi_results_generated = True
+            st.session_state.hi_result_signature = signature
+            st.session_state.hi_workflow_state = "comparison_results_generated"
+        else:
+            return
 
     if not filtered:
-        st.markdown(
-            f"""
-            <section class="hi-panel">
-              <div class="hi-kicker">No Strong Comparable Events Found</div>
-              <div class="hi-section-title">No same-family events match the current threshold</div>
-              <p class="hi-copy">
-                Selected match group: {html.escape(selected_family)}. Minimum similarity: {min_similarity}%.
-                Lower the similarity threshold or choose “All comparable events” to broaden the search.
-                The page does not silently replace missing results with unrelated events.
-              </p>
-            </section>
-            """,
-            unsafe_allow_html=True,
-        )
+        st.warning("No curated examples meet the selected minimum match. Lower the setting or choose another event type.")
         return
 
     count = len(filtered)
@@ -3151,246 +3386,85 @@ def _render_historical_intelligence_page() -> None:
     best_7d = round(max(row["d7"] for row in filtered), 2)
     worst_7d = round(min(row["d7"] for row in filtered), 2)
     avg_similarity = round(statistics.mean(row["similarity"] for row in filtered))
+    best_similarity = max(row["similarity"] for row in filtered)
     positive_rate = round(sum(1 for row in filtered if row["d7"] > 0) * 100 / count)
 
-    st.markdown(
-        f"""
-        <div class="hi-metrics">
-          <div class="hi-metric"><strong>{count}</strong><span>same-family comparable events</span></div>
-          <div class="hi-metric"><strong>{avg_7d:+.1f}%</strong><span>average 7D reaction</span></div>
-          <div class="hi-metric"><strong>{best_7d:+.1f}%</strong><span>best 7D move</span></div>
-          <div class="hi-metric"><strong>{worst_7d:+.1f}%</strong><span>worst 7D move</span></div>
-          <div class="hi-metric"><strong>{positive_rate}%</strong><span>positive 7D rate</span></div>
-        </div>
+    st.markdown("### Closest available examples" if fallback_mode else "### Similar past examples")
+    st.warning("Comparison source: Curated demonstration examples")
+    if fallback_mode:
+        included_families = ", ".join(sorted({row["family"] for row in filtered}))
+        st.markdown(
+            f"- **Detected event type:** {detected_family}\n"
+            f"- **Exact same-event examples:** 0\n"
+            f"- **Closest available examples shown:** {count}\n"
+            f"- **Best available demonstration match:** {best_similarity}%\n"
+            f"- **Event types included:** {included_families}\n"
+            f"- **Minimum threshold requested:** {min_similarity}%\n"
+            f"- **Fallback went below the threshold:** {'Yes' if fallback_below_threshold else 'No'}"
+        )
+    else:
+        st.markdown(
+            f"**{len(comparable_events)}** total demonstration examples · **{len(group_events)}** in this event group · "
+            f"**{count}** pass the filter · **{best_similarity}%** best preassigned match · **{avg_similarity}%** average preassigned match"
+        )
 
-        <section class="hi-panel">
-          <div class="hi-kicker">Why These Events Matched</div>
-          <div class="hi-grid-4">
-            <div class="hi-card"><strong>Event family match</strong><span>{html.escape(selected_family)}</span></div>
-            <div class="hi-card"><strong>Average similarity</strong><span>{avg_similarity}% comparable-event match confidence</span></div>
-            <div class="hi-card"><strong>Average 30D reaction</strong><span>{avg_30d:+.1f}% after similar events</span></div>
-            <div class="hi-card"><strong>Current forecast path</strong><span>{html.escape(current_path)} reference path</span></div>
-          </div>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
+    table_data = [{
+        "Date": row["date"], "Past example": row["event"], "Target": row["target"],
+        "Relationship to current article": "Different event type — approximate comparison" if fallback_mode else "Same event type",
+        "Demonstration match": f'{row["similarity"]}%', "1-day move": f'{row["d1"]:+.1f}%',
+        "7-day move": f'{row["d7"]:+.1f}%', "30-day move": f'{row["d30"]:+.1f}%', "Market setting": row["regime"],
+    } for row in sorted(filtered, key=lambda item: item["similarity"], reverse=True)]
+    st.dataframe(table_data, use_container_width=True, hide_index=True)
+    st.caption("Dates and returns shown here are curated demonstration values stored in the application. They are not retrieved from a live market-data service.")
 
     try:
         import plotly.graph_objects as go
-
         windows = ["Day 0", "1D", "3D", "7D", "14D", "30D"]
         avg_line = [0, statistics.mean(row["d1"] for row in filtered), statistics.mean(row["d3"] for row in filtered), statistics.mean(row["d7"] for row in filtered), statistics.mean(row["d14"] for row in filtered), statistics.mean(row["d30"] for row in filtered)]
         best_line = [0, max(row["d1"] for row in filtered), max(row["d3"] for row in filtered), max(row["d7"] for row in filtered), max(row["d14"] for row in filtered), max(row["d30"] for row in filtered)]
         worst_line = [0, min(row["d1"] for row in filtered), min(row["d3"] for row in filtered), min(row["d7"] for row in filtered), min(row["d14"] for row in filtered), min(row["d30"] for row in filtered)]
-
-        if current_path == "Moderately bullish":
-            current_line = [0, .8, 1.5, 2.6, 3.4, 4.2]
-        elif current_path == "Bearish risk":
-            current_line = [0, -.4, -1.0, -1.8, -2.4, -3.2]
-        else:
-            current_line = [0, .2, .3, .5, .7, .9]
-
+        current_line = [0, .8, 1.5, 2.6, 3.4, 4.2] if current_path == "Moderately bullish" else [0, -.4, -1.0, -1.8, -2.4, -3.2] if current_path == "Bearish risk" else [0, .2, .3, .5, .7, .9]
         timeline = go.Figure()
         timeline.add_trace(go.Scatter(x=windows, y=best_line, mode="lines+markers", name="Best comparable reaction", line=dict(width=3)))
         timeline.add_trace(go.Scatter(x=windows, y=avg_line, mode="lines+markers", name="Average comparable reaction", line=dict(width=5)))
         timeline.add_trace(go.Scatter(x=windows, y=worst_line, mode="lines+markers", name="Worst comparable reaction", line=dict(width=3)))
-        timeline.add_trace(go.Scatter(x=windows, y=current_line, mode="lines+markers", name="Current forecast reference", line=dict(width=4, dash="dash")))
-        timeline.update_layout(
-            title="Historical Reaction Timeline · Same-Family Comparable Events",
-            template="plotly_dark",
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(15,23,42,.35)",
-            height=460,
-            margin=dict(l=0, r=0, t=55, b=0),
-            xaxis_title="Reaction window",
-            yaxis_title="Movement %",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        )
+        timeline.add_trace(go.Scatter(x=windows, y=current_line, mode="lines+markers", name="Reference outlook line", line=dict(width=4, dash="dash")))
+        timeline.update_layout(title="Closest Available Demonstration Examples — Reaction Paths" if fallback_mode else "Reaction paths in the curated examples", template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(15,23,42,.35)", height=460, margin=dict(l=0,r=0,t=55,b=0), xaxis_title="Reaction window", yaxis_title="Movement %", legend=dict(orientation="h",yanchor="bottom",y=1.02,xanchor="right",x=1))
         st.plotly_chart(timeline, use_container_width=True, config={"displayModeBar": False})
 
-        st.markdown(
-            """
-            <div class="hi-explain">
-              <strong>How to read this chart:</strong>
-              the average line shows the typical same-family reaction after similar events. Best and worst lines show historical range.
-              The dashed line compares the current forecast path against those historical outcomes.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        if avg_7d > 1.0 and positive_rate >= 60:
+            conclusion = "These curated examples mostly show positive short-term movement. This does not predict what the current article will cause."
+        elif avg_7d < -1.0:
+            conclusion = "These curated examples mostly show weak short-term movement. This does not predict what the current article will cause."
+        else:
+            conclusion = "These curated examples show mixed short-term movement. Treat the comparison as context, not a forecast."
+        st.info(conclusion)
 
-        col1, col2 = st.columns(2)
-
-        with col1:
-            scatter = go.Figure()
-            scatter.add_trace(
-                go.Scatter(
-                    x=[row["similarity"] for row in filtered],
-                    y=[row["d7"] for row in filtered],
-                    mode="markers",
-                    marker=dict(
-                        size=[max(10, row["vol"] * 2.0) for row in filtered],
-                        opacity=.88,
-                        line=dict(width=1, color="rgba(255,255,255,.35)"),
-                    ),
-                    text=[row["event"] for row in filtered],
-                    customdata=[row["regime"] for row in filtered],
-                    hovertemplate="<b>%{text}</b><br>Similarity: %{x}%<br>7D reaction: %{y}%<br>Regime: %{customdata}<extra></extra>",
-                )
-            )
-            scatter.update_layout(
-                title="Similar Event Scatter Map",
-                template="plotly_dark",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(15,23,42,.35)",
-                height=400,
-                margin=dict(l=0, r=0, t=55, b=0),
-                xaxis=dict(title="Similarity score", range=[45, 100]),
-                yaxis_title="7D reaction %",
-                showlegend=False,
-            )
-            st.plotly_chart(scatter, use_container_width=True, config={"displayModeBar": False})
-
-        with col2:
-            distribution = go.Figure()
-            distribution.add_trace(go.Histogram(x=[row["d7"] for row in filtered], nbinsx=8))
-            distribution.update_layout(
-                title="Historical 7D Return Distribution",
-                template="plotly_dark",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(15,23,42,.35)",
-                height=400,
-                margin=dict(l=0, r=0, t=55, b=0),
-                xaxis_title="7D movement %",
-                yaxis_title="Comparable event count",
-            )
+        why_tab, return_tab, risk_tab, charts_tab, method_tab = st.tabs(["Why these matched", "Return range", "Risk comparison", "More charts", "How the comparison works"])
+        with why_tab:
+            st.markdown("### Why these examples were selected")
+            st.markdown(f"- Event type selects the group: **{selected_family}**.\n- The minimum setting filters the preassigned demonstration score.\n- The target is context only.\n- Article tone, risk, and market setting explain the article but do not calculate the score.")
+        with return_tab:
+            distribution = go.Figure(go.Histogram(x=[row["d7"] for row in filtered], nbinsx=8))
+            distribution.update_layout(title="Closest Available Demonstration Examples — 7-Day Move Range" if fallback_mode else "7-day move range", template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(15,23,42,.35)", height=400, xaxis_title="7-day movement %", yaxis_title="Example count")
             st.plotly_chart(distribution, use_container_width=True, config={"displayModeBar": False})
-
-        col3, col4 = st.columns(2)
-
-        with col3:
-            match_breakdown = go.Figure(
-                go.Bar(
-                    x=[34, 23, 18, 14, 11],
-                    y=["Event family", "Sentiment tone", "Target / sector", "Risk profile", "Market regime"],
-                    orientation="h",
-                )
-            )
-            match_breakdown.update_layout(
-                title="Comparable Match Breakdown",
-                template="plotly_dark",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(15,23,42,.35)",
-                height=380,
-                margin=dict(l=0, r=0, t=55, b=0),
-                xaxis_title="Contribution %",
-                yaxis_title="",
-            )
-            st.plotly_chart(match_breakdown, use_container_width=True, config={"displayModeBar": False})
-
-        with col4:
-            risk_return = go.Figure()
-            risk_return.add_trace(
-                go.Scatter(
-                    x=[row["risk"] for row in filtered],
-                    y=[row["d30"] for row in filtered],
-                    mode="markers",
-                    marker=dict(
-                        size=[max(10, row["similarity"] / 4.5) for row in filtered],
-                        opacity=.88,
-                        line=dict(width=1, color="rgba(255,255,255,.35)"),
-                    ),
-                    text=[row["target"] for row in filtered],
-                    hovertemplate="<b>%{text}</b><br>Risk pressure: %{x}<br>30D reaction: %{y}%<extra></extra>",
-                )
-            )
-            risk_return.update_layout(
-                title="Risk Pressure vs 30D Reaction",
-                template="plotly_dark",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(15,23,42,.35)",
-                height=380,
-                margin=dict(l=0, r=0, t=55, b=0),
-                xaxis=dict(title="Risk pressure", range=[20, 90]),
-                yaxis_title="30D movement %",
-                showlegend=False,
-            )
+        with risk_tab:
+            risk_return = go.Figure(go.Scatter(x=[row["risk"] for row in filtered], y=[row["d30"] for row in filtered], mode="markers", marker=dict(size=[max(10,row["similarity"]/4.5) for row in filtered],opacity=.88,line=dict(width=1,color="rgba(255,255,255,.35)")), text=[row["target"] for row in filtered], hovertemplate="<b>%{text}</b><br>Risk pressure: %{x}<br>30-day move: %{y}%<extra></extra>"))
+            risk_return.update_layout(title="Closest Available Demonstration Examples — Risk and 30-Day Move" if fallback_mode else "Risk pressure and 30-day move", template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(15,23,42,.35)", height=380, xaxis=dict(title="Risk pressure",range=[20,90]), yaxis_title="30-day movement %", showlegend=False)
             st.plotly_chart(risk_return, use_container_width=True, config={"displayModeBar": False})
-
+        with charts_tab:
+            scatter = go.Figure(go.Scatter(x=[row["similarity"] for row in filtered], y=[row["d7"] for row in filtered], mode="markers", marker=dict(size=[max(10,row["vol"]*2.0) for row in filtered],opacity=.88,line=dict(width=1,color="rgba(255,255,255,.35)")), text=[row["event"] for row in filtered], customdata=[row["regime"] for row in filtered], hovertemplate="<b>%{text}</b><br>Demonstration match: %{x}%<br>7-day move: %{y}%<br>Market setting: %{customdata}<extra></extra>"))
+            scatter.update_layout(title="Closest Available Demonstration Examples — Match and 7-Day Move" if fallback_mode else "Demonstration match and 7-day move",template="plotly_dark",paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(15,23,42,.35)",height=400,xaxis=dict(title="Demonstration match",range=[45,100]),yaxis_title="7-day movement %",showlegend=False)
+            st.plotly_chart(scatter, use_container_width=True, config={"displayModeBar": False})
+        with method_tab:
+            st.markdown("### How the comparison works")
+            st.markdown("Event type determines the comparison group. The minimum-match setting filters the preassigned demonstration score. The optional target provides context only. The reference outlook changes only the dashed line.")
+            breakdown = go.Figure(go.Bar(x=[34,23,18,14,11], y=["Event family","Sentiment tone","Target / sector","Risk profile","Market regime"], orientation="h"))
+            breakdown.update_layout(title="Closest Available Demonstration Examples — Illustrative Comparison Factors" if fallback_mode else "Illustrative comparison factors",template="plotly_dark",paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(15,23,42,.35)",height=380,xaxis_title="Illustrative contribution %",yaxis_title="")
+            st.plotly_chart(breakdown, use_container_width=True, config={"displayModeBar": False})
+            st.caption("These percentages explain the intended comparison framework. They are not currently used to calculate the demonstration match score.")
     except Exception as exc:
-        st.warning(f"Historical Intelligence charts could not render. Reason: {exc}")
-
-    table_rows = ""
-    for row in sorted(filtered, key=lambda item: item["similarity"], reverse=True):
-        table_rows += (
-            "<tr>"
-            f"<td>{html.escape(row['date'])}</td>"
-            f"<td>{html.escape(row['event'])}</td>"
-            f"<td>{html.escape(row['target'])}</td>"
-            f"<td>{row['similarity']}%</td>"
-            f"<td>{row['d1']:+.1f}%</td>"
-            f"<td>{row['d7']:+.1f}%</td>"
-            f"<td>{row['d30']:+.1f}%</td>"
-            f"<td>{html.escape(row['regime'])}</td>"
-            "</tr>"
-        )
-
-    if avg_7d > 1.0 and positive_rate >= 60:
-        historical_read = "historically supportive"
-        guidance = "Similar same-family events usually produced positive short-term follow-through."
-    elif avg_7d < -1.0:
-        historical_read = "historically cautious"
-        guidance = "Similar same-family events often produced weak or negative short-term reactions."
-    else:
-        historical_read = "historically mixed"
-        guidance = "Similar same-family events produced uneven reactions, so the current signal should be treated carefully."
-
-    st.markdown(
-        f"""
-        <section class="hi-panel">
-          <div class="hi-kicker">Comparable Events Table</div>
-          <div class="hi-section-title">Historical cases selected by same-family similarity and context</div>
-          <table class="hi-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Event</th>
-                <th>Target</th>
-                <th>Similarity</th>
-                <th>1D</th>
-                <th>7D</th>
-                <th>30D</th>
-                <th>Regime</th>
-              </tr>
-            </thead>
-            <tbody>{table_rows}</tbody>
-          </table>
-        </section>
-
-        <section class="hi-panel">
-          <div class="hi-kicker">Regime Context</div>
-          <div class="hi-grid-4">
-            <div class="hi-card"><strong>Market regime</strong><span>Same-family public demo sample set</span></div>
-            <div class="hi-card"><strong>Volatility context</strong><span>Average comparable volatility: {statistics.mean(row["vol"] for row in filtered):.1f}</span></div>
-            <div class="hi-card"><strong>Risk pressure</strong><span>Average risk pressure: {statistics.mean(row["risk"] for row in filtered):.0f}/100</span></div>
-            <div class="hi-card"><strong>Historical read</strong><span>{html.escape(historical_read.title())}</span></div>
-          </div>
-        </section>
-
-        <section class="hi-panel">
-          <div class="hi-kicker">Historical Analyst Explanation</div>
-          <div class="hi-section-title">What history suggests</div>
-          <p class="hi-copy">
-            {html.escape(guidance)} The selected comparable-event set has an average 7-day reaction of {avg_7d:+.1f}%
-            and a positive 7-day historical rate of {positive_rate}%. The best cases show continuation, while weaker
-            cases fade when macro risk, credit risk, or volatility returns. This page does not directly predict the future;
-            it shows how the current article’s detected event family behaved historically.
-          </p>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
+        st.warning(f"The comparison charts could not be shown. Reason: {exc}")
 
 def _render_explainability_page() -> None:
     """Render the Explainability page as an article-driven model explanation cockpit."""
