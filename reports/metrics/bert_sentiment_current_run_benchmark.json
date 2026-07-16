@@ -1,0 +1,49 @@
+{
+  "model_directory": "C:\\Ruturaj\\Projects\\financial-news-stock-intelligence\\artifacts\\models\\bert_sentiment\\final_model",
+  "model_artifact_size_bytes": 438912889,
+  "label_order": [
+    "Bearish",
+    "Neutral",
+    "Bullish"
+  ],
+  "device": "cuda",
+  "device_name": "NVIDIA GeForce RTX 5070 Laptop GPU",
+  "model_load_seconds": 1.9254996000017854,
+  "warm_batch_seconds": 0.004830300000321586,
+  "warm_sentence_milliseconds": 1.6101000001071952,
+  "process_rss_increase_bytes": 682110976,
+  "cuda_peak_allocated_bytes": 449758208,
+  "predictions": [
+    {
+      "text": "The company reported record revenue and raised its full-year guidance.",
+      "predicted_label": "Bullish",
+      "probabilities": {
+        "Bearish": 0.002788900164887309,
+        "Neutral": 0.003131765639409423,
+        "Bullish": 0.9940793514251709
+      }
+    },
+    {
+      "text": "The firm issued a profit warning after demand declined sharply.",
+      "predicted_label": "Bearish",
+      "probabilities": {
+        "Bearish": 0.9955984354019165,
+        "Neutral": 0.0017071588663384318,
+        "Bullish": 0.002694331808015704
+      }
+    },
+    {
+      "text": "The company will publish its quarterly results next Thursday.",
+      "predicted_label": "Neutral",
+      "probabilities": {
+        "Bearish": 0.0027186162769794464,
+        "Neutral": 0.9947448968887329,
+        "Bullish": 0.0025364758912473917
+      }
+    }
+  ],
+  "article_aggregation_smoke_test": {
+    "predicted_label": "Bearish",
+    "sentence_count": 3
+  }
+}

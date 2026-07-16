@@ -1,0 +1,118 @@
+{
+  "test_evaluation": {
+    "classification_report": {
+      "Bearish": {
+        "f1-score": 0.8529411764705882,
+        "precision": 0.7945205479452054,
+        "recall": 0.9206349206349206,
+        "support": 63
+      },
+      "Bullish": {
+        "f1-score": 0.8666666666666667,
+        "precision": 0.8540145985401459,
+        "recall": 0.8796992481203008,
+        "support": 133
+      },
+      "Neutral": {
+        "f1-score": 0.9396825396825396,
+        "precision": 0.961038961038961,
+        "recall": 0.9192546583850931,
+        "support": 322
+      },
+      "accuracy": 0.9092664092664092,
+      "macro avg": {
+        "f1-score": 0.8864301276065981,
+        "precision": 0.8698580358414375,
+        "recall": 0.9065296090467715,
+        "support": 518
+      },
+      "weighted avg": {
+        "f1-score": 0.9103855956797133,
+        "precision": 0.9133074933994842,
+        "recall": 0.9092664092664092,
+        "support": 518
+      }
+    },
+    "confusion_matrix": [
+      [
+        58,
+        1,
+        4
+      ],
+      [
+        10,
+        296,
+        16
+      ],
+      [
+        5,
+        11,
+        117
+      ]
+    ],
+    "label_order": [
+      "Bearish",
+      "Neutral",
+      "Bullish"
+    ]
+  },
+  "test_metrics": {
+    "test_accuracy": 0.9092664092664092,
+    "test_bearish_f1": 0.8529411764705882,
+    "test_bearish_precision": 0.7945205479452054,
+    "test_bearish_recall": 0.9206349206349206,
+    "test_bullish_f1": 0.8666666666666667,
+    "test_bullish_precision": 0.8540145985401459,
+    "test_bullish_recall": 0.8796992481203008,
+    "test_loss": 0.40884217619895935,
+    "test_macro_f1": 0.8864301276065981,
+    "test_macro_precision": 0.8698580358414375,
+    "test_macro_recall": 0.9065296090467715,
+    "test_neutral_f1": 0.9396825396825396,
+    "test_neutral_precision": 0.961038961038961,
+    "test_neutral_recall": 0.9192546583850931,
+    "test_runtime": 1.3104,
+    "test_samples_per_second": 395.295,
+    "test_steps_per_second": 25.183,
+    "test_weighted_f1": 0.9103855956797133,
+    "test_weighted_precision": 0.9133074933994842,
+    "test_weighted_recall": 0.9092664092664092
+  },
+  "timing": {
+    "test_inference_seconds": 1.3115623999983654,
+    "test_milliseconds_per_example": 2.5319737451705895,
+    "training_seconds": 80.93103929999779,
+    "validation_seconds": 1.408725699999195
+  },
+  "training_metrics": {
+    "epoch": 3.0,
+    "total_flos": 195207544644840.0,
+    "train_loss": 0.3617505545812201,
+    "train_runtime": 80.8357,
+    "train_samples_per_second": 89.552,
+    "train_steps_per_second": 5.604
+  },
+  "validation_metrics": {
+    "epoch": 3.0,
+    "validation_accuracy": 0.9264990328820116,
+    "validation_bearish_f1": 0.8702290076335878,
+    "validation_bearish_precision": 0.8382352941176471,
+    "validation_bearish_recall": 0.9047619047619048,
+    "validation_bullish_f1": 0.9010989010989012,
+    "validation_bullish_precision": 0.8785714285714286,
+    "validation_bullish_recall": 0.924812030075188,
+    "validation_loss": 0.3080761730670929,
+    "validation_macro_f1": 0.9068447526462794,
+    "validation_macro_precision": 0.8948147543807167,
+    "validation_macro_recall": 0.9203460364306405,
+    "validation_neutral_f1": 0.9492063492063493,
+    "validation_neutral_precision": 0.9676375404530745,
+    "validation_neutral_recall": 0.9314641744548287,
+    "validation_runtime": 1.4076,
+    "validation_samples_per_second": 367.279,
+    "validation_steps_per_second": 23.443,
+    "validation_weighted_f1": 0.927206613969648,
+    "validation_weighted_precision": 0.9289564294291077,
+    "validation_weighted_recall": 0.9264990328820117
+  }
+}

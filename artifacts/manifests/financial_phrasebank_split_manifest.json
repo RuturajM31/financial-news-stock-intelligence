@@ -1,6 +1,6 @@
 {
   "configuration": "sentences_75agree",
-  "created_at": "2026-07-03T06:54:41.731590+00:00",
+  "created_at": "2026-07-16T15:02:11.735210+00:00",
   "dataset_checksum_sha256": "de0c9380a04548ef262d109deca17b8b2cd5afefb1b7282c1954ccd9381371fa",
   "dataset_name": "Financial PhraseBank",
   "duplicates_removed": 5,
@@ -55,7 +55,7 @@
     "validation": 0.15
   },
   "source_checksum_sha256": "612e74ee6b70bc1072e5d617f869ca50adecccc2777f2ac4d0f778fe62f3a916",
-  "source_file": "/Users/ruturajmokashi/Projects/financial-news-stock-intelligence/data/processed/financial_phrasebank/financial_phrasebank_75agree.jsonl",
+  "source_file": "C:\\Ruturaj\\Projects\\financial-news-stock-intelligence\\data\\processed\\financial_phrasebank\\financial_phrasebank_75agree.jsonl",
   "source_record_count": 3453,
   "split_strategy": "stratified_random"
 }

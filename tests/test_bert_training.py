@@ -43,6 +43,7 @@ BERT_OVERRIDE_FIELDS = {
     "model_family",
     "benchmark_role",
     "model_id",
+    "model_revision",
     "checkpoint_dir",
     "final_model_dir",
     "metrics_file",

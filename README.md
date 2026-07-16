@@ -284,3 +284,20 @@ For a fast review:
   <strong>Financial News Stock Intelligence</strong><br>
   Public financial AI dashboard · Streamlit · Plotly · MLOps evidence · Live deployment QA
 </p>
+
+## Financial News Sentiment Analyzer release
+
+The public application uses Full BERT as its primary inference model to classify financial-news language as Bearish, Neutral or Bullish and expose sentence-level evidence. The current reproduced run reached 90.93% accuracy and 0.8864 macro-F1. The historical Full BERT result, 91.31% accuracy and 0.8900 macro-F1, is displayed separately.
+
+The four public pages are Overview, Analyze Article, Model Results, and About / Architecture.
+
+Local launch:
+
+    $env:PYTHONPATH = "src"
+    .venv-bert\Scripts\python.exe -m streamlit run app\streamlit_app.py --server.port 8502
+
+Run tests with .venv-bert\Scripts\python.exe -m pytest.
+
+Streamlit Community Cloud uses app/requirements.txt and retrieves the private repository ruturajmokashi/financial-news-full-bert with a deployment-only Hugging Face READ token. Cold starts may download approximately 419 MiB and cloud inference runs on CPU. The application never presents lexical scoring as Full BERT output.
+
+Author: Ruturaj Mokashi

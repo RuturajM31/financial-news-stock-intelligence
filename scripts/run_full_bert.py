@@ -48,12 +48,16 @@ import argparse
 import hashlib
 import importlib.util
 import json
-import resource
 import shutil
 import sys
 from dataclasses import fields
 from pathlib import Path
 from typing import Any, Mapping
+
+try:
+    import resource
+except ImportError:  # Windows does not provide the Unix resource module.
+    resource = None
 
 
 EXPECTED_CLASS_COUNT = 3
@@ -61,6 +65,9 @@ EXPECTED_MODEL_ID = "google-bert/bert-base-uncased"
 EXPECTED_EXPERIMENT_NAME = "BERT Financial Sentiment"
 EXPECTED_MODEL_FAMILY = "BERT"
 EXPECTED_BENCHMARK_ROLE = "full_fine_tuning_comparison"
+CURRENT_METRICS_NAME = "bert_sentiment_current_run_metrics.json"
+CURRENT_HISTORY_NAME = "bert_sentiment_current_run_history.json"
+CURRENT_MANIFEST_NAME = "bert_sentiment_current_run_manifest.json"
 EXPECTED_SPLIT_RECORDS = {
     "train": 2_413,
     "validation": 517,
@@ -97,7 +104,7 @@ def ensure_isolated_environment() -> None:
     into the same process.
     """
 
-    if importlib.util.find_spec("sklearn") is not None:
+    if sys.platform == "darwin" and importlib.util.find_spec("sklearn") is not None:
         raise FullBertBenchmarkError(
             "scikit-learn is visible. Run with .venv-distilbert/bin/python."
         )
@@ -137,11 +144,24 @@ def write_json_atomic(file_path: Path, payload: Mapping[str, Any]) -> None:
 
 
 def current_peak_rss_mib() -> float:
-    """Return peak process RSS normalized to MiB on macOS and Linux."""
+    """Return process RSS in MiB using the best metric available per platform."""
 
-    raw_value = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
-    bytes_value = raw_value if sys.platform == "darwin" else raw_value * 1024.0
-    return bytes_value / MEBIBYTE
+    if resource is not None:
+        raw_value = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+        bytes_value = raw_value if sys.platform == "darwin" else raw_value * 1024.0
+        return bytes_value / MEBIBYTE
+
+    import psutil
+
+    return float(psutil.Process().memory_info().rss) / MEBIBYTE
+
+
+def memory_measurement_method() -> str:
+    """Describe the platform-specific process-memory measurement."""
+
+    if resource is not None:
+        return "resource.getrusage(resource.RUSAGE_SELF).ru_maxrss"
+    return "psutil.Process().memory_info().rss (current RSS; peak unavailable)"
 
 
 def build_artifact_inventory(directory: Path) -> list[dict[str, Any]]:
@@ -205,9 +225,7 @@ def enrich_manifest_evidence(
 
     manifest["artifact_files"] = build_artifact_inventory(final_model_dir)
     manifest["memory"] = {
-        "measurement_method": (
-            "resource.getrusage(resource.RUSAGE_SELF).ru_maxrss"
-        ),
+        "measurement_method": memory_measurement_method(),
         "measurement_scope": "full_training_validation_and_test_process",
         "baseline_peak_rss_mib": float(baseline_peak_rss_mib),
         "peak_process_rss_mib": float(completed_peak_rss_mib),
@@ -215,7 +233,8 @@ def enrich_manifest_evidence(
             max(0.0, completed_peak_rss_mib - baseline_peak_rss_mib)
         ),
         "platform_unit_normalization": (
-            "bytes_on_macos; kibibytes_on_linux; normalized_to_mib"
+            "bytes_on_macos; kibibytes_on_linux; bytes_on_windows_psutil; "
+            "normalized_to_mib"
         ),
     }
     write_json_atomic(manifest_path, manifest)
@@ -663,7 +682,9 @@ def validate_memory_evidence(manifest: Mapping[str, Any]) -> dict[str, float | s
     if float(peak) <= 0 or float(peak) < float(baseline):
         raise FullBertBenchmarkError("Measured peak RSS evidence is inconsistent.")
     method = memory.get("measurement_method")
-    if not isinstance(method, str) or "ru_maxrss" not in method:
+    if not isinstance(method, str) or not (
+        "ru_maxrss" in method or "psutil.Process().memory_info().rss" in method
+    ):
         raise FullBertBenchmarkError("Measured memory method is missing.")
     return {
         "measurement_method": method,
@@ -812,6 +833,32 @@ def load_bert_contract() -> tuple[type[Any], Any, Any]:
     return BertTrainingConfig, run_bert_training, validate_bert_config
 
 
+def configure_current_run_evidence(config: Any) -> None:
+    """Keep newly reproduced evidence separate from historical metrics."""
+
+    project_root = Path(__file__).resolve().parents[1]
+    config.metrics_file = project_root / "reports" / "metrics" / CURRENT_METRICS_NAME
+    config.manifest_file = project_root / "artifacts" / "manifests" / CURRENT_MANIFEST_NAME
+
+
+def preserve_current_run_history(config: Any) -> Path:
+    """Copy complete Trainer state and log history into a stable report file."""
+
+    trainer_state_path = Path(config.checkpoint_dir) / "trainer_state.json"
+    state = load_json_object(trainer_state_path, "Trainer state")
+    history_path = Path(config.metrics_file).with_name(CURRENT_HISTORY_NAME)
+    payload = {
+        "best_metric": state.get("best_metric"),
+        "best_model_checkpoint": state.get("best_model_checkpoint"),
+        "epoch": state.get("epoch"),
+        "global_step": state.get("global_step"),
+        "is_local_process_zero": state.get("is_local_process_zero"),
+        "is_world_process_zero": state.get("is_world_process_zero"),
+        "log_history": state.get("log_history", []),
+    }
+    write_json_atomic(history_path, payload)
+    return history_path
+
 def run_full_bert(
     replace_existing: bool = False,
     verify_only: bool = False,
@@ -821,12 +868,14 @@ def run_full_bert(
     ensure_isolated_environment()
     config_type, training_function, validation_function = load_bert_contract()
     config = config_type()
+    configure_current_run_evidence(config)
     validation_function(config)
 
     if not verify_only:
         protect_or_replace_outputs(config, replace_existing=replace_existing)
         baseline_peak_rss_mib = current_peak_rss_mib()
         training_function(config)
+        preserve_current_run_history(config)
         enrich_manifest_evidence(
             config,
             baseline_peak_rss_mib=baseline_peak_rss_mib,

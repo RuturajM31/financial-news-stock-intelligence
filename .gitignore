@@ -64,3 +64,25 @@ artifacts/models/distilbert_sentiment/
 build/
 dist/
 *.egg-info/
+
+# Local model delivery and Hugging Face caches
+.cache/huggingface/
+**/.cache/huggingface/
+huggingface/
+artifacts/models/bert_sentiment/
+*.safetensors
+pytorch_model.bin
+
+# Local release evidence and generated presentation artifacts
+artifacts/screenshots/
+artifacts/patches/
+artifacts/backups/
+artifacts/logs/
+NN_Submission_Evidence/
+NN_Submission_Evidence.zip
+playwright-report/
+test-results/
+browser-data/
+browser-profiles/
+*.tmp.html
+*.capture.pdf

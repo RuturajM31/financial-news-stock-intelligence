@@ -364,6 +364,8 @@ def test_run_delegates_once_before_artifact_review(
         return {"status": "fixture"}
 
     monkeypatch.setattr(runner, "ensure_isolated_environment", lambda: None)
+    monkeypatch.setattr(runner, "configure_current_run_evidence", lambda config: None)
+    monkeypatch.setattr(runner, "preserve_current_run_history", lambda config: None)
     monkeypatch.setattr(
         runner,
         "load_bert_contract",
@@ -515,3 +517,27 @@ def test_per_class_values_must_match_confusion_matrix(tmp_path: Path) -> None:
 
     # Check
     assert "confusion matrix" in str(captured.value)
+
+
+def test_windows_memory_fallback_uses_psutil(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Measure current RSS when the Unix resource module is unavailable."""
+
+    monkeypatch.setattr(runner, "resource", None)
+
+    assert runner.current_peak_rss_mib() > 0
+    assert "psutil.Process().memory_info().rss" in runner.memory_measurement_method()
+
+
+def test_memory_validator_accepts_windows_psutil_evidence(tmp_path: Path) -> None:
+    """Accept explicit current-RSS evidence while retaining Unix support."""
+
+    config = build_complete_artifacts(tmp_path)
+    manifest = json.loads(config.manifest_file.read_text(encoding="utf-8"))
+    manifest["memory"]["measurement_method"] = (
+        "psutil.Process().memory_info().rss (current RSS; peak unavailable)"
+    )
+    write_json(config.manifest_file, manifest)
+
+    summary = runner.validate_full_bert_artifacts(config)
+
+    assert "psutil" in summary["memory"]["measurement_method"]

@@ -45,6 +45,7 @@ from financial_news_intelligence.paths import MANIFESTS_DIR
 # ============================================================
 
 BERT_MODEL_ID = "google-bert/bert-base-uncased"
+BERT_MODEL_REVISION = "86b5e0934494bd15c9632b12f734a8a67f723594"
 
 
 # ============================================================
@@ -73,6 +74,7 @@ class BertTrainingConfig(DistilBertTrainingConfig):
     model_family: str = "BERT"
     benchmark_role: str = "full_fine_tuning_comparison"
     model_id: str = BERT_MODEL_ID
+    model_revision: str | None = BERT_MODEL_REVISION
 
     checkpoint_dir: Path = field(
         default_factory=lambda: BERT_MODEL_ROOT / "checkpoints"

@@ -567,6 +567,11 @@ def resolve_model_revision(
         config.model_revision or "main"
     )
 
+    if len(requested_revision) == 40 and all(
+        character in "0123456789abcdef" for character in requested_revision.casefold()
+    ):
+        return requested_revision.casefold()
+
     model_info = HfApi().model_info(
         repo_id=config.model_id,
         revision=requested_revision,
