@@ -56,49 +56,183 @@ def _finite(value: Any, field: str, *, optional: bool = False) -> float | None:
     return float(value)
 
 
-def _load_metrics(path: Path, name: str) -> ModelMetrics:
-    payload = _read_json(path)
-    metrics = payload.get("test_metrics")
-    evaluation = payload.get("test_evaluation")
-    if not isinstance(metrics, dict) or not isinstance(evaluation, dict):
-        raise ExperimentDataError(f"{path.name} is missing test metrics or evaluation data.")
-    labels = tuple(evaluation.get("label_order", ()))
-    if labels != LABEL_ORDER:
-        raise ExperimentDataError(f"{path.name} has an unexpected label order: {labels!r}")
-    raw_matrix = evaluation.get("confusion_matrix")
-    if not isinstance(raw_matrix, list) or len(raw_matrix) != len(LABEL_ORDER):
-        raise ExperimentDataError(f"{path.name} has an invalid confusion matrix.")
-    matrix: list[tuple[int, ...]] = []
-    for row in raw_matrix:
-        if not isinstance(row, list) or len(row) != len(LABEL_ORDER):
-            raise ExperimentDataError(f"{path.name} has an invalid confusion matrix row.")
-        clean_row = tuple(int(value) for value in row)
-        if any(value < 0 for value in clean_row):
-            raise ExperimentDataError(f"{path.name} has a negative confusion-matrix count.")
-        matrix.append(clean_row)
-    report = evaluation.get("classification_report", {})
-    per_class: dict[str, dict[str, float]] = {}
-    for label in LABEL_ORDER:
-        values = report.get(label) if isinstance(report, dict) else None
-        if not isinstance(values, dict):
-            values = evaluation.get("per_class", {}).get(label, {})
-        if not isinstance(values, dict):
-            values = {}
-        per_class[label] = {
-            "precision": _finite(values.get("precision", metrics.get(f"test_{label.lower()}_precision")), f"{label} precision"),
-            "recall": _finite(values.get("recall", metrics.get(f"test_{label.lower()}_recall")), f"{label} recall"),
-            "f1": _finite(values.get("f1-score", values.get("f1", metrics.get(f"test_{label.lower()}_f1"))), f"{label} F1"),
-            "support": _finite(values.get("support", sum(matrix[LABEL_ORDER.index(label)])), f"{label} support"),
+def _validate_label_order(test_evaluation: dict[str, Any], source_name: str) -> None:
+    """Require the saved class order used throughout public inference."""
+
+    saved_label_order = tuple(test_evaluation.get("label_order", ()))
+    if saved_label_order != LABEL_ORDER:
+        raise ExperimentDataError(
+            f"{source_name} has an unexpected label order: {saved_label_order!r}"
+        )
+
+
+def _validate_confusion_matrix(
+    test_evaluation: dict[str, Any],
+    source_name: str,
+) -> tuple[tuple[int, ...], ...]:
+    """Validate dimensions and non-negative integer counts in the saved matrix."""
+
+    raw_confusion_matrix = test_evaluation.get("confusion_matrix")
+    expected_dimension = len(LABEL_ORDER)
+
+    if (
+        not isinstance(raw_confusion_matrix, list)
+        or len(raw_confusion_matrix) != expected_dimension
+    ):
+        raise ExperimentDataError(
+            f"{source_name} has an invalid confusion matrix."
+        )
+
+    validated_confusion_matrix: list[tuple[int, ...]] = []
+
+    for raw_matrix_row in raw_confusion_matrix:
+        if (
+            not isinstance(raw_matrix_row, list)
+            or len(raw_matrix_row) != expected_dimension
+        ):
+            raise ExperimentDataError(
+                f"{source_name} has an invalid confusion matrix row."
+            )
+
+        validated_matrix_row = tuple(
+            int(raw_value) for raw_value in raw_matrix_row
+        )
+        if any(count < 0 for count in validated_matrix_row):
+            raise ExperimentDataError(
+                f"{source_name} has a negative confusion-matrix count."
+            )
+
+        validated_confusion_matrix.append(validated_matrix_row)
+
+    return tuple(validated_confusion_matrix)
+
+
+def _resolve_class_metrics(
+    class_label: str,
+    classification_report: Any,
+    test_evaluation: dict[str, Any],
+) -> dict[str, Any]:
+    """Use the classification report first, preserving the saved fallback."""
+
+    class_metrics = None
+    if isinstance(classification_report, dict):
+        class_metrics = classification_report.get(class_label)
+
+    if not isinstance(class_metrics, dict):
+        saved_per_class_metrics = test_evaluation.get("per_class", {})
+        if isinstance(saved_per_class_metrics, dict):
+            class_metrics = saved_per_class_metrics.get(class_label, {})
+
+    if not isinstance(class_metrics, dict):
+        return {}
+
+    return class_metrics
+
+
+def _extract_per_class_metrics(
+    test_metrics: dict[str, Any],
+    test_evaluation: dict[str, Any],
+    validated_confusion_matrix: tuple[tuple[int, ...], ...],
+) -> dict[str, dict[str, float]]:
+    """Resolve and validate precision, recall, F1, and support per class."""
+
+    classification_report = test_evaluation.get("classification_report", {})
+    per_class_metrics: dict[str, dict[str, float]] = {}
+
+    for class_index, class_label in enumerate(LABEL_ORDER):
+        class_metrics = _resolve_class_metrics(
+            class_label,
+            classification_report,
+            test_evaluation,
+        )
+        metric_prefix = f"test_{class_label.lower()}"
+        default_support = sum(validated_confusion_matrix[class_index])
+
+        per_class_metrics[class_label] = {
+            "precision": _finite(
+                class_metrics.get(
+                    "precision",
+                    test_metrics.get(f"{metric_prefix}_precision"),
+                ),
+                f"{class_label} precision",
+            ),
+            "recall": _finite(
+                class_metrics.get(
+                    "recall",
+                    test_metrics.get(f"{metric_prefix}_recall"),
+                ),
+                f"{class_label} recall",
+            ),
+            "f1": _finite(
+                class_metrics.get(
+                    "f1-score",
+                    class_metrics.get(
+                        "f1",
+                        test_metrics.get(f"{metric_prefix}_f1"),
+                    ),
+                ),
+                f"{class_label} F1",
+            ),
+            "support": _finite(
+                class_metrics.get("support", default_support),
+                f"{class_label} support",
+            ),
         }
-    return ModelMetrics(
-        name=name,
-        accuracy=_finite(metrics.get("test_accuracy"), f"{name} accuracy"),
-        macro_f1=_finite(metrics.get("test_macro_f1"), f"{name} macro-F1"),
-        macro_precision=_finite(metrics.get("test_macro_precision"), f"{name} macro precision", optional=True),
-        macro_recall=_finite(metrics.get("test_macro_recall"), f"{name} macro recall", optional=True),
-        confusion_matrix=tuple(matrix), per_class=per_class, source=path.name,
+
+    return per_class_metrics
+
+
+def _load_metrics(path: Path, name: str) -> ModelMetrics:
+    """Read, validate, and construct one model-metrics record."""
+
+    metrics_payload = _read_json(path)
+    test_metrics = metrics_payload.get("test_metrics")
+    test_evaluation = metrics_payload.get("test_evaluation")
+
+    # Reject partial artifacts instead of displaying mixed or incomplete data.
+    if not isinstance(test_metrics, dict) or not isinstance(
+        test_evaluation,
+        dict,
+    ):
+        raise ExperimentDataError(
+            f"{path.name} is missing test metrics or evaluation data."
+        )
+
+    _validate_label_order(test_evaluation, path.name)
+    validated_confusion_matrix = _validate_confusion_matrix(
+        test_evaluation,
+        path.name,
+    )
+    per_class_metrics = _extract_per_class_metrics(
+        test_metrics,
+        test_evaluation,
+        validated_confusion_matrix,
     )
 
+    return ModelMetrics(
+        name=name,
+        accuracy=_finite(
+            test_metrics.get("test_accuracy"),
+            f"{name} accuracy",
+        ),
+        macro_f1=_finite(
+            test_metrics.get("test_macro_f1"),
+            f"{name} macro-F1",
+        ),
+        macro_precision=_finite(
+            test_metrics.get("test_macro_precision"),
+            f"{name} macro precision",
+            optional=True,
+        ),
+        macro_recall=_finite(
+            test_metrics.get("test_macro_recall"),
+            f"{name} macro recall",
+            optional=True,
+        ),
+        confusion_matrix=validated_confusion_matrix,
+        per_class=per_class_metrics,
+        source=path.name,
+    )
 
 def load_experiment_lab_data(project_root: Path) -> ExperimentLabData:
     """Load current, historical and runtime artifacts without cross-substitution."""
