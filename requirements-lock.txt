@@ -88,7 +88,7 @@ protobuf==5.29.6
 psutil==7.2.2
 ptyprocess==0.7.0
 pure_eval==0.2.3
-pyarrow==16.0.0
+pyarrow==25.0.0
 pydantic==2.10.4
 pydantic_core==2.27.2
 pydeck==0.9.3
