@@ -55,32 +55,75 @@ def token_landscape(
     sentence_predictions: Iterable[Any],
     tokenized_sentences: Iterable[list[str]],
 ) -> list[TokenLandscapeItem]:
-    """Build submitted-token counts and sentence-class distributions."""
+    """Build token counts and class distributions from submitted article text."""
 
-    counts: Counter[str] = Counter()
-    class_counts: dict[str, Counter[str]] = defaultdict(Counter)
-    examples: dict[str, str] = {}
-    display_case: dict[str, str] = {}
-    for prediction, pieces in zip(sentence_predictions, tokenized_sentences):
-        source_words = {
-            re.sub(r"[^a-z0-9]", "", word.lower()): word.strip(".,;:!?()[]{}\"'")
-            for word in prediction.text.split()
+    token_counts: Counter[str] = Counter()
+    token_class_counts: dict[str, Counter[str]] = defaultdict(Counter)
+    example_sentences: dict[str, str] = {}
+    display_tokens: dict[str, str] = {}
+
+    for sentence_prediction, wordpiece_tokens in zip(
+        sentence_predictions,
+        tokenized_sentences,
+    ):
+        # Preserve the article's original capitalization for display.
+        original_words = {
+            re.sub(r"[^a-z0-9]", "", word.lower()): word.strip(
+                ".,;:!?()[]{}\"'"
+            )
+            for word in sentence_prediction.text.split()
         }
-        for token in merge_wordpieces(pieces):
-            normalized = re.sub(r"[^a-z0-9-]", "", token.lower())
-            if not normalized or normalized in STOP_WORDS or not re.search(r"[a-z0-9]", normalized):
-                continue
-            counts[normalized] += 1
-            class_counts[normalized][prediction.label] += 1
-            examples.setdefault(normalized, prediction.text)
-            display_case.setdefault(normalized, source_words.get(normalized, normalized))
-    rows = []
-    for token, count in counts.most_common(36):
-        distribution = {label: class_counts[token][label] for label in LABEL_ORDER}
-        dominant = max(LABEL_ORDER, key=lambda label: (distribution[label], -LABEL_ORDER.index(label)))
-        rows.append(TokenLandscapeItem(display_case[token], count, dominant, distribution, examples[token]))
-    return rows
 
+        for merged_token in merge_wordpieces(wordpiece_tokens):
+            normalized_token = re.sub(
+                r"[^a-z0-9-]",
+                "",
+                merged_token.lower(),
+            )
+            token_is_usable = (
+                normalized_token
+                and normalized_token not in STOP_WORDS
+                and re.search(r"[a-z0-9]", normalized_token)
+            )
+            if not token_is_usable:
+                continue
+
+            token_counts[normalized_token] += 1
+            token_class_counts[normalized_token][sentence_prediction.label] += 1
+            example_sentences.setdefault(
+                normalized_token,
+                sentence_prediction.text,
+            )
+            display_tokens.setdefault(
+                normalized_token,
+                original_words.get(normalized_token, normalized_token),
+            )
+
+    landscape_items: list[TokenLandscapeItem] = []
+
+    for normalized_token, token_count in token_counts.most_common(36):
+        class_distribution = {
+            class_label: token_class_counts[normalized_token][class_label]
+            for class_label in LABEL_ORDER
+        }
+        dominant_class = max(
+            LABEL_ORDER,
+            key=lambda class_label: (
+                class_distribution[class_label],
+                -LABEL_ORDER.index(class_label),
+            ),
+        )
+        landscape_items.append(
+            TokenLandscapeItem(
+                display_tokens[normalized_token],
+                token_count,
+                dominant_class,
+                class_distribution,
+                example_sentences[normalized_token],
+            )
+        )
+
+    return landscape_items
 
 def reader_segments(text: str, sentence_predictions: Iterable[Any]) -> list[ReaderSegment]:
     """Address analyzed sentences while preserving every original character."""
@@ -105,27 +148,71 @@ def reader_segments(text: str, sentence_predictions: Iterable[Any]) -> list[Read
     return segments
 
 
-def cosine_links(tokens: Iterable[Any], *, maximum_nodes: int = 18, maximum_links: int = 28) -> tuple[list[Any], list[tuple[int, int, float]]]:
-    """Return deterministic strongest positive contextual-token similarities."""
+def cosine_links(
+    tokens: Iterable[Any],
+    *,
+    maximum_nodes: int = 18,
+    maximum_links: int = 28,
+) -> tuple[list[Any], list[tuple[int, int, float]]]:
+    """Return the strongest positive contextual-token similarities.
 
+    Similarity describes proximity between model representations. It is not
+    causal evidence and does not measure a token's influence on the prediction.
+    """
+
+    # NumPy stays lazy because this helper is rendered only on demand.
     import numpy as np
 
-    nodes = [token for token in tokens if token.text.lower() not in STOP_WORDS and re.search(r"[A-Za-z0-9]", token.text)][:maximum_nodes]
-    if len(nodes) < 2:
-        return nodes, []
-    matrix = np.asarray([node.embedding for node in nodes], dtype=np.float64)
-    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
-    normalized = matrix / np.maximum(norms, 1e-12)
-    similarities = normalized @ normalized.T
-    candidates = [
-        (i, j, float(similarities[i, j]))
-        for i in range(len(nodes)) for j in range(i + 1, len(nodes))
-        if math.isfinite(similarities[i, j]) and similarities[i, j] > 0
-    ]
-    candidates.sort(key=lambda item: (-item[2], item[0], item[1]))
-    selected = candidates[:maximum_links]
-    return nodes, selected
+    contextual_tokens = [
+        token
+        for token in tokens
+        if token.text.lower() not in STOP_WORDS
+        and re.search(r"[A-Za-z0-9]", token.text)
+    ][:maximum_nodes]
 
+    if len(contextual_tokens) < 2:
+        return contextual_tokens, []
+
+    token_embedding_matrix = np.asarray(
+        [token.embedding for token in contextual_tokens],
+        dtype=np.float64,
+    )
+    token_embedding_norms = np.linalg.norm(
+        token_embedding_matrix,
+        axis=1,
+        keepdims=True,
+    )
+    normalized_token_embeddings = token_embedding_matrix / np.maximum(
+        token_embedding_norms,
+        1e-12,
+    )
+    token_similarity_matrix = (
+        normalized_token_embeddings @ normalized_token_embeddings.T
+    )
+
+    candidate_links = [
+        (
+            source_index,
+            target_index,
+            float(token_similarity_matrix[source_index, target_index]),
+        )
+        for source_index in range(len(contextual_tokens))
+        for target_index in range(source_index + 1, len(contextual_tokens))
+        if math.isfinite(
+            token_similarity_matrix[source_index, target_index]
+        )
+        and token_similarity_matrix[source_index, target_index] > 0
+    ]
+    candidate_links.sort(
+        key=lambda candidate_link: (
+            -candidate_link[2],
+            candidate_link[0],
+            candidate_link[1],
+        )
+    )
+    strongest_links = candidate_links[:maximum_links]
+
+    return contextual_tokens, strongest_links
 
 def circular_positions(count: int) -> list[tuple[float, float]]:
     """Return stable positions for a compact contextual-token network."""
