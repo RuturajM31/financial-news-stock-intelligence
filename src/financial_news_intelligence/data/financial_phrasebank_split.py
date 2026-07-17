@@ -323,15 +323,15 @@ def count_labels(
     The fixed order makes manifests easier to compare.
     """
 
-    counts = Counter(
+    class_counts = Counter(
         str(record["label"])
         for record in records
     )
 
     return {
-        "Bearish": counts.get("Bearish", 0),
-        "Neutral": counts.get("Neutral", 0),
-        "Bullish": counts.get("Bullish", 0),
+        "Bearish": class_counts.get("Bearish", 0),
+        "Neutral": class_counts.get("Neutral", 0),
+        "Bullish": class_counts.get("Bullish", 0),
     }
 
 
@@ -544,7 +544,7 @@ def export_phrasebank_splits(
         remove_duplicate_records(source_records)
     )
 
-    splits = split_phrasebank_records(
+    dataset_splits = split_phrasebank_records(
         unique_records,
         train_ratio=train_ratio,
         validation_ratio=validation_ratio,
@@ -562,7 +562,7 @@ def export_phrasebank_splits(
         exist_ok=True,
     )
 
-    file_details: dict[str, dict[str, object]] = {}
+    split_file_details: dict[str, dict[str, object]] = {}
 
     # Save all three split files.
     for split_name in (
@@ -570,7 +570,7 @@ def export_phrasebank_splits(
         "validation",
         "test",
     ):
-        records = splits[split_name]
+        records_in_split = dataset_splits[split_name]
 
         file_name = (
             f"financial_phrasebank_{split_name}.jsonl"
@@ -579,26 +579,26 @@ def export_phrasebank_splits(
         file_path = output_dir / file_name
 
         checksum = save_jsonl_split(
-            records,
+            records_in_split,
             file_path,
         )
 
-        file_details[split_name] = {
+        split_file_details[split_name] = {
             "file_name": file_name,
-            "record_count": len(records),
-            "label_counts": count_labels(records),
+            "record_count": len(records_in_split),
+            "label_counts": count_labels(records_in_split),
             "checksum_sha256": checksum,
         }
 
     # Create one checksum representing the full split package.
-    dataset_summary = json.dumps(
-        file_details,
+    serialized_split_summary = json.dumps(
+        split_file_details,
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
 
     dataset_checksum = create_sha256(
-        dataset_summary
+        serialized_split_summary
     )
 
     manifest: dict[str, object] = {
@@ -622,7 +622,7 @@ def export_phrasebank_splits(
         "overall_label_counts": count_labels(
             unique_records
         ),
-        "files": file_details,
+        "files": split_file_details,
         "dataset_checksum_sha256": dataset_checksum,
         "limitations": [
             "No publication timestamps are available.",

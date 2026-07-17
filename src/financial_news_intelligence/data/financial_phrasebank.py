@@ -253,7 +253,7 @@ def read_phrasebank_records(
     # The original dataset file uses ISO-8859-1 encoding.
     file_text = raw_content.decode("iso-8859-1")
 
-    records: list[dict[str, object]] = []
+    normalized_records: list[dict[str, object]] = []
 
     for line_number, raw_line in enumerate(
         file_text.splitlines(),
@@ -304,7 +304,7 @@ def read_phrasebank_records(
             clean_sentence.encode("utf-8")
         )
 
-        records.append(
+        normalized_records.append(
             {
                 "record_id": (
                     f"fpb_{line_number:06d}"
@@ -320,14 +320,14 @@ def read_phrasebank_records(
         )
 
     # Detect accidental use of the wrong file or an upstream change.
-    if len(records) != EXPECTED_RECORD_COUNT:
+    if len(normalized_records) != EXPECTED_RECORD_COUNT:
         raise ValueError(
             "Unexpected Financial PhraseBank record count. "
             f"Expected {EXPECTED_RECORD_COUNT}, "
-            f"received {len(records)}."
+            f"received {len(normalized_records)}."
         )
 
-    return records
+    return normalized_records
 
 
 # ============================================================
@@ -413,7 +413,7 @@ def acquire_financial_phrasebank(
     )
 
     # Read and convert all selected sentiment records.
-    records = read_phrasebank_records(
+    normalized_records = read_phrasebank_records(
         archive_path
     )
 
@@ -434,7 +434,7 @@ def acquire_financial_phrasebank(
 
     # Save the cleaned records and calculate their checksum.
     processed_checksum = save_phrasebank_jsonl(
-        records,
+        normalized_records,
         output_path,
     )
 
@@ -446,7 +446,7 @@ def acquire_financial_phrasebank(
     # Count Bullish, Neutral, and Bearish records.
     label_counts = Counter(
         str(record["label"])
-        for record in records
+        for record in normalized_records
     )
 
     manifest: dict[str, object] = {
@@ -460,7 +460,7 @@ def acquire_financial_phrasebank(
         "acquired_at": acquired_at.isoformat(),
         "license": DATASET_LICENSE,
         "commercial_use_restricted": True,
-        "record_count": len(records),
+        "record_count": len(normalized_records),
         "label_counts": dict(
             sorted(label_counts.items())
         ),
