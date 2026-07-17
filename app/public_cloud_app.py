@@ -11099,9 +11099,10 @@ def _render_bert_evidence(result: Any) -> None:
                     st.code(" · ".join(tokens), language=None)
 
 def _initialize_sentiment_analyzer_state() -> None:
-    """Initialize the small, persistent state used by the public analyzer."""
+    """Initialize Analyze Article state without replacing values from reruns."""
 
-    defaults = {
+    # Streamlit reruns this file after interactions, so existing user state must survive.
+    state_defaults = {
         "an_url": "",
         "an_input_choice": "Article link",
         "an_manual_headline": "",
@@ -11122,14 +11123,15 @@ def _initialize_sentiment_analyzer_state() -> None:
         "an_token_network": None,
         "an_token_network_signature": "",
     }
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
+    for state_key, default_value in state_defaults.items():
+        if state_key not in st.session_state:
+            st.session_state[state_key] = default_value
 
 
 def _clear_sentiment_results() -> None:
-    """Clear results whenever the active article changes."""
+    """Remove stale analysis while preserving the user's current article input."""
 
+    # Source callbacks invalidate derived results before Streamlit renders again.
     st.session_state.an_results_generated = False
     st.session_state.an_result_signature = ""
     st.session_state.an_result_signal = None
@@ -11142,12 +11144,12 @@ def _clear_sentiment_results() -> None:
 
 
 def _on_sentiment_source_change() -> None:
-    """Activate one source mode and remove results from the previous source."""
+    """Activate the selected source and clear results from the previous source."""
 
-    choice = st.session_state.get("an_input_choice", "Article link")
-    if choice == "Article link":
+    source_choice = st.session_state.get("an_input_choice", "Article link")
+    if source_choice == "Article link":
         _on_sentiment_url_change()
-    elif choice == "Paste article":
+    elif source_choice == "Paste article":
         _on_sentiment_manual_change()
     else:
         st.session_state.an_loaded_headline = ""
@@ -11163,7 +11165,8 @@ def _on_sentiment_url_change() -> None:
 
     st.session_state.an_loaded_headline = ""
     st.session_state.an_loaded_body = ""
-    st.session_state.an_source_url = _clean_text(st.session_state.get("an_url", ""))
+    cleaned_url = _clean_text(st.session_state.get("an_url", ""))
+    st.session_state.an_source_url = cleaned_url
     st.session_state.an_source_type = "Article link" if st.session_state.an_source_url else "No article added"
     st.session_state.an_extraction_method = "Not started"
     st.session_state.an_extraction_status = (
@@ -11177,31 +11180,31 @@ def _on_sentiment_url_change() -> None:
 def _on_sentiment_manual_change() -> None:
     """Make edited manual text the active article and invalidate old results."""
 
-    headline = _clean_text(st.session_state.get("an_manual_headline", ""))
-    body = _clean_article_text(st.session_state.get("an_manual_body", ""))
-    st.session_state.an_loaded_headline = headline
-    st.session_state.an_loaded_body = body
+    manual_headline = _clean_text(st.session_state.get("an_manual_headline", ""))
+    manual_body = _clean_article_text(st.session_state.get("an_manual_body", ""))
+    st.session_state.an_loaded_headline = manual_headline
+    st.session_state.an_loaded_body = manual_body
     st.session_state.an_source_url = ""
-    st.session_state.an_source_type = "Pasted article" if headline or body else "No article added"
-    st.session_state.an_extraction_method = "Manual entry" if headline or body else "Not started"
-    words = len(f"{headline} {body}".split())
+    st.session_state.an_source_type = "Pasted article" if manual_headline or manual_body else "No article added"
+    st.session_state.an_extraction_method = "Manual entry" if manual_headline or manual_body else "Not started"
+    article_word_count = len(f"{manual_headline} {manual_body}".split())
     st.session_state.an_extraction_status = (
         "Pasted article is ready."
-        if words >= 25
+        if article_word_count >= 25
         else "Add at least 25 words before analyzing."
-        if words
+        if article_word_count
         else "Add an article link, paste an article, or use the sample."
     )
     _clear_sentiment_results()
 
 
 def _load_sentiment_sample() -> None:
-    """Load the built-in article without changing scoring logic."""
+    """Load the built-in article and invalidate results from the prior source."""
 
-    sample = _clean_text(_BASE_EXAMPLE)
-    first_sentence, _, remainder = sample.partition(".")
+    sample_text = _clean_text(_BASE_EXAMPLE)
+    first_sentence, _, remaining_text = sample_text.partition(".")
     st.session_state.an_loaded_headline = first_sentence.strip()
-    st.session_state.an_loaded_body = remainder.strip() or sample
+    st.session_state.an_loaded_body = remaining_text.strip() or sample_text
     st.session_state.an_source_type = "Built-in sample"
     st.session_state.an_source_url = ""
     st.session_state.an_extraction_method = "Built-in sample"
@@ -11210,7 +11213,7 @@ def _load_sentiment_sample() -> None:
 
 
 def _navigate_to_analyzer(load_sample: bool = False) -> None:
-    """Navigate from the landing page using the existing radio state."""
+    """Open Analyze Article and optionally prepare its built-in sample."""
 
     _initialize_sentiment_analyzer_state()
     if load_sample:
@@ -11220,12 +11223,12 @@ def _navigate_to_analyzer(load_sample: bool = False) -> None:
         st.session_state.an_input_choice = "Presentation sample"
 
 def _sentiment_article_signature(headline: str, body: str, source: str) -> str:
-    """Return a stable signature for stale-result protection."""
+    """Hash normalized article content and source for stale-result protection."""
 
     import hashlib
 
-    payload = f"{_clean_text(headline)}\n{_clean_text(body)}\n{_clean_text(source)}"
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    normalized_article = f"{_clean_text(headline)}\n{_clean_text(body)}\n{_clean_text(source)}"
+    return hashlib.sha256(normalized_article.encode("utf-8")).hexdigest()
 
 
 def _navigate_public_page(page: str) -> None:
@@ -12131,7 +12134,7 @@ def _render_article_reader(result: Any, signal: ArticleSignal, headline: str, bo
             st.write("Risk-related: " + (", ".join(signal.risk_hits) or "None detected"))
 
 def _render_sentiment_analyze_page() -> None:
-    """Render the main premium article-analysis workspace."""
+    """Coordinate Analyze Article inputs, inference, state, and evidence views."""
 
     _initialize_sentiment_analyzer_state()
     st.markdown(
@@ -12142,88 +12145,92 @@ def _render_sentiment_analyze_page() -> None:
     )
     input_panel, preview_panel = st.columns([1.02, .98], gap="large")
     with input_panel:
-        choice = st.segmented_control(
+        source_choice = st.segmented_control(
             "Article source", ["Article link", "Paste article", "Presentation sample"],
             key="an_input_choice", width="stretch", on_change=_on_sentiment_source_change,
         )
-        if choice == "Article link":
+        if source_choice == "Article link":
             st.text_input("Article link", key="an_url", placeholder="https://example.com/financial-news-article", on_change=_on_sentiment_url_change)
             if st.button("Get article text", key="an_get_article_text", width="stretch"):
-                url = _clean_text(st.session_state.an_url)
+                article_url = _clean_text(st.session_state.an_url)
                 _clear_sentiment_results()
                 st.session_state.an_loaded_headline = ""
                 st.session_state.an_loaded_body = ""
-                st.session_state.an_source_url = url
-                st.session_state.an_source_type = "Article link" if url else "No article added"
-                if not url:
+                st.session_state.an_source_url = article_url
+                st.session_state.an_source_type = "Article link" if article_url else "No article added"
+                if not article_url:
                     st.session_state.an_extraction_status = "Add an article link first."
                     st.session_state.an_extraction_method = "Not started"
                 else:
                     try:
                         with st.spinner("Loading article text..."):
-                            extracted_headline, extracted_body, extraction_method = _extract_article_content(url)
+                            extracted_headline, extracted_body, extraction_method = _extract_article_content(article_url)
                         st.session_state.an_loaded_headline = extracted_headline
                         st.session_state.an_loaded_body = extracted_body
                         st.session_state.an_extraction_method = extraction_method
                         st.session_state.an_extraction_status = "Article text was loaded successfully."
-                    except Exception as exc:
-                        name = type(exc).__name__.lower()
-                        if "timeout" in name:
-                            reason = "The website took too long to respond."
-                        elif "http" in name or "connection" in name:
-                            reason = "The website returned a network or access error."
-                        elif "runtime" in name:
-                            reason = "Article extraction is unavailable in this runtime."
+                    except Exception as extraction_error:
+                        error_name = type(extraction_error).__name__.lower()
+                        if "timeout" in error_name:
+                            failure_reason = "The website took too long to respond."
+                        elif "http" in error_name or "connection" in error_name:
+                            failure_reason = "The website returned a network or access error."
+                        elif "runtime" in error_name:
+                            failure_reason = "Article extraction is unavailable in this runtime."
                         else:
-                            reason = "We could not find enough readable article text on this page."
+                            failure_reason = "We could not find enough readable article text on this page."
                         st.session_state.an_extraction_method = "Automatic extraction failed"
-                        st.session_state.an_extraction_status = f"{reason} Paste the article text instead."
-        elif choice == "Paste article":
+                        st.session_state.an_extraction_status = f"{failure_reason} Paste the article text instead."
+        elif source_choice == "Paste article":
             st.text_input("Article headline (optional)", key="an_manual_headline", on_change=_on_sentiment_manual_change)
             st.text_area("Article body", key="an_manual_body", height=205, placeholder="Paste at least 25 words of financial-news text.", on_change=_on_sentiment_manual_change)
         else:
             st.write("Use the built-in financial-news example.")
             st.button("Load presentation sample", key="an_load_sample", on_click=_load_sentiment_sample, width="stretch")
 
-        headline = _clean_text(st.session_state.an_loaded_headline)
-        body = _clean_text(st.session_state.an_loaded_body)
-        full_text = _clean_text(f"{headline}. {body}")
-        word_count = len(full_text.split())
-        content_ready = word_count >= 25
-        signature = _sentiment_article_signature(headline, body, st.session_state.an_source_type)
-        if st.session_state.an_results_generated and st.session_state.an_result_signature != signature:
+        article_headline = _clean_text(st.session_state.an_loaded_headline)
+        article_body = _clean_text(st.session_state.an_loaded_body)
+        article_text = _clean_text(f"{article_headline}. {article_body}")
+        article_word_count = len(article_text.split())
+        content_ready = article_word_count >= 25
+        article_signature = _sentiment_article_signature(
+            article_headline, article_body, st.session_state.an_source_type,
+        )
+        # A signature mismatch means the displayed results belong to older input.
+        if st.session_state.an_results_generated and st.session_state.an_result_signature != article_signature:
             _clear_sentiment_results()
 
         st.markdown(
-            f'<div class="fs-note">{_safe(st.session_state.an_extraction_status)} · {word_count} words</div>',
+            f'<div class="fs-note">{_safe(st.session_state.an_extraction_status)} · {article_word_count} words</div>',
             unsafe_allow_html=True,
         )
-        if full_text and not content_ready:
+        if article_text and not content_ready:
             st.caption("At least 25 words are required.")
         if st.button("Analyze with Full BERT", key="an_analyze_article", type="primary", width="stretch", disabled=not content_ready):
-            signal = _score_article(full_text, st.session_state.an_source_type, headline_text=headline, body_text=body)
+            article_signal = _score_article(article_text, st.session_state.an_source_type, headline_text=article_headline, body_text=article_body)
             try:
+                # Load Full BERT only after the user requests analysis.
                 with st.status("Preparing Full BERT", expanded=True) as model_status:
                     model_status.write("Retrieving model artifact")
-                    runtime = _load_public_bert_runtime()
+                    bert_runtime = _load_public_bert_runtime()
                     model_status.write("Loading model")
-                    bert_result = analyze_article_with_bert(runtime, headline, body)
+                    bert_result = analyze_article_with_bert(bert_runtime, article_headline, article_body)
                     model_status.update(label="Full BERT ready", state="complete", expanded=False)
-            except Exception as exc:
-                st.session_state.an_result_error = f"The trained BERT model could not run: {exc}"
+            except Exception as inference_error:
+                st.session_state.an_result_error = f"The trained BERT model could not run: {inference_error}"
                 st.session_state.an_result_bert = None
                 st.session_state.an_results_generated = False
             else:
-                st.session_state.an_result_signal = signal
+                st.session_state.an_result_signal = article_signal
                 st.session_state.an_result_bert = bert_result
                 st.session_state.an_result_error = ""
-                st.session_state.an_result_signature = signature
+                st.session_state.an_result_signature = article_signature
                 st.session_state.an_results_generated = True
         if st.session_state.an_result_error:
             st.error(st.session_state.an_result_error)
 
     with preview_panel:
-        if not headline and not body:
+        if not article_headline and not article_body:
             st.markdown(
                 '<div class="fs-card fs-empty"><div class="fs-empty-icon">▤</div>'
                 '<strong>Article preview</strong><p>Add a link, paste text, or load the sample. '
@@ -12231,30 +12238,30 @@ def _render_sentiment_analyze_page() -> None:
                 unsafe_allow_html=True,
             )
         else:
-            ticker, company = _infer_company(headline, body)
+            ticker, company = _infer_company(article_headline, article_body)
             domain = _article_domain(st.session_state.an_source_url)
-            preview = body[:480] + ("…" if len(body) > 480 else "")
+            article_preview = article_body[:480] + ("…" if len(article_body) > 480 else "")
             domain_chip = f'<span class="fs-chip">{_safe(domain)}</span>' if domain else ""
             st.markdown(
                 f'<div class="fs-card"><div class="fs-preview-label">ARTICLE PREVIEW</div>'
-                f'<h3 style="color:#f8fafc">{_safe(headline or "No separate headline supplied")}</h3>'
+                f'<h3 style="color:#f8fafc">{_safe(article_headline or "No separate headline supplied")}</h3>'
                 f'<div class="fs-meta"><span class="fs-chip">{_safe(st.session_state.an_source_type)}</span>'
                 f'{domain_chip}<span class="fs-chip">{_safe(company)} · {_safe(ticker)}</span>'
-                f'<span class="fs-chip">{word_count} words</span></div>'
-                f'<p class="fs-copy" style="font-size:.94rem">{_safe(preview)}</p></div>',
+                f'<span class="fs-chip">{article_word_count} words</span></div>'
+                f'<p class="fs-copy" style="font-size:.94rem">{_safe(article_preview)}</p></div>',
                 unsafe_allow_html=True,
             )
 
     result_ready = (
         st.session_state.an_results_generated
-        and st.session_state.an_result_signature == signature
+        and st.session_state.an_result_signature == article_signature
         and st.session_state.an_result_signal is not None
         and st.session_state.an_result_bert is not None
     )
     if not result_ready:
         return
 
-    signal = st.session_state.an_result_signal
+    article_signal = st.session_state.an_result_signal
     bert_result = st.session_state.an_result_bert
     if not st.session_state.an_evidence_class:
         st.session_state.an_evidence_class = bert_result.label
@@ -12265,7 +12272,7 @@ def _render_sentiment_analyze_page() -> None:
 
     with summary_tab:
         strength = "Strong" if bert_result.confidence >= .75 else "Moderate" if bert_result.confidence >= .55 else "Slight"
-        entity = f"{signal.company} · {signal.ticker}" if signal.ticker else f"{signal.company} · Private company"
+        entity = f"{article_signal.company} · {article_signal.ticker}" if article_signal.ticker else f"{article_signal.company} · Private company"
         st.markdown(
             f'<div class="fs-card fs-bert-hero"><div><div class="fs-eye">FULL BERT ARTICLE RESULT</div>'
             f'<h2>{_safe(bert_result.label)}</h2><p>{strength} model preference for the dominant class. '
@@ -12308,27 +12315,27 @@ def _render_sentiment_analyze_page() -> None:
             _render_selected_sentence(bert_result, "semantic")
         with semantic_right:
             _section_heading("CONTEXT", "Contextual token similarity")
-            _render_contextual_network(bert_result, signature)
+            _render_contextual_network(bert_result, article_signature)
 
     with lexical_tab:
         _section_heading("SECONDARY ANALYSIS", "Lexical Cues — Secondary Analysis", "These rule-based cues supplement the Full BERT result. They do not determine the primary article sentiment.")
         _section_heading("SPECTRUM", "Rule-based Bearish-to-Bullish spectrum")
-        _render_sentiment_spectrum(signal)
+        _render_sentiment_spectrum(article_signal)
         _section_heading("LEXICAL EVIDENCE", "Detected contextual phrases")
-        _render_evidence_cloud(full_text, signal)
+        _render_evidence_cloud(article_text, article_signal)
         _section_heading("CONTRIBUTIONS", "Contextual phrase contributions", "Positive evidence extends right; negative evidence extends left.")
-        _render_evidence_chart(full_text, signal)
+        _render_evidence_chart(article_text, article_signal)
         risk_left, risk_right = st.columns(2, gap="large")
         with risk_left:
             _section_heading("RISK LANGUAGE", "Heuristic article-risk indicator")
-            _render_risk_gauge(signal)
+            _render_risk_gauge(article_signal)
             st.caption("This indicator reflects risk-related language in the article. It is not a prediction of financial loss.")
         with risk_right:
             _section_heading("RISK THEMES", "Detected risk-language themes")
-            _render_risk_theme_chart(full_text, signal)
+            _render_risk_theme_chart(article_text, article_signal)
 
     with reader_tab:
-        _render_article_reader(bert_result, signal, headline, body, word_count)
+        _render_article_reader(bert_result, article_signal, article_headline, article_body, article_word_count)
         _scope_note("Full BERT colours describe sentence classes. Inline lexical highlights show only configured phrase matches. Neither is investment advice.")
 
 
