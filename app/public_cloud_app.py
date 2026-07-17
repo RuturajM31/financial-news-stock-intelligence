@@ -164,26 +164,31 @@ class ArticleSignal:
 
 
 def should_use_public_streamlit_cloud_app(project_root: Path | str | None = None) -> bool:
-    """Return True for the public Streamlit mode."""
+    """Return whether the self-contained public Streamlit app should run."""
 
     return True
 
 
 def _safe(text: Any) -> str:
-    """Escape text before inserting it into custom HTML."""
+    """Convert a value to text and make it safe for custom HTML."""
 
-    return html.escape(str(text), quote=True)
+    # Escape user-provided text before inserting it into rendered HTML.
+    raw_text = str(text)
+    escaped_text = html.escape(raw_text, quote=True)
+    return escaped_text
 
 
 def _clean_text(text: str | None) -> str:
-    """Normalize text onto one line for scoring."""
+    """Decode and normalize text onto one line for scoring."""
 
     if text is None:
         return ""
-    value = html.unescape(html.unescape(str(text)))
-    value = re.sub(r"\\[nrt]", " ", value)
-    value = re.sub(r"\\+(?=['\"])", "", value)
-    return re.sub(r"\s+", " ", value).strip()
+
+    decoded_text = html.unescape(html.unescape(str(text)))
+    cleaned_text = re.sub(r"\\[nrt]", " ", decoded_text)
+    cleaned_text = re.sub(r"\\+(?=['\"])", "", cleaned_text)
+    cleaned_text = re.sub(r"\s+", " ", cleaned_text).strip()
+    return cleaned_text
 
 
 def _clean_article_text(text: str | None) -> str:
@@ -191,30 +196,40 @@ def _clean_article_text(text: str | None) -> str:
 
     if text is None:
         return ""
-    value = html.unescape(html.unescape(str(text))).replace("\r\n", "\n").replace("\r", "\n")
-    value = re.sub(r"\\[nrt]", " ", value)
-    value = re.sub(r"\\+(?=['\"])", "", value)
-    paragraphs = []
-    for part in re.split(r"\n\s*\n|(?<=\.)\s{3,}", value):
-        clean = re.sub(r"[ \t]+", " ", part)
-        clean = re.sub(r"\n+", " ", clean).strip()
-        if clean:
-            paragraphs.append(clean)
-    return "\n\n".join(paragraphs)
+
+    decoded_text = html.unescape(html.unescape(str(text)))
+    normalized_text = decoded_text.replace("\r\n", "\n").replace("\r", "\n")
+    normalized_text = re.sub(r"\\[nrt]", " ", normalized_text)
+    normalized_text = re.sub(r"\\+(?=['\"])", "", normalized_text)
+
+    cleaned_paragraphs = []
+    for raw_paragraph in re.split(r"\n\s*\n|(?<=\.)\s{3,}", normalized_text):
+        cleaned_paragraph = re.sub(r"[ \t]+", " ", raw_paragraph)
+        cleaned_paragraph = re.sub(r"\n+", " ", cleaned_paragraph).strip()
+        if cleaned_paragraph:
+            cleaned_paragraphs.append(cleaned_paragraph)
+
+    return "\n\n".join(cleaned_paragraphs)
 
 
 def _term_count(text: str, term: str) -> int:
-    return len(re.findall(rf"(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])", text, re.IGNORECASE))
+    """Count case-insensitive matches of one complete term or phrase."""
+
+    # Letter-and-number boundaries prevent matches inside larger words.
+    term_pattern = rf"(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])"
+    matching_terms = re.findall(term_pattern, text, re.IGNORECASE)
+    return len(matching_terms)
 
 
 def _hits(text: str, terms: set[str]) -> list[str]:
-    """Find complete configured terms rather than substrings."""
+    """Return configured terms that appear as complete matches in text."""
 
-    return sorted(term for term in terms if _term_count(text, term) > 0)
+    matching_terms = [term for term in terms if _term_count(text, term) > 0]
+    return sorted(matching_terms)
 
 
 def _sentiment_interpretation(score: float) -> str:
-    """Single source of truth for every displayed sentiment label."""
+    """Select the displayed sentiment label from the configured thresholds."""
 
     if score <= -0.15:
         return "Bearish"
