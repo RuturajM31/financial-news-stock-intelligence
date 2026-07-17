@@ -119,8 +119,8 @@ async def _read_bounded_body(
 def _validate_filename(filename: str) -> str:
     """Reject blank, path-like, or unreasonably long upload filenames."""
 
-    cleaned = filename.strip()
-    if not cleaned:
+    safe_filename = filename.strip()
+    if not safe_filename:
         raise ApiProblem(
             422,
             "upload_filename_missing",
@@ -129,17 +129,17 @@ def _validate_filename(filename: str) -> str:
             "The upload does not contain a filename.",
             "Choose a TXT, PDF, DOCX, or CSV file and submit it again.",
         )
-    if len(cleaned) > MAXIMUM_FILENAME_CHARACTERS:
+    if len(safe_filename) > MAXIMUM_FILENAME_CHARACTERS:
         raise ApiProblem(
             422,
             "upload_filename_too_long",
             "File upload failed.",
             "Uploaded file metadata",
-            f"The filename contains {len(cleaned)} characters; the limit is "
+            f"The filename contains {len(safe_filename)} characters; the limit is "
             f"{MAXIMUM_FILENAME_CHARACTERS}.",
             "Rename the file with a shorter plain filename and retry.",
         )
-    if "\x00" in cleaned or "/" in cleaned or "\\" in cleaned:
+    if "\x00" in safe_filename or "/" in safe_filename or "\\" in safe_filename:
         raise ApiProblem(
             422,
             "upload_filename_invalid",
@@ -148,7 +148,7 @@ def _validate_filename(filename: str) -> str:
             "The filename contains a path separator or a null character.",
             "Upload the file with a plain filename such as article.txt.",
         )
-    if Path(cleaned).name != cleaned:
+    if Path(safe_filename).name != safe_filename:
         raise ApiProblem(
             422,
             "upload_filename_invalid",
@@ -157,7 +157,7 @@ def _validate_filename(filename: str) -> str:
             "The filename is not a plain basename.",
             "Upload the file with a plain filename such as article.txt.",
         )
-    return cleaned
+    return safe_filename
 
 
 def _decode_form_field(field_name: str, payload: bytes, charset: str) -> str:
@@ -207,10 +207,10 @@ def _parse_multipart_body(
         f"Content-Type: {content_type}\r\n"
         "MIME-Version: 1.0\r\n\r\n"
     ).encode("latin-1") + body
-    message = BytesParser(policy=default_email_policy).parsebytes(
+    parsed_message = BytesParser(policy=default_email_policy).parsebytes(
         synthetic_message
     )
-    if not message.is_multipart():
+    if not parsed_message.is_multipart():
         raise ApiProblem(
             400,
             "multipart_body_invalid",
@@ -220,14 +220,14 @@ def _parse_multipart_body(
             "Send one standard multipart file field named file and retry.",
         )
 
-    parts = list(message.iter_parts())
-    if len(parts) > MAXIMUM_MULTIPART_PARTS:
+    multipart_parts = list(parsed_message.iter_parts())
+    if len(multipart_parts) > MAXIMUM_MULTIPART_PARTS:
         raise ApiProblem(
             413,
             "multipart_part_limit_exceeded",
             "File upload failed.",
             "Multipart request part count",
-            f"The request contains {len(parts)} parts; the limit is "
+            f"The request contains {len(multipart_parts)} parts; the limit is "
             f"{MAXIMUM_MULTIPART_PARTS}.",
             "Send one file and, for CSV only, one csv_text_column field.",
         )
@@ -237,7 +237,7 @@ def _parse_multipart_body(
     csv_text_column: str | None = None
     seen_names: set[str] = set()
 
-    for part in parts:
+    for part in multipart_parts:
         if part.get_content_disposition() != "form-data":
             raise ApiProblem(
                 422,
@@ -297,8 +297,8 @@ def _parse_multipart_body(
                     "Send csv_text_column as short UTF-8 text and retry.",
                 )
             charset = part.get_content_charset() or "utf-8"
-            decoded = _decode_form_field(field_name, payload, charset)
-            csv_text_column = decoded or None
+            decoded_column = _decode_form_field(field_name, payload, charset)
+            csv_text_column = decoded_column or None
 
     if filename is None or file_content is None:
         raise ApiProblem(
@@ -328,18 +328,18 @@ async def read_upload_request(
         maximum_request_bytes = (
             maximum_file_bytes + MAXIMUM_MULTIPART_OVERHEAD_BYTES
         )
-        body = await _read_bounded_body(request, maximum_request_bytes)
+        request_body = await _read_bounded_body(request, maximum_request_bytes)
         return _parse_multipart_body(
             content_type,
-            body,
+            request_body,
             maximum_file_bytes,
         )
 
     raw_filename = request.headers.get(RAW_FILENAME_HEADER, "")
     filename = _validate_filename(raw_filename)
-    body = await _read_bounded_body(request, maximum_file_bytes)
-    csv_header = request.headers.get(RAW_CSV_COLUMN_HEADER)
-    csv_text_column = csv_header.strip() if csv_header else None
+    request_body = await _read_bounded_body(request, maximum_file_bytes)
+    csv_column_header = request.headers.get(RAW_CSV_COLUMN_HEADER)
+    csv_text_column = csv_column_header.strip() if csv_column_header else None
     if (
         csv_text_column
         and len(csv_text_column.encode("utf-8")) > MAXIMUM_FORM_FIELD_BYTES
@@ -354,6 +354,6 @@ async def read_upload_request(
         )
     return ParsedUploadRequest(
         filename=filename,
-        content=body,
+        content=request_body,
         csv_text_column=csv_text_column,
     )

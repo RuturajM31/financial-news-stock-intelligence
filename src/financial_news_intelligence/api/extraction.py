@@ -151,8 +151,8 @@ def _extract_docx_text(content: bytes) -> str:
 def clean_text(value: str, maximum_characters: int) -> str:
     """Normalize whitespace and enforce one explicit text limit."""
 
-    cleaned = " ".join(str(value).strip().split())
-    if not cleaned:
+    cleaned_text = " ".join(str(value).strip().split())
+    if not cleaned_text:
         raise ApiProblem(
             422,
             "empty_text",
@@ -161,17 +161,17 @@ def clean_text(value: str, maximum_characters: int) -> str:
             "No readable text remained after whitespace normalization.",
             "Provide a text-based document or paste readable article text.",
         )
-    if len(cleaned) > maximum_characters:
+    if len(cleaned_text) > maximum_characters:
         raise ApiProblem(
             413,
             "text_too_large",
             "Text validation failed.",
             "Extracted article text",
-            f"The article contains {len(cleaned)} characters; the limit is "
+            f"The article contains {len(cleaned_text)} characters; the limit is "
             f"{maximum_characters}.",
             "Submit a shorter article without unrelated page content.",
         )
-    return cleaned
+    return cleaned_text
 
 
 def extract_uploaded_bytes(
@@ -184,14 +184,14 @@ def extract_uploaded_bytes(
 ) -> list[str]:
     """Extract one or more clean texts from a supported in-memory file."""
 
-    extension = Path(filename).suffix.lower()
-    if extension not in SUPPORTED_EXTENSIONS:
+    file_extension = Path(filename).suffix.lower()
+    if file_extension not in SUPPORTED_EXTENSIONS:
         raise ApiProblem(
             415,
             "unsupported_file_type",
             "File extraction failed.",
             "Uploaded filename",
-            f"The extension {extension or '[none]'} is not supported.",
+            f"The extension {file_extension or '[none]'} is not supported.",
             "Upload a TXT, PDF, DOCX, or CSV file.",
         )
     if not content:
@@ -215,10 +215,10 @@ def extract_uploaded_bytes(
         )
 
     try:
-        if extension == ".txt":
+        if file_extension == ".txt":
             raw_text = content.decode("utf-8")
             return [clean_text(raw_text, maximum_characters)]
-        if extension == ".pdf":
+        if file_extension == ".pdf":
             if not content.startswith(b"%PDF-"):
                 raise ApiProblem(
                     422,
@@ -242,7 +242,7 @@ def extract_uploaded_bytes(
                 )
             raw_text = " ".join(page.extract_text() or "" for page in reader.pages)
             return [clean_text(raw_text, maximum_characters)]
-        if extension == ".docx":
+        if file_extension == ".docx":
             if not content.startswith(b"PK"):
                 raise ApiProblem(
                     422,
@@ -264,36 +264,36 @@ def extract_uploaded_bytes(
                 "A CSV file requires the name of its article-text column.",
                 "Send csv_text_column with the exact CSV column name.",
             )
-        decoded_csv = content.decode("utf-8-sig")
-        reader = csv.DictReader(io.StringIO(decoded_csv, newline=""))
-        column = csv_text_column.strip()
+        csv_text = content.decode("utf-8-sig")
+        reader = csv.DictReader(io.StringIO(csv_text, newline=""))
+        text_column = csv_text_column.strip()
         fieldnames = [str(value) for value in (reader.fieldnames or [])]
-        if column not in fieldnames:
+        if text_column not in fieldnames:
             raise ApiProblem(
                 422,
                 "csv_column_missing",
                 "CSV extraction failed.",
                 "CSV header",
-                f"Column '{column}' was not found. Available columns: "
+                f"Column '{text_column}' was not found. Available columns: "
                 + ", ".join(fieldnames),
                 "Use an existing CSV column name and retry.",
             )
-        raw_values: list[str] = []
+        article_values: list[str] = []
         for row in reader:
-            value = row.get(column)
+            value = row.get(text_column)
             if value is not None and str(value).strip():
-                raw_values.append(str(value))
-        if len(raw_values) > maximum_csv_rows:
+                article_values.append(str(value))
+        if len(article_values) > maximum_csv_rows:
             raise ApiProblem(
                 413,
                 "csv_row_limit_exceeded",
                 "CSV extraction failed.",
                 "CSV article rows",
-                f"The CSV contains {len(raw_values)} readable rows; the limit is "
+                f"The CSV contains {len(article_values)} readable rows; the limit is "
                 f"{maximum_csv_rows}.",
                 "Split the CSV into smaller batches and retry.",
             )
-        return [clean_text(value, maximum_characters) for value in raw_values]
+        return [clean_text(value, maximum_characters) for value in article_values]
     except ApiProblem:
         raise
     except (UnicodeDecodeError, ValueError, OSError) as exc:
@@ -301,7 +301,7 @@ def extract_uploaded_bytes(
             422,
             "file_parse_failed",
             "File extraction failed.",
-            f"{extension.upper()} parser",
+            f"{file_extension.upper()} parser",
             f"The file could not be parsed safely: {type(exc).__name__}.",
             "Confirm that the file is not encrypted or damaged, then retry.",
         ) from exc
@@ -311,7 +311,7 @@ def _validate_public_host(hostname: str) -> None:
     """Resolve a hostname and reject every non-public address."""
 
     try:
-        records = socket.getaddrinfo(hostname, None)
+        address_records = socket.getaddrinfo(hostname, None)
     except socket.gaierror as exc:
         raise ApiProblem(
             422,
@@ -321,8 +321,8 @@ def _validate_public_host(hostname: str) -> None:
             "The URL hostname could not be resolved.",
             "Check the public hostname and retry.",
         ) from exc
-    addresses = {record[4][0] for record in records}
-    if not addresses:
+    resolved_addresses = {record[4][0] for record in address_records}
+    if not resolved_addresses:
         raise ApiProblem(
             422,
             "url_dns_empty",
@@ -331,7 +331,7 @@ def _validate_public_host(hostname: str) -> None:
             "The URL hostname resolved to no addresses.",
             "Use a public HTTP or HTTPS article URL.",
         )
-    for raw_address in addresses:
+    for raw_address in resolved_addresses:
         try:
             address = ipaddress.ip_address(raw_address)
         except ValueError as exc:
@@ -366,8 +366,8 @@ def _validate_public_host(hostname: str) -> None:
 def validate_public_url(url: str) -> str:
     """Validate URL syntax, scheme, credentials, and public host resolution."""
 
-    parsed = urlsplit(url)
-    if parsed.scheme.lower() not in ALLOWED_URL_SCHEMES:
+    parsed_url = urlsplit(url)
+    if parsed_url.scheme.lower() not in ALLOWED_URL_SCHEMES:
         raise ApiProblem(
             422,
             "url_scheme_invalid",
@@ -376,7 +376,7 @@ def validate_public_url(url: str) -> str:
             "Only HTTP and HTTPS URLs are supported.",
             "Submit a public HTTP or HTTPS article URL.",
         )
-    if parsed.username or parsed.password:
+    if parsed_url.username or parsed_url.password:
         raise ApiProblem(
             422,
             "url_credentials_forbidden",
@@ -385,7 +385,7 @@ def validate_public_url(url: str) -> str:
             "Embedded usernames and passwords are not allowed.",
             "Remove credentials from the URL and retry.",
         )
-    if not parsed.hostname:
+    if not parsed_url.hostname:
         raise ApiProblem(
             422,
             "url_host_missing",
@@ -394,7 +394,7 @@ def validate_public_url(url: str) -> str:
             "The URL does not contain a hostname.",
             "Submit a complete public article URL.",
         )
-    _validate_public_host(parsed.hostname)
+    _validate_public_host(parsed_url.hostname)
     return url
 
 
@@ -467,14 +467,14 @@ def extract_public_url(
             try:
                 response.raise_for_status()
             except requests.HTTPError as exc:
-                status = response.status_code
+                status_code = response.status_code
                 response.close()
                 raise ApiProblem(
                     502,
                     "url_http_failed",
                     "URL extraction failed.",
                     "Remote article response",
-                    f"The remote server returned HTTP {status}.",
+                    f"The remote server returned HTTP {status_code}.",
                     "Use a publicly accessible article URL and retry once.",
                 ) from exc
 
@@ -543,7 +543,7 @@ def extract_public_url(
 
             encoding = response.encoding or "utf-8"
             try:
-                html = b"".join(chunks).decode(encoding, errors="strict")
+                response_text = b"".join(chunks).decode(encoding, errors="strict")
             except UnicodeDecodeError as exc:
                 raise ApiProblem(
                     422,
@@ -554,15 +554,15 @@ def extract_public_url(
                     "Use a UTF-8 or standard text article page.",
                 ) from exc
             if content_type.lower() == "text/plain":
-                return clean_text(html, maximum_characters)
-            soup = BeautifulSoup(html, "html.parser")
-            for tag in soup(
+                return clean_text(response_text, maximum_characters)
+            parsed_page = BeautifulSoup(response_text, "html.parser")
+            for tag in parsed_page(
                 ["script", "style", "nav", "footer", "header", "aside"]
             ):
                 tag.decompose()
             paragraph_text = " ".join(
                 paragraph.get_text(" ", strip=True)
-                for paragraph in soup.find_all("p")
+                for paragraph in parsed_page.find_all("p")
                 if paragraph.get_text(strip=True)
             )
             return clean_text(paragraph_text, maximum_characters)
