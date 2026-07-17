@@ -72,8 +72,10 @@ class SentimentProbabilitiesResponse(ProjectSchema):
 
     @model_validator(mode="after")
     def validate_total(self) -> "SentimentProbabilitiesResponse":
-        total = self.bearish + self.neutral + self.bullish
-        if abs(total - 1.0) > 1e-6:
+        """Require the three sentiment scores to form one probability result."""
+
+        probability_total = self.bearish + self.neutral + self.bullish
+        if abs(probability_total - 1.0) > 1e-6:
             raise ValueError("Sentiment probabilities must total 1.0.")
         return self
 
@@ -109,14 +111,18 @@ class MovementPredictionRequest(ProjectSchema):
     @field_validator("ticker")
     @classmethod
     def normalize_ticker(cls, value: str) -> str:
-        normalized = value.strip().upper()
-        if not TICKER_PATTERN.fullmatch(normalized):
+        """Normalize a ticker before enforcing the public symbol format."""
+
+        normalized_ticker = value.strip().upper()
+        if not TICKER_PATTERN.fullmatch(normalized_ticker):
             raise ValueError("Ticker contains unsupported characters.")
-        return normalized
+        return normalized_ticker
 
     @field_validator("published_at")
     @classmethod
     def require_timezone(cls, value: datetime) -> datetime:
+        """Reject timestamps that cannot identify an exact market moment."""
+
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("published_at must include a timezone.")
         return value
@@ -131,8 +137,10 @@ class MovementProbabilitiesResponse(ProjectSchema):
 
     @model_validator(mode="after")
     def validate_total(self) -> "MovementProbabilitiesResponse":
-        total = self.down + self.flat + self.up
-        if abs(total - 1.0) > 1e-6:
+        """Require the three movement scores to form one probability result."""
+
+        probability_total = self.down + self.flat + self.up
+        if abs(probability_total - 1.0) > 1e-6:
             raise ValueError("Movement probabilities must total 1.0.")
         return self
 
@@ -233,13 +241,17 @@ class ScenarioAnalysisRequest(MovementPredictionRequest):
     @field_validator("currency")
     @classmethod
     def normalize_currency(cls, value: str) -> str:
-        normalized = value.strip().upper()
-        if not re.fullmatch(r"[A-Z]{3}", normalized):
+        """Normalize a currency before enforcing its three-letter code."""
+
+        normalized_currency = value.strip().upper()
+        if not re.fullmatch(r"[A-Z]{3}", normalized_currency):
             raise ValueError("currency must be a three-letter code.")
-        return normalized
+        return normalized_currency
 
     @model_validator(mode="after")
     def validate_available_capital(self) -> "ScenarioAnalysisRequest":
+        """Require the entry fee to leave capital available for investment."""
+
         if self.entry_fee >= self.investment_amount:
             raise ValueError("entry_fee must be below investment_amount.")
         return self
