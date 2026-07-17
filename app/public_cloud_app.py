@@ -11855,6 +11855,7 @@ _BERT_COLORS = {"Bearish": "#fb7185", "Neutral": "#22d3ee", "Bullish": "#34d399"
 
 
 def _render_bert_score_stack(result: Any) -> None:
+    """Render article-level Full BERT scores in fixed class order."""
     import plotly.graph_objects as go
 
     fig = go.Figure()
@@ -11876,65 +11877,69 @@ def _render_bert_score_stack(result: Any) -> None:
 
 
 def _render_sentence_heatmap(result: Any) -> None:
+    """Render sentence-level Full BERT scores as a class heatmap."""
     import plotly.graph_objects as go
 
-    values = [[sentence.probabilities[label] * 100 for label in BERT_LABEL_ORDER] for sentence in result.sentences]
-    hover = [[
+    # Rows represent article sentences; columns follow the three model classes.
+    heatmap_values = [[sentence.probabilities[label] * 100 for label in BERT_LABEL_ORDER] for sentence in result.sentences]
+    hover_text = [[
         f"Sentence {index + 1}<br>{_safe(sentence.text)}<br>"
         + "<br>".join(f"{label}: {sentence.probabilities[label]:.2%}" for label in BERT_LABEL_ORDER)
         + f"<br>Predicted class: {sentence.label}"
         for _ in BERT_LABEL_ORDER
     ] for index, sentence in enumerate(result.sentences)]
-    fig = go.Figure(go.Heatmap(
-        z=values, x=list(BERT_LABEL_ORDER), y=[f"S{index + 1}" for index in range(len(values))],
-        customdata=hover, colorscale=[[0, "#0b1628"], [.45, "#155e75"], [1, "#e2e8f0"]],
+    chart_figure = go.Figure(go.Heatmap(
+        z=heatmap_values, x=list(BERT_LABEL_ORDER), y=[f"S{index + 1}" for index in range(len(heatmap_values))],
+        customdata=hover_text, colorscale=[[0, "#0b1628"], [.45, "#155e75"], [1, "#e2e8f0"]],
         zmin=0, zmax=100, colorbar={"title": "Score %", "thickness": 12},
         hovertemplate="%{customdata}<extra></extra>",
     ))
     for row, sentence in enumerate(result.sentences):
         column = BERT_LABEL_ORDER.index(sentence.label)
-        fig.add_shape(type="rect", x0=column - .48, x1=column + .48, y0=row - .48, y1=row + .48,
+        chart_figure.add_shape(type="rect", x0=column - .48, x1=column + .48, y0=row - .48, y1=row + .48,
                       line={"color": _BERT_COLORS[sentence.label], "width": 3}, fillcolor="rgba(0,0,0,0)")
-    fig.update_layout(
-        **_plotly_layout(height=max(310, 42 * len(values) + 120), margin={"l": 54, "r": 35, "t": 25, "b": 55}),
+    chart_figure.update_layout(
+        **_plotly_layout(height=max(310, 42 * len(heatmap_values) + 120), margin={"l": 54, "r": 35, "t": 25, "b": 55}),
         xaxis={"side": "top", "fixedrange": True}, yaxis={"autorange": "reversed", "fixedrange": True},
     )
-    st.plotly_chart(fig, width="stretch", config=_plotly_config(), key="an_sentence_heatmap")
+    st.plotly_chart(chart_figure, width="stretch", config=_plotly_config(), key="an_sentence_heatmap")
 
 
 def _render_sentiment_journey(result: Any) -> None:
+    """Render sentence sentiment in reading order and store chart selections."""
     import plotly.graph_objects as go
 
-    fig = go.Figure()
-    for index, sentence in enumerate(result.sentences):
+    chart_figure = go.Figure()
+    for sentence_index, sentence in enumerate(result.sentences):
         opacity = .38 + .62 * sentence.confidence
-        hover = (
-            f"Sentence {index + 1}<br>{_safe(sentence.text)}<br>"
+        hover_text = (
+            f"Sentence {sentence_index + 1}<br>{_safe(sentence.text)}<br>"
             + "<br>".join(f"{label}: {sentence.probabilities[label]:.2%}" for label in BERT_LABEL_ORDER)
         )
-        fig.add_trace(go.Bar(
-            x=[1], y=["Journey"], orientation="h", name=f"Sentence {index + 1}",
+        chart_figure.add_trace(go.Bar(
+            x=[1], y=["Journey"], orientation="h", name=f"Sentence {sentence_index + 1}",
             marker={"color": _BERT_COLORS[sentence.label], "opacity": opacity,
-                    "line": {"color": "#f8fafc" if index == st.session_state.an_selected_sentence else "rgba(15,23,42,.55)", "width": 2}},
-            customdata=[[hover, index]], hovertemplate="%{customdata[0]}<extra></extra>", showlegend=False,
+                    "line": {"color": "#f8fafc" if sentence_index == st.session_state.an_selected_sentence else "rgba(15,23,42,.55)", "width": 2}},
+            customdata=[[hover_text, sentence_index]], hovertemplate="%{customdata[0]}<extra></extra>", showlegend=False,
         ))
-    fig.update_layout(
+    chart_figure.update_layout(
         **_plotly_layout(height=135, margin={"l": 8, "r": 8, "t": 10, "b": 20}, barmode="stack"),
         xaxis={"visible": False, "fixedrange": True}, yaxis={"visible": False, "fixedrange": True},
     )
-    event = st.plotly_chart(
-        fig, width="stretch", config=_plotly_config(), key="an_sentiment_journey",
+    selection_event = st.plotly_chart(
+        chart_figure, width="stretch", config=_plotly_config(), key="an_sentiment_journey",
         on_select="rerun", selection_mode="points",
     )
     try:
-        points = event.selection.points
-        if points:
-            st.session_state.an_selected_sentence = int(points[0]["customdata"][1])
+        selected_points = selection_event.selection.points
+        if selected_points:
+            st.session_state.an_selected_sentence = int(selected_points[0]["customdata"][1])
     except (AttributeError, KeyError, TypeError, ValueError):
         pass
 
 
 def _score_bars(sentence: Any) -> str:
+    """Return HTML bars for one sentence's Full BERT class scores."""
     bars = []
     for label in BERT_LABEL_ORDER:
         value = sentence.probabilities[label] * 100
@@ -11945,6 +11950,7 @@ def _score_bars(sentence: Any) -> str:
 
 
 def _render_selected_sentence(result: Any, key_prefix: str) -> None:
+    """Render the selected sentence and its exact Full BERT input tokens."""
     index = min(max(int(st.session_state.an_selected_sentence), 0), len(result.sentences) - 1)
     st.session_state.an_selected_sentence = index
     sentence = result.sentences[index]
@@ -11960,6 +11966,7 @@ def _render_selected_sentence(result: Any, key_prefix: str) -> None:
 
 
 def _render_evidence_cards(result: Any) -> None:
+    """Rank sentence evidence by class and update the selected sentence."""
     selected_class = st.segmented_control(
         "Evidence class", list(BERT_LABEL_ORDER), key="an_evidence_class", width="stretch",
     ) or result.label
@@ -11977,68 +11984,74 @@ def _render_evidence_cards(result: Any) -> None:
 
 
 def _render_semantic_map(result: Any) -> None:
+    """Project Full BERT sentence embeddings into a selectable PCA map."""
     import plotly.graph_objects as go
 
-    points = deterministic_pca([sentence.embedding for sentence in result.sentences])
-    fig = go.Figure()
-    for label in BERT_LABEL_ORDER:
-        indices = [index for index, sentence in enumerate(result.sentences) if sentence.label == label]
-        if not indices:
+    sentence_embeddings = [sentence.embedding for sentence in result.sentences]
+    # PCA is a two-dimensional visual summary, not proof of cause or market impact.
+    projected_coordinates = deterministic_pca(sentence_embeddings)
+    chart_figure = go.Figure()
+    for sentiment_label in BERT_LABEL_ORDER:
+        sentence_indices = [index for index, sentence in enumerate(result.sentences) if sentence.label == sentiment_label]
+        if not sentence_indices:
             continue
-        fig.add_trace(go.Scatter(
-            x=[points[index][0] for index in indices], y=[points[index][1] for index in indices],
-            mode="markers+text", name=label, text=[f"S{index + 1}" for index in indices], textposition="top center",
-            marker={"color": _BERT_COLORS[label], "size": [10 + 18 * result.sentences[index].confidence for index in indices],
+        chart_figure.add_trace(go.Scatter(
+            x=[projected_coordinates[index][0] for index in sentence_indices], y=[projected_coordinates[index][1] for index in sentence_indices],
+            mode="markers+text", name=sentiment_label, text=[f"S{index + 1}" for index in sentence_indices], textposition="top center",
+            marker={"color": _BERT_COLORS[sentiment_label], "size": [10 + 18 * result.sentences[index].confidence for index in sentence_indices],
                     "line": {"color": "#f8fafc", "width": 1.5}},
             customdata=[[index, result.sentences[index].text,
                          result.sentences[index].probabilities["Bearish"],
                          result.sentences[index].probabilities["Neutral"],
-                         result.sentences[index].probabilities["Bullish"]] for index in indices],
+                         result.sentences[index].probabilities["Bullish"]] for index in sentence_indices],
             hovertemplate="Sentence %{customdata[0]}<br>%{customdata[1]}<br>Bearish: %{customdata[2]:.2%}<br>Neutral: %{customdata[3]:.2%}<br>Bullish: %{customdata[4]:.2%}<extra></extra>",
         ))
-    fig.update_layout(**_plotly_layout(height=410, showlegend=True), xaxis={"title": "PCA component 1", "zeroline": False}, yaxis={"title": "PCA component 2", "zeroline": False})
-    event = st.plotly_chart(fig, width="stretch", config=_plotly_config(), key="an_semantic_map", on_select="rerun", selection_mode="points")
+    chart_figure.update_layout(**_plotly_layout(height=410, showlegend=True), xaxis={"title": "PCA component 1", "zeroline": False}, yaxis={"title": "PCA component 2", "zeroline": False})
+    selection_event = st.plotly_chart(chart_figure, width="stretch", config=_plotly_config(), key="an_semantic_map", on_select="rerun", selection_mode="points")
     try:
-        points_selected = event.selection.points
-        if points_selected:
-            st.session_state.an_selected_sentence = int(points_selected[0]["customdata"][0])
+        selected_points = selection_event.selection.points
+        if selected_points:
+            st.session_state.an_selected_sentence = int(selected_points[0]["customdata"][0])
     except (AttributeError, KeyError, TypeError, ValueError):
         pass
     st.caption("Nearby points have more similar Full BERT sentence representations in this two-dimensional projection. The projection is not a complete explanation of model reasoning.")
 
 
 def _render_token_landscape(result: Any) -> None:
-    evidence = sorted(result.sentences, key=lambda item: item.probabilities[result.label], reverse=True)[:6]
-    runtime = _load_public_bert_runtime()
-    tokenized = [wordpiece_tokens(runtime, sentence.text, include_special_tokens=False) for sentence in evidence]
-    items = token_landscape(evidence, tokenized)
+    """Render WordPiece frequency across the strongest evidence sentences."""
+    evidence_sentences = sorted(result.sentences, key=lambda sentence: sentence.probabilities[result.label], reverse=True)[:6]
+    bert_runtime = _load_public_bert_runtime()
+    token_labels = [wordpiece_tokens(bert_runtime, sentence.text, include_special_tokens=False) for sentence in evidence_sentences]
+    token_items = token_landscape(evidence_sentences, token_labels)
     _section_heading("TOKEN LANDSCAPE", "Token landscape — frequency within BERT evidence sentences")
-    if not items:
+    if not token_items:
         st.info("No meaningful article tokens are available for this view.")
         return
-    maximum = max(item.count for item in items)
-    chips = []
-    for item in items:
-        size = 13 + 15 * item.count / maximum
-        distribution = ", ".join(f"{label}: {item.class_counts[label]}" for label in BERT_LABEL_ORDER)
-        tooltip = f"Token: {item.token} | Occurrences: {item.count} | Sentence classes: {distribution} | Example: {item.example_sentence}"
-        chips.append(f'<span class="fs-landscape-token" style="font-size:{size:.1f}px;color:{_BERT_COLORS[item.dominant_class]}" title="{_safe(tooltip)}">{_safe(item.token)} <small>{item.count}</small></span>')
-    st.markdown('<div class="fs-card fs-token-landscape">' + "".join(chips) + "</div>", unsafe_allow_html=True)
+    maximum_frequency = max(token_item.count for token_item in token_items)
+    token_chips = []
+    for token_item in token_items:
+        token_size = 13 + 15 * token_item.count / maximum_frequency
+        class_distribution = ", ".join(f"{label}: {token_item.class_counts[label]}" for label in BERT_LABEL_ORDER)
+        tooltip = f"Token: {token_item.token} | Occurrences: {token_item.count} | Sentence classes: {class_distribution} | Example: {token_item.example_sentence}"
+        token_chips.append(f'<span class="fs-landscape-token" style="font-size:{token_size:.1f}px;color:{_BERT_COLORS[token_item.dominant_class]}" title="{_safe(tooltip)}">{_safe(token_item.token)} <small>{token_item.count}</small></span>')
+    st.markdown('<div class="fs-card fs-token-landscape">' + "".join(token_chips) + "</div>", unsafe_allow_html=True)
     st.caption("Token size represents frequency within selected evidence sentences, not model importance.")
 
 
 def _render_contextual_network(result: Any, signature: str) -> None:
+    """Build and reuse a requested contextual-token similarity network."""
     import plotly.graph_objects as go
 
     index = min(max(int(st.session_state.an_selected_sentence), 0), len(result.sentences) - 1)
     sentence = result.sentences[index]
-    network_signature = f"{signature}:{index}"
+    token_network_signature = f"{signature}:{index}"
+    # Contextual embedding extraction stays lazy because it is relatively expensive.
     if st.button("Build contextual token view", key="an_build_token_network", width="stretch"):
         with st.spinner("Building contextual token view..."):
             nodes, links = cosine_links(contextual_tokens(_load_public_bert_runtime(), sentence.text))
         st.session_state.an_token_network = (nodes, links)
-        st.session_state.an_token_network_signature = network_signature
-    if st.session_state.an_token_network_signature != network_signature or not st.session_state.an_token_network:
+        st.session_state.an_token_network_signature = token_network_signature
+    if st.session_state.an_token_network_signature != token_network_signature or not st.session_state.an_token_network:
         st.caption("Build this view when needed. It uses the selected sentence's final-layer contextual token representations.")
         return
     nodes, links = st.session_state.an_token_network
@@ -12062,14 +12075,16 @@ def _render_contextual_network(result: Any, signature: str) -> None:
 
 
 def _lexical_markup_exact(text: str, signal: ArticleSignal, selected_filter: str) -> str:
+    """Escape source text and add separate lexical-evidence highlights."""
     categories = {term: ("Positive", "fs-pos", 1.2 / 6.0) for term in signal.positive_hits}
     categories.update({term: ("Negative", "fs-neg", -(1.05 / 6.0)) for term in signal.negative_hits})
     categories.update({term: ("Risk-related", "fs-risk", .13) for term in signal.risk_hits})
     if not categories:
         return _safe(text)
-    pattern = re.compile("|".join(rf"(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])" for term in sorted(categories, key=len, reverse=True)), re.IGNORECASE)
+    # Match longer phrases first so shorter overlapping terms cannot replace them.
+    phrase_pattern = re.compile("|".join(rf"(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])" for term in sorted(categories, key=len, reverse=True)), re.IGNORECASE)
     pieces, cursor = [], 0
-    for match in pattern.finditer(text):
+    for match in phrase_pattern.finditer(text):
         pieces.append(_safe(text[cursor:match.start()]))
         configured = next(term for term in categories if term.lower() == match.group(0).lower())
         category, css_class, contribution = categories[configured]
@@ -12081,20 +12096,21 @@ def _lexical_markup_exact(text: str, signal: ArticleSignal, selected_filter: str
 
 
 def _render_article_reader(result: Any, signal: ArticleSignal, headline: str, body: str, word_count: int) -> None:
+    """Render Full BERT sentence styling with separate lexical highlights."""
     _section_heading("ARTICLE READER", "Highlighted Article Evidence Explorer", "Explore Full BERT sentence classifications and lexical phrase cues while preserving the exact article wording.")
-    selected_filter = st.segmented_control(
+    reader_filter = st.segmented_control(
         "Evidence filter", ["All evidence", "BERT Bearish", "BERT Neutral", "BERT Bullish", "Lexical Positive", "Lexical Negative", "Lexical Risk"],
         default="All evidence", key="an_reader_filter", width="stretch",
     ) or "All evidence"
     st.markdown('<div class="fs-sticky-legend"><strong>Full BERT sentence class</strong><span class="fs-bert-bearish">Bearish</span><span class="fs-bert-neutral">Neutral</span><span class="fs-bert-bullish">Bullish</span><strong>Lexical phrase evidence</strong><mark class="fs-pos">Positive</mark><mark class="fs-neg">Negative</mark><mark class="fs-risk">Risk-related</mark></div>', unsafe_allow_html=True)
     reader_text = headline + ("\n\n" if headline and body else "") + body
-    segments = reader_segments(reader_text, result.sentences)
+    article_segments = reader_segments(reader_text, result.sentences)
     rendered = []
-    for segment in segments:
-        content = _lexical_markup_exact(segment.text, signal, selected_filter)
+    for segment in article_segments:
+        content = _lexical_markup_exact(segment.text, signal, reader_filter)
         if segment.sentence_class:
-            bert_filter = selected_filter.startswith("BERT ")
-            dim = bert_filter and selected_filter != f"BERT {segment.sentence_class}"
+            bert_filter = reader_filter.startswith("BERT ")
+            dim = bert_filter and reader_filter != f"BERT {segment.sentence_class}"
             rendered.append(f'<span id="bert-sentence-{segment.sentence_index + 1}" class="fs-bert-sentence fs-bert-{segment.sentence_class.lower()}{" fs-dim" if dim else ""}" title="Sentence {segment.sentence_index + 1} | {segment.sentence_class} | Dominant class score: {segment.score:.2%}">{content}</span>')
         else:
             rendered.append(content)
