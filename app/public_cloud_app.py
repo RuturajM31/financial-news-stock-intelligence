@@ -989,9 +989,10 @@ def _apply_theme() -> None:
 
 
 def _render_sidebar() -> str:
-    """Render real clickable Streamlit sidebar navigation."""
+    """Render the stable four-page public navigation and return its selection."""
 
-    pages = [
+    # Stable route labels preserve navigation state across Streamlit reruns.
+    page_options = [
         "Overview",
         "Analyze Article",
         "Model Results",
@@ -1016,7 +1017,7 @@ def _render_sidebar() -> str:
 
     selected_page = st.sidebar.radio(
         "Pages",
-        pages,
+        page_options,
         index=0,
         key="public_dashboard_page",
         label_visibility="collapsed",
@@ -12924,10 +12925,11 @@ def _render_sentiment_architecture_page() -> None:
         st.button("Return to Overview", key="ar_overview", width="stretch", on_click=_navigate_public_page, args=("Overview",))
 
 def _render_compact_architecture_mode(mode: str, data: Any) -> None:
-    """Render one materially distinct architecture diagram and inspector."""
-    current, historical = data.current, data.historical["Full BERT historical"]
+    """Render one architecture blueprint without running training or inference."""
+    current_result = data.current
+    historical_result = data.historical["Full BERT historical"]
     if mode == "Runtime system":
-        nodes = [
+        workflow_steps = [
             ("Article source", "URL, pasted text or sample", "Operational"),
             ("Clean extraction", "Readable content retained", "Validated"),
             ("Sentence segmentation", "Ordered sentence units", "Operational"),
@@ -12936,9 +12938,9 @@ def _render_compact_architecture_mode(mode: str, data: Any) -> None:
             ("Article aggregation", "Arithmetic mean of scores", "Transparent"),
             ("Evidence workspace", "Heatmap · map · tokens · cues", "Validated locally"),
         ]
-        default, key = "Batched Full BERT inference", "ar_runtime_node"
+        default_stage, widget_key = "Batched Full BERT inference", "ar_runtime_node"
     elif mode == "Training system":
-        nodes = [
+        workflow_steps = [
             ("Financial PhraseBank", "3,453 source records", "Verified"),
             ("Deduplication", "3,448 records · 5 duplicates removed", "Verified"),
             ("Stratified splits", "Fixed train · validation · test", "Reproducible"),
@@ -12948,57 +12950,58 @@ def _render_compact_architecture_mode(mode: str, data: Any) -> None:
             ("Champion selection", "checkpoint-453", "Verified"),
             ("Champion model artifact", "Weights · tokenizer · config", "Local artifact ready"),
         ]
-        default, key = "Champion model artifact", "ar_training_node"
+        default_stage, widget_key = "Champion model artifact", "ar_training_node"
     else:
-        nodes = [
+        workflow_steps = [
             ("Current local inference", "Streamlit and cached Full BERT", "Operational locally"),
             ("Public interface", "Public product client", "Planned"),
             ("Authenticated API", "HTTPS controls and limits", "Planned"),
             ("Model service", "Containerised FastAPI runtime", "Planned"),
             ("Managed runtime", "Monitoring and scaling", "Planned"),
         ]
-        default, key = "Current local inference", "ar_deployment_node"
-    selected = st.segmented_control("Inspect stage", [n[0] for n in nodes], default=default, key=key, width="stretch") or default
+        default_stage, widget_key = "Current local inference", "ar_deployment_node"
+    selected_stage = st.segmented_control("Inspect stage", [stage[0] for stage in workflow_steps], default=default_stage, key=widget_key, width="stretch") or default_stage
 
     if mode == "Runtime system":
-        st.markdown('<section class="ar-blueprint ar-runtime-blueprint"><div class="ar-mode-head"><div><small>RUNTIME SYSTEM</small><strong>Article to inspectable evidence</strong></div><span>WORKING LOCALLY</span></div>' + _ar_flow(nodes) + '<div class="ar-artifact-dock"><small>SAVED MODEL HANDOFF</small><strong>FULL BERT ARTIFACT</strong><span>google-bert/bert-base-uncased · 3 classes · 109.5M · maximum length 128 · 438,912,889 bytes</span><b>LOCAL ARTIFACT READY</b></div></section>', unsafe_allow_html=True)
+        st.markdown('<section class="ar-blueprint ar-runtime-blueprint"><div class="ar-mode-head"><div><small>RUNTIME SYSTEM</small><strong>Article to inspectable evidence</strong></div><span>WORKING LOCALLY</span></div>' + _ar_flow(workflow_steps) + '<div class="ar-artifact-dock"><small>SAVED MODEL HANDOFF</small><strong>FULL BERT ARTIFACT</strong><span>google-bert/bert-base-uncased · 3 classes · 109.5M · maximum length 128 · 438,912,889 bytes</span><b>LOCAL ARTIFACT READY</b></div></section>', unsafe_allow_html=True)
     elif mode == "Training system":
-        st.markdown('<section class="ar-blueprint ar-training-blueprint"><div class="ar-mode-head"><div><small>TRAINING SYSTEM</small><strong>Dataset to champion artifact</strong></div><span>VERIFIED LINEAGE</span></div>' + _ar_flow(nodes[:4]) + '<div class="ar-branch"><i></i><div><span>FULL BERT</span><span>DISTILBERT</span><span>BERT-LoRA</span></div><i></i></div>' + _ar_flow(nodes[5:]) + f'<div class="ar-training-proof"><div><small>CURRENT FULL BERT</small><strong>{current.accuracy * 100:.2f}% accuracy · {current.macro_f1:.4f} macro-F1</strong><span>checkpoint-453 · 80.93 seconds · Bearish 420 · Neutral 2,141 · Bullish 887</span></div><div><small>HISTORICAL BEST · SEPARATE RUN</small><strong>{historical.accuracy * 100:.2f}% accuracy · {historical.macro_f1:.4f} macro-F1</strong></div></div></section>', unsafe_allow_html=True)
+        st.markdown('<section class="ar-blueprint ar-training-blueprint"><div class="ar-mode-head"><div><small>TRAINING SYSTEM</small><strong>Dataset to champion artifact</strong></div><span>VERIFIED LINEAGE</span></div>' + _ar_flow(workflow_steps[:4]) + '<div class="ar-branch"><i></i><div><span>FULL BERT</span><span>DISTILBERT</span><span>BERT-LoRA</span></div><i></i></div>' + _ar_flow(workflow_steps[5:]) + f'<div class="ar-training-proof"><div><small>CURRENT FULL BERT</small><strong>{current_result.accuracy * 100:.2f}% accuracy · {current_result.macro_f1:.4f} macro-F1</strong><span>checkpoint-453 · 80.93 seconds · Bearish 420 · Neutral 2,141 · Bullish 887</span></div><div><small>HISTORICAL BEST · SEPARATE RUN</small><strong>{historical_result.accuracy * 100:.2f}% accuracy · {historical_result.macro_f1:.4f} macro-F1</strong></div></div></section>', unsafe_allow_html=True)
     else:
         st.markdown('<section class="ar-blueprint ar-deployment-blueprint"><div class="ar-topology ar-current"><div class="ar-mode-head"><div><small>CURRENT WORKING TOPOLOGY</small><strong>Operational locally</strong></div><span>VALIDATED</span></div>' + _ar_flow([("Streamlit interface","Presentation-ready","Local"),("Local cached Full BERT","Saved artifact","Ready"),("GPU or CPU inference","Both paths validated","Operational"),("Evidence visualisations","Inspectable output","Ready")]) + '<p>Windows validated · NVIDIA GPU validated · CPU fallback validated · health endpoint operational · presentation-ready</p></div><div class="ar-topology ar-target"><div class="ar-mode-head"><div><small>TARGET PRODUCTION TOPOLOGY</small><strong>Architecture target — not yet publicly validated</strong></div><span>PLANNED</span></div>' + _ar_flow([("Public web interface","Product client","Planned"),("Authenticated HTTPS API","Security and limits","Planned"),("FastAPI model service","Containerised runtime","Planned"),("Versioned model storage","Artifact distribution","Planned"),("Managed CPU/GPU","Monitoring and scale","Planned")]) + '<p>Unresolved: model artifact distribution · hosted inference service · security and request controls · monitoring and scaling</p></div></section>', unsafe_allow_html=True)
         with st.expander("Detailed deployment requirements"):
             st.markdown("- Versioned artifact distribution\n- Authenticated HTTPS inference\n- Host-specific PyTorch validation\n- Request controls, health monitoring, scaling and cost validation")
 
-    selected_node = next(node for node in nodes if node[0] == selected)
-    inspector = {
+    selected_stage_details = next(stage for stage in workflow_steps if stage[0] == selected_stage)
+    inspector_text = {
         "Runtime system": ("Financial article or prior stage output.", "Runs the selected article-processing stage.", "Model or evidence output for the next stage."),
         "Training system": ("Verified dataset or prior experiment artifact.", "Runs the selected preparation, experiment or evaluation stage.", "Reproducible evidence or saved model artifact."),
         "Deployment topology": ("Validated local component or planned service input.", "Runs locally now or describes a production responsibility.", "Operational local output or planned service handoff."),
     }[mode]
-    st.markdown(f'<div class="ar-inspector"><div><small>INPUT</small><strong>{inspector[0]}</strong></div><div><small>PROCESS</small><strong>{inspector[1]}</strong></div><div><small>OUTPUT</small><strong>{inspector[2]}</strong></div><div><small>STATUS</small><strong>{selected_node[2]}</strong></div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="ar-inspector"><div><small>INPUT</small><strong>{inspector_text[0]}</strong></div><div><small>PROCESS</small><strong>{inspector_text[1]}</strong></div><div><small>OUTPUT</small><strong>{inspector_text[2]}</strong></div><div><small>STATUS</small><strong>{selected_stage_details[2]}</strong></div></div>', unsafe_allow_html=True)
 
 
 def _render_sentiment_architecture_page() -> None:
-    """Render the compact, inference-free Architecture Observatory."""
+    """Document the active system architecture without running model inference."""
     try:
-        data = load_experiment_lab_data(PROJECT_ROOT)
-    except ExperimentDataError as exc:
-        st.error(f"Verified architecture evidence could not be loaded: {exc}")
+        experiment_results = load_experiment_lab_data(PROJECT_ROOT)
+    except ExperimentDataError as data_error:
+        st.error(f"Verified architecture evidence could not be loaded: {data_error}")
         return
-    current, benchmark = data.current, data.benchmark
-    historical = data.historical["Full BERT historical"]
-    artifact_bytes = benchmark.get("model_artifact_size_bytes", 438_912_889)
-    artifact_mib = artifact_bytes / (1024 ** 2)
+    current_result = experiment_results.current
+    runtime_benchmark = experiment_results.benchmark
+    historical_result = experiment_results.historical["Full BERT historical"]
+    artifact_bytes = runtime_benchmark.get("model_artifact_size_bytes", 438_912_889)
+    artifact_size_mib = artifact_bytes / (1024 ** 2)
 
     st.markdown('''<section class="ar-hero"><div class="ar-eyebrow">SYSTEM ARCHITECTURE · MODEL LINEAGE · MLOPS</div><h1>One model artifact. Two connected systems.</h1><p>A verified Full BERT model links the training laboratory with a reusable financial-news inference product.</p></section>''', unsafe_allow_html=True)
-    statuses=[("FULL BERT","Verified","ok"),("LOCAL INFERENCE","Operational","ok"),("GPU RUNTIME","Operational","ok"),("CPU FALLBACK","Validated","ok"),("PUBLIC INTERFACE","Validated locally","local"),("CLOUD MODEL SERVICE","Not yet validated","planned"),("TEST SUITE","Passing","ok")]
-    st.markdown('<section class="ar-command-bar">' + ''.join(f'<div><small>{a}</small><strong class="ar-{c}">{b}</strong></div>' for a,b,c in statuses) + '</section>', unsafe_allow_html=True)
+    system_statuses=[("FULL BERT","Verified","ok"),("LOCAL INFERENCE","Operational","ok"),("GPU RUNTIME","Operational","ok"),("CPU FALLBACK","Validated","ok"),("PUBLIC INTERFACE","Validated locally","local"),("CLOUD MODEL SERVICE","Not yet validated","planned"),("TEST SUITE","Passing","ok")]
+    st.markdown('<section class="ar-command-bar">' + ''.join(f'<div><small>{status_name}</small><strong class="ar-{status_class}">{status_value}</strong></div>' for status_name,status_value,status_class in system_statuses) + '</section>', unsafe_allow_html=True)
     st.markdown(f'''<section class="ar-observatory"><div class="ar-observatory-head"><div><div class="ar-eyebrow">INTERACTIVE ARCHITECTURE BLUEPRINT</div><h2>Training lineage connected to article intelligence</h2></div><span>SELECT A MODE · INSPECT A STAGE</span></div><div class="ar-system-map"><div class="ar-system-side"><small>TRAINING LABORATORY</small><strong>Data → experiments → evaluation</strong><span>Financial PhraseBank · Full BERT · DistilBERT · BERT-LoRA</span></div><i class="ar-map-link"></i><div class="ar-central-artifact"><small>FULL BERT ARTIFACT</small><strong>google-bert/bert-base-uncased</strong><span>3 classes · 109.5M parameters · maximum length 128</span><span>{artifact_bytes:,} bytes</span><b>LOCAL ARTIFACT READY</b></div><i class="ar-map-link"></i><div class="ar-system-side"><small>INFERENCE PRODUCT</small><strong>Article → model → evidence</strong><span>Extraction · sentence scores · aggregation · workspace</span></div></div></section>''', unsafe_allow_html=True)
-    mode=st.segmented_control("Architecture view",["Runtime system","Training system","Deployment topology"],default="Runtime system",key="ar_view_mode",width="stretch") or "Runtime system"
-    _render_compact_architecture_mode(mode,data)
+    architecture_view=st.segmented_control("Architecture view",["Runtime system","Training system","Deployment topology"],default="Runtime system",key="ar_view_mode",width="stretch") or "Runtime system"
+    _render_compact_architecture_mode(architecture_view,experiment_results)
 
-    cpu=benchmark.get("cpu_sentence_milliseconds")
-    st.markdown(f'''<section class="ar-evidence"><div class="ar-section-head"><div><div class="ar-eyebrow">ENGINEERING EVIDENCE</div><h2>Verified measurements and artifact lineage</h2></div><span>CURRENT RUN · NOT LIVE LOGS</span></div><div class="ar-instrument"><div class="ar-instrument-primary"><div><small>MODEL</small><strong>Full BERT</strong></div><div><small>STATUS</small><strong>Ready</strong></div><div><small>DEVICE</small><strong>{_safe(benchmark.get("device_name","Not recorded"))}</strong></div></div><div class="ar-gauges"><div><small>MODEL LOAD</small><strong>{benchmark.get("model_load_seconds"):.2f} s</strong></div><div><small>WARM GPU INFERENCE</small><strong>{benchmark.get("warm_sentence_milliseconds"):.2f} ms / sentence</strong></div><div><small>MODEL ARTIFACT</small><strong>{artifact_mib:.2f} MiB</strong></div><div><small>CURRENT MACRO-F1</small><strong>{current.macro_f1:.4f}</strong></div></div><div class="ar-technical-row"><span>Current accuracy <b>{current.accuracy*100:.2f}%</b></span><span>Best checkpoint <b>{data.best_checkpoint}</b></span><span>CUDA peak allocation <b>{benchmark.get("cuda_peak_allocated_bytes")/1_000_000:.1f} MB</b></span><span>CPU latency <b>{f"{cpu:.2f} ms" if isinstance(cpu,(int,float)) else "Not recorded"}</b></span></div></div>''', unsafe_allow_html=True)
+    cpu_latency=runtime_benchmark.get("cpu_sentence_milliseconds")
+    st.markdown(f'''<section class="ar-evidence"><div class="ar-section-head"><div><div class="ar-eyebrow">ENGINEERING EVIDENCE</div><h2>Verified measurements and artifact lineage</h2></div><span>CURRENT RUN · NOT LIVE LOGS</span></div><div class="ar-instrument"><div class="ar-instrument-primary"><div><small>MODEL</small><strong>Full BERT</strong></div><div><small>STATUS</small><strong>Ready</strong></div><div><small>DEVICE</small><strong>{_safe(runtime_benchmark.get("device_name","Not recorded"))}</strong></div></div><div class="ar-gauges"><div><small>MODEL LOAD</small><strong>{runtime_benchmark.get("model_load_seconds"):.2f} s</strong></div><div><small>WARM GPU INFERENCE</small><strong>{runtime_benchmark.get("warm_sentence_milliseconds"):.2f} ms / sentence</strong></div><div><small>MODEL ARTIFACT</small><strong>{artifact_size_mib:.2f} MiB</strong></div><div><small>CURRENT MACRO-F1</small><strong>{current_result.macro_f1:.4f}</strong></div></div><div class="ar-technical-row"><span>Current accuracy <b>{current_result.accuracy*100:.2f}%</b></span><span>Best checkpoint <b>{experiment_results.best_checkpoint}</b></span><span>CUDA peak allocation <b>{runtime_benchmark.get("cuda_peak_allocated_bytes")/1_000_000:.1f} MB</b></span><span>CPU latency <b>{f"{cpu_latency:.2f} ms" if isinstance(cpu_latency,(int,float)) else "Not recorded"}</b></span></div></div>''', unsafe_allow_html=True)
     lineage=[("SOURCE","3,453 Financial PhraseBank sentences","ACQUISITION"),("PREPARATION","3,448 deduplicated records","JSONL"),("SPLITS","Fixed stratified train, validation and test","MANIFEST"),("TRAINING","Trainer history and checkpoints","CHECKPOINTS"),("EVALUATION","Classification report and confusion matrix","METRICS"),("MODEL","Final Full BERT weights and tokenizer","ARTIFACT"),("INFERENCE","Article and sentence evidence outputs","RUNTIME")]
     st.markdown('<div class="ar-lineage"><div class="ar-section-head"><div><div class="ar-eyebrow">MODEL AND DATA LINEAGE</div><h2>One continuous artifact trail</h2></div></div><div class="ar-lineage-track">'+'<i></i>'.join(f'<div><small>{a}</small><strong>{b}</strong><span>{c}</span></div>' for a,b,c in lineage)+'</div></div>',unsafe_allow_html=True)
     with st.expander("Artifact registry"):
@@ -13019,23 +13022,25 @@ def _render_sentiment_architecture_page() -> None:
     with c: st.button("Return to Overview",key="ar_overview",width="stretch",on_click=_navigate_public_page,args=("Overview",))
 
 def render_public_streamlit_cloud_app(project_root: Path | str | None = None) -> None:
-    """Render the focused public Streamlit application."""
+    """Configure and route the stable four-page public Streamlit application."""
 
     _apply_theme()
     _render_premium_sentiment_styles()
     selected_page = _render_sidebar()
 
-    routes = {
+    # Each stable route name maps to exactly one active page renderer.
+    page_renderers = {
         "Overview": _render_sentiment_overview_page,
         "Analyze Article": _render_sentiment_analyze_page,
         "Model Results": _render_verified_model_results_page,
         "About / Architecture": _render_sentiment_architecture_page,
     }
-    renderer = routes.get(selected_page)
-    if renderer is None:
+    page_renderer = page_renderers.get(selected_page)
+    if page_renderer is None:
         st.error("This page is not available.")
         return
-    renderer()
+    page_renderer()
 
 if __name__ == "__main__":
+    # Keep the same startup target for direct runs and Streamlit execution.
     render_public_streamlit_cloud_app()
