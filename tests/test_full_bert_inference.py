@@ -12,20 +12,22 @@ from financial_news_intelligence.models.full_bert_inference import (
 
 
 def test_sentence_split_keeps_headline_and_filters_boilerplate() -> None:
-    sentences = split_article_sentences(
+    article_sentences = split_article_sentences(
         "Company raises guidance",
         "Revenue rose sharply during the quarter. Accept cookies to continue. Demand remained strong across regions.",
     )
-    assert sentences == [
+    expected_sentences = [
         "Company raises guidance",
         "Revenue rose sharply during the quarter.",
         "Demand remained strong across regions.",
     ]
+    assert article_sentences == expected_sentences
 
 
 def test_article_requires_meaningful_content() -> None:
+    mock_runtime = SimpleNamespace()
     with pytest.raises(ValueError, match="meaningful sentence"):
-        analyze_article(SimpleNamespace(), "", "Too short")
+        analyze_article(mock_runtime, "", "Too short")
 
 
 def test_verified_label_order_is_stable() -> None:
