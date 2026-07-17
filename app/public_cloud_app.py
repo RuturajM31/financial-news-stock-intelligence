@@ -1,12 +1,12 @@
-"""Self-contained public Streamlit dashboard for free Streamlit Cloud.
+"""Render the public Financial News Sentiment Analyzer in Streamlit.
 
-This module intentionally avoids private FastAPI/runtime dependencies so the
-public app can run on Streamlit Community Cloud. It renders a polished
-Executive Overview dashboard with URL, upload, paste, and sample analysis.
+The module contains the four routed pages and coordinates article extraction,
+Full BERT inference, visualizations, model results, and architecture views.
 """
 
 from __future__ import annotations
 
+# Standard library
 import html
 import math
 import os
@@ -16,13 +16,30 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+# Third-party libraries
 import streamlit as st
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = PROJECT_ROOT / 'src'
-if str(SRC_ROOT) not in os.sys.path:
-    os.sys.path.insert(0, str(SRC_ROOT))
+try:
+    import requests
+except Exception:  # pragma: no cover - public fallback
+    requests = None  # type: ignore[assignment]
 
+try:
+    import plotly.graph_objects as go
+except Exception:  # pragma: no cover - public fallback
+    go = None  # type: ignore[assignment]
+
+
+current_file_path = Path(__file__).resolve()
+application_directory = current_file_path.parent
+PROJECT_ROOT = application_directory.parent
+source_directory = PROJECT_ROOT / "src"
+
+# The repository uses a src layout, so local packages need src on Python's path.
+if str(source_directory) not in os.sys.path:
+    os.sys.path.insert(0, str(source_directory))
+
+# Local project imports. Their heavy model dependencies load lazily at runtime.
 from financial_news_intelligence.models.full_bert_inference import (
     LABEL_ORDER as BERT_LABEL_ORDER,
     analyze_article as analyze_article_with_bert,
@@ -46,17 +63,7 @@ from financial_news_intelligence.models.experiment_results import (
     normalize_confusion,
 )
 
-try:
-    import requests
-except Exception:  # pragma: no cover - public fallback
-    requests = None  # type: ignore[assignment]
-
-try:
-    import plotly.graph_objects as go
-except Exception:  # pragma: no cover - public fallback
-    go = None  # type: ignore[assignment]
-
-
+# Built-in sample used by presentation and article-analysis workflows.
 _BASE_EXAMPLE = (
     "Nvidia raises outlook as data-center demand reaches a record. "
     "Nvidia reported record quarterly data-center revenue after demand for its artificial-intelligence chips remained strong. "
@@ -69,6 +76,7 @@ _BASE_EXAMPLE = (
     "Nvidia plans to provide another operational update when it publishes its next quarterly results."
 )
 
+# Lexical cue lists support transparent evidence; they do not affect Full BERT.
 _POSITIVE_TERMS = {
     "record",
     "growth",
@@ -128,6 +136,7 @@ _RISK_TERMS = {
     "policy",
 }
 
+# Ordered aliases support deterministic company and ticker detection.
 _COMPANY_ENTITIES = (
     {"company": "SpaceX", "ticker": "", "private": True, "aliases": ("spacex", "space exploration technologies")},
     {"company": "NVIDIA Corporation", "ticker": "NVDA", "private": False, "aliases": ("nvidia", "nvda")},
@@ -145,7 +154,10 @@ _COMPANY_ENTITIES = (
 
 @dataclass(frozen=True)
 class ArticleSignal:
-    """Analysis result displayed by the public dashboard."""
+    """Store lexical article signals used by the public visualizations.
+
+    These rule-based values remain separate from the Full BERT prediction.
+    """
 
     ticker: str
     company: str
@@ -239,70 +251,86 @@ def _sentiment_interpretation(score: float) -> str:
 
 
 def _infer_company(headline: str, body: str) -> tuple[str, str]:
-    """Rank known entities by headline, lead, repetition, exact name, and ticker."""
+    """Rank known entities using headline, article position, name, and ticker."""
 
     headline_text = _clean_text(headline)
     body_text = _clean_text(body)
-    lead, remainder = body_text[:500], body_text[500:]
-    ranked: list[tuple[int, int, dict[str, Any]]] = []
-    for order, entity in enumerate(_COMPANY_ENTITIES):
-        score = 0
+    lead_text = body_text[:500]
+    remaining_text = body_text[500:]
+    combined_text = f"{headline_text} {body_text}"
+
+    ranked_entities: list[tuple[int, int, dict[str, Any]]] = []
+    for entity_order, entity in enumerate(_COMPANY_ENTITIES):
+        entity_score = 0
         for alias in entity["aliases"]:
-            score += _term_count(headline_text, alias) * 8
-            score += _term_count(lead, alias) * 5
-            score += _term_count(remainder, alias)
-        if _term_count(f"{headline_text} {body_text}", entity["company"]) > 0:
-            score += 3
-        ticker = entity["ticker"]
-        if ticker and _term_count(f"{headline_text} {body_text}", ticker) > 0:
-            score += 3
-        ranked.append((score, -order, entity))
-    score, _, winner = max(ranked, key=lambda item: (item[0], item[1]))
-    if score < 5:
+            entity_score += _term_count(headline_text, alias) * 8
+            entity_score += _term_count(lead_text, alias) * 5
+            entity_score += _term_count(remaining_text, alias)
+
+        if _term_count(combined_text, entity["company"]) > 0:
+            entity_score += 3
+
+        ticker_symbol = entity["ticker"]
+        if ticker_symbol and _term_count(combined_text, ticker_symbol) > 0:
+            entity_score += 3
+
+        ranked_entities.append((entity_score, -entity_order, entity))
+
+    best_score, _entity_order, best_entity = max(
+        ranked_entities,
+        key=lambda item: (item[0], item[1]),
+    )
+    if best_score < 5:
         return "", "Company not confidently detected"
-    if winner["private"]:
-        return "Private company", winner["company"]
-    return winner["ticker"], winner["company"]
+    if best_entity["private"]:
+        return "Private company", best_entity["company"]
+    return best_entity["ticker"], best_entity["company"]
 
 
 def _infer_ticker(text: str) -> tuple[str, str]:
-    """Compatibility wrapper for callers without separate headline/body text."""
+    """Detect an entity when headline and body arrive as one text value."""
 
-    first, _, rest = _clean_text(text).partition(".")
-    return _infer_company(first, rest)
+    headline, _sentence_separator, article_body = _clean_text(text).partition(".")
+    return _infer_company(headline, article_body)
 
 
 def _is_boilerplate_fragment(text: str) -> bool:
-    low = text.lower().strip(" .:|")
-    phrases = (
+    """Identify short navigation or website text that is not article content."""
+
+    normalized_text = text.lower().strip(" .:|")
+    boilerplate_phrases = (
         "skip to content", "accept cookies", "cookie policy", "privacy policy",
         "sign up", "subscribe", "newsletter", "follow us", "share this",
         "related articles", "recommended for you", "all rights reserved",
         "advertisement", "read more", "menu", "home", "contact us",
     )
-    if any(phrase in low for phrase in phrases):
+    if any(phrase in normalized_text for phrase in boilerplate_phrases):
         return True
-    words = low.split()
-    return len(words) < 6 and not re.search(r"[.!?]$", text.strip())
+
+    fragment_words = normalized_text.split()
+    has_sentence_ending = re.search(r"[.!?]$", text.strip())
+    return len(fragment_words) < 6 and not has_sentence_ending
 
 
 def _extract_article_content(url: str) -> tuple[str, str, str]:
-    """Extract a clean headline/body pair from structured article HTML."""
+    """Download a page and return its cleaned headline, body, and method."""
 
-    clean_url = _clean_text(url)
-    if not clean_url:
+    article_url = _clean_text(url)
+    if not article_url:
         raise ValueError("Add an article link first.")
-    if not clean_url.startswith(("http://", "https://")):
+    if not article_url.startswith(("http://", "https://")):
         raise ValueError("Article link must start with http:// or https://")
     if requests is None:
         raise RuntimeError("requests is unavailable in this public runtime")
+
+    # BeautifulSoup stays optional so the public app can explain a missing parser.
     try:
         from bs4 import BeautifulSoup
     except ImportError as exc:
         raise RuntimeError("BeautifulSoup is unavailable in this public runtime") from exc
 
     response = requests.get(
-        clean_url,
+        article_url,
         headers={
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml",
@@ -310,66 +338,101 @@ def _extract_article_content(url: str) -> tuple[str, str, str]:
         timeout=12,
     )
     response.raise_for_status()
-    raw_html = response.text or ""
-    if len(raw_html.strip()) < 200:
+
+    page_html = response.text or ""
+    if len(page_html.strip()) < 200:
         raise ValueError("The website returned too little readable content.")
 
-    soup = BeautifulSoup(raw_html, "html.parser")
-    for tag in soup.select("script,style,noscript,nav,footer,header,aside,form,dialog,svg"):
-        tag.decompose()
-    chrome_pattern = re.compile(
+    page = BeautifulSoup(page_html, "html.parser")
+
+    # Remove page furniture before searching for the article itself.
+    for unwanted_element in page.select(
+        "script,style,noscript,nav,footer,header,aside,form,dialog,svg"
+    ):
+        unwanted_element.decompose()
+
+    boilerplate_attribute_pattern = re.compile(
         r"cookie|consent|newsletter|subscribe|related|recommend|share|social|"
         r"footer|navigation|navbar|menu|breadcrumb|advert|promo|modal|popup",
         re.IGNORECASE,
     )
-    for tag in soup.find_all(attrs={"class": chrome_pattern}) + soup.find_all(attrs={"id": chrome_pattern}):
-        tag.decompose()
+    boilerplate_elements = page.find_all(
+        attrs={"class": boilerplate_attribute_pattern}
+    ) + page.find_all(attrs={"id": boilerplate_attribute_pattern})
+    for boilerplate_element in boilerplate_elements:
+        boilerplate_element.decompose()
 
-    headline_node = soup.find("h1")
-    if headline_node is None:
-        headline_node = soup.find("meta", attrs={"property": "og:title"})
-    if headline_node is None:
-        headline_node = soup.find("title")
-    if headline_node is None:
+    # Prefer the visible page heading, then social metadata, then the HTML title.
+    headline_element = page.find("h1")
+    if headline_element is None:
+        headline_element = page.find("meta", attrs={"property": "og:title"})
+    if headline_element is None:
+        headline_element = page.find("title")
+
+    if headline_element is None:
         headline = ""
-    elif headline_node.name == "meta":
-        headline = _clean_text(headline_node.get("content", ""))
+    elif headline_element.name == "meta":
+        headline = _clean_text(headline_element.get("content", ""))
     else:
-        headline = _clean_text(headline_node.get_text(" ", strip=True))
+        headline = _clean_text(headline_element.get_text(" ", strip=True))
 
-    containers = [
-        soup.find("article"),
-        soup.find("main"),
-        soup.find(attrs={"itemprop": "articleBody"}),
-        soup.find(class_=re.compile(r"article[-_ ]?(body|content)|story[-_ ]?(body|content)|entry[-_ ]?content", re.IGNORECASE)),
+    # Search increasingly broad containers while preserving the original order.
+    content_containers = [
+        page.find("article"),
+        page.find("main"),
+        page.find(attrs={"itemprop": "articleBody"}),
+        page.find(
+            class_=re.compile(
+                r"article[-_ ]?(body|content)|story[-_ ]?(body|content)|entry[-_ ]?content",
+                re.IGNORECASE,
+            )
+        ),
     ]
-    container = next((node for node in containers if node is not None), soup.body or soup)
-    candidates = container.find_all("p")
-    if not candidates:
-        candidates = soup.find_all("p")
+    article_container = next(
+        (element for element in content_containers if element is not None),
+        page.body or page,
+    )
+    paragraph_elements = article_container.find_all("p")
+    if not paragraph_elements:
+        paragraph_elements = page.find_all("p")
 
-    paragraphs, seen = [], set()
-    headline_key = re.sub(r"\W+", "", headline.lower())
-    for node in candidates:
-        paragraph = _clean_article_text(node.get_text(" ", strip=True))
-        key = re.sub(r"\W+", "", paragraph.lower())
-        if not paragraph or not key or key == headline_key or key in seen:
+    article_paragraphs = []
+    seen_paragraph_keys = set()
+    normalized_headline_key = re.sub(r"\W+", "", headline.lower())
+
+    for paragraph_element in paragraph_elements:
+        paragraph_text = _clean_article_text(
+            paragraph_element.get_text(" ", strip=True)
+        )
+        paragraph_key = re.sub(r"\W+", "", paragraph_text.lower())
+        if (
+            not paragraph_text
+            or not paragraph_key
+            or paragraph_key == normalized_headline_key
+            or paragraph_key in seen_paragraph_keys
+        ):
             continue
-        if _is_boilerplate_fragment(paragraph):
+        if _is_boilerplate_fragment(paragraph_text):
             continue
-        seen.add(key)
-        paragraphs.append(paragraph)
-    body = "\n\n".join(paragraphs)
-    if len(body.split()) < 25:
-        raise ValueError("The website prevented reliable article extraction or exposed too little article text.")
-    return headline, body[:20000].strip(), "Structured article extraction"
+
+        seen_paragraph_keys.add(paragraph_key)
+        article_paragraphs.append(paragraph_text)
+
+    article_body = "\n\n".join(article_paragraphs)
+    if len(article_body.split()) < 25:
+        raise ValueError(
+            "The website prevented reliable article extraction or exposed too little article text."
+        )
+
+    return headline, article_body[:20000].strip(), "Structured article extraction"
 
 
 def _fetch_url_text(url: str) -> str:
-    """Compatibility wrapper returning a combined clean article."""
+    """Return an extracted headline and body as one normalized text value."""
 
-    headline, body, _ = _extract_article_content(url)
-    return _clean_text(f"{headline}. {body}")
+    headline, article_body, _extraction_method = _extract_article_content(url)
+    combined_article = f"{headline}. {article_body}"
+    return _clean_text(combined_article)
 
 
 def _score_article(
@@ -379,34 +442,68 @@ def _score_article(
     headline_text: str = "",
     body_text: str = "",
 ) -> ArticleSignal:
-    """Create deterministic public article analysis without hidden fallback."""
+    """Calculate deterministic lexical sentiment, movement, and risk signals."""
 
-    clean = _clean_text(text)
-    if not clean:
+    cleaned_text = _clean_text(text)
+    if not cleaned_text:
         raise ValueError("Article text is required for analysis.")
-    ticker, company = _infer_company(headline_text or clean.split(".")[0], body_text or clean)
 
-    positive_hits = _hits(clean, _POSITIVE_TERMS)
-    negative_hits = _hits(clean, _NEGATIVE_TERMS)
-    risk_hits = _hits(clean, _RISK_TERMS)
-    pos, neg, risk = len(positive_hits), len(negative_hits), len(risk_hits)
+    entity_headline = headline_text or cleaned_text.split(".")[0]
+    entity_body = body_text or cleaned_text
+    ticker_symbol, company_name = _infer_company(entity_headline, entity_body)
 
-    sentiment_score = max(-1.0, min(1.0, ((pos * 1.2) - (neg * 1.05)) / 6.0))
-    risk_score = max(0.05, min(0.95, (risk * 0.13) + (neg * 0.05)))
+    # Lexical cues explain article language but do not influence Full BERT.
+    positive_hits = _hits(cleaned_text, _POSITIVE_TERMS)
+    negative_hits = _hits(cleaned_text, _NEGATIVE_TERMS)
+    risk_hits = _hits(cleaned_text, _RISK_TERMS)
 
+    positive_count = len(positive_hits)
+    negative_count = len(negative_hits)
+    risk_count = len(risk_hits)
+
+    # Positive and negative phrase counts produce a bounded sentiment score.
+    sentiment_score = max(
+        -1.0,
+        min(1.0, ((positive_count * 1.2) - (negative_count * 1.05)) / 6.0),
+    )
+    risk_score = max(
+        0.05,
+        min(0.95, (risk_count * 0.13) + (negative_count * 0.05)),
+    )
+
+    # Convert the lexical signals into three normalized movement scenarios.
     movement_up = 0.36 + sentiment_score * 0.28 - risk_score * 0.05
     movement_down = 0.22 - sentiment_score * 0.18 + risk_score * 0.12
     movement_flat = 1.0 - movement_up - movement_down
-    values = [max(0.06, movement_up), max(0.06, movement_flat), max(0.06, movement_down)]
-    total = sum(values)
-    movement_up, movement_flat, movement_down = [value / total for value in values]
-    confidence = min(0.94, max(0.58, 0.62 + abs(sentiment_score) * 0.22 + min(len(clean), 4500) / 30000))
+    movement_scores = [
+        max(0.06, movement_up),
+        max(0.06, movement_flat),
+        max(0.06, movement_down),
+    ]
+    movement_total = sum(movement_scores)
+    movement_up, movement_flat, movement_down = [
+        movement_score / movement_total
+        for movement_score in movement_scores
+    ]
 
-    headline = _clean_text(headline_text) or clean.split(".")[0].strip()[:210]
+    confidence = min(
+        0.94,
+        max(
+            0.58,
+            0.62
+            + abs(sentiment_score) * 0.22
+            + min(len(cleaned_text), 4500) / 30000,
+        ),
+    )
+    display_headline = (
+        _clean_text(headline_text)
+        or cleaned_text.split(".")[0].strip()[:210]
+    )
+
     return ArticleSignal(
-        ticker=ticker,
-        company=company,
-        headline=headline,
+        ticker=ticker_symbol,
+        company=company_name,
+        headline=display_headline,
         source=source,
         label=_sentiment_interpretation(sentiment_score),
         confidence=confidence,
@@ -422,27 +519,36 @@ def _score_article(
 
 
 def _sparkline_svg(values: list[float], color: str) -> str:
-    """Render a tiny SVG sparkline for KPI cards."""
+    """Render numeric values as a small SVG line chart for KPI cards."""
 
     if not values:
         values = [0.2, 0.4, 0.35, 0.6]
+
     width, height = 130, 42
-    min_v, max_v = min(values), max(values)
-    span = max(max_v - min_v, 1e-6)
-    pts = []
-    for idx, val in enumerate(values):
-        x = idx * (width / max(len(values) - 1, 1))
-        y = height - ((val - min_v) / span) * (height - 8) - 4
-        pts.append(f"{x:.1f},{y:.1f}")
+    minimum_value = min(values)
+    maximum_value = max(values)
+    value_range = max(maximum_value - minimum_value, 1e-6)
+
+    point_coordinates = []
+    for point_index, point_value in enumerate(values):
+        x_coordinate = point_index * (width / max(len(values) - 1, 1))
+        # SVG coordinates start at the top, so larger values need smaller y values.
+        y_coordinate = (
+            height
+            - ((point_value - minimum_value) / value_range) * (height - 8)
+            - 4
+        )
+        point_coordinates.append(f"{x_coordinate:.1f},{y_coordinate:.1f}")
+
     return (
         f"<svg viewBox='0 0 {width} {height}' class='spark'>"
-        f"<polyline points='{' '.join(pts)}' fill='none' stroke='{color}' "
+        f"<polyline points='{' '.join(point_coordinates)}' fill='none' stroke='{color}' "
         f"stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/></svg>"
     )
 
 
 def _plotly_config() -> dict[str, bool]:
-    """Common Plotly config for dashboard charts."""
+    """Return shared responsive settings for Plotly charts."""
 
     return {"displayModeBar": False, "responsive": True}
 
