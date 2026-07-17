@@ -55,7 +55,7 @@
     "validation": 0.15
   },
   "source_checksum_sha256": "612e74ee6b70bc1072e5d617f869ca50adecccc2777f2ac4d0f778fe62f3a916",
-  "source_file": "C:\\Ruturaj\\Projects\\financial-news-stock-intelligence\\data\\processed\\financial_phrasebank\\financial_phrasebank_75agree.jsonl",
+  "source_file": "data/processed/financial_phrasebank/financial_phrasebank_75agree.jsonl",
   "source_record_count": 3453,
   "split_strategy": "stratified_random"
 }

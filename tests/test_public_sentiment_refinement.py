@@ -102,24 +102,5 @@ class PublicSentimentRefinementTests(unittest.TestCase):
         expected = set(signal.positive_hits) | set(signal.negative_hits) | set(signal.risk_hits)
         self.assertEqual({item["term"] for item in items}, expected)
 
-    def test_highlighting_preserves_words_and_longest_match(self) -> None:
-        text = "Management announced a guidance cut after weak demand."
-        signal = app._score_article(text, "test", headline_text="Update", body_text=text)
-        marked = app._highlight_submitted_text(text, signal)
-        self.assertEqual(BeautifulSoup(marked, "html.parser").get_text(), text)
-        self.assertIn('<mark class="fs-neg">guidance cut</mark>', marked)
-        self.assertNotIn('<mark class="fs-neg">cut</mark>', marked)
-        self.assertEqual(marked.count("guidance cut</mark>"), 1)
-
-    def test_filter_only_emphasizes_selected_category(self) -> None:
-        text = "Strong revenue growth continued despite weak demand and supply risk."
-        signal = app._score_article(text, "test", headline_text="Update", body_text=text)
-        positive = app._highlight_submitted_text(text, signal, "Positive")
-        self.assertIn("fs-pos", positive)
-        self.assertNotIn("fs-neg", positive)
-        self.assertNotIn("fs-risk", positive)
-        self.assertEqual(BeautifulSoup(positive, "html.parser").get_text(), html.unescape(text))
-
-
 if __name__ == "__main__":
     unittest.main()

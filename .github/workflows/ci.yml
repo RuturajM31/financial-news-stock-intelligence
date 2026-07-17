@@ -1,25 +1,22 @@
-name: CI and Security
+name: Public application quality
 
 on:
   push:
-    branches:
-      - main
-      - project-foundation-streamlit-closure
+    branches: [main, cleanup/senior-project-structure]
   pull_request:
-    branches:
-      - main
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  public-dashboard-contract:
-    name: Public dashboard contract
+  retained-application:
+    name: Retained Streamlit and Full BERT contracts
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: src
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -27,229 +24,72 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Compile public Streamlit sources
+      - name: Install retained test dependencies
         run: |
-          python -m py_compile app/public_cloud_app.py app/streamlit_app.py
+          python -m pip install --upgrade pip
+          python -m pip install -r app/requirements.txt
+          python -m pip install datasets==3.2.0 scikit-learn==1.5.0 pytest==8.3.4
 
-      - name: Verify public dashboard source contract
+      - name: Compile retained Python files
         run: |
           python - <<'PY'
+          import py_compile
           from pathlib import Path
 
-          text = Path("app/public_cloud_app.py").read_text(encoding="utf-8")
-
-          required = [
-              "def should_use_public_streamlit_cloud_app",
-              "def render_public_streamlit_cloud_app",
-              "Executive Overview",
-              "Analyze Article",
-              "Forecasts",
-              "Historical Intelligence",
-              "Explainability",
-              "Scenario Analysis",
-              "Model Comparison",
-              "Model Training / Evidence",
-              "Provenance",
-              "Architecture / System Design",
-              "3D Intelligence",
-              "About / Project Purpose",
-              "Visual QA / Page Audit",
-              "13 / 13 PASSED",
-          ]
-
-          missing = [item for item in required if item not in text]
-          if missing:
-              raise SystemExit("Missing public dashboard contract items: " + ", ".join(missing))
-
-          forbidden = [
-              "Next polish step: replace this placeholder",
-              "This is now a real clickable page, not a fake sidebar label.",
-          ]
-          found = [item for item in forbidden if item in text]
-          if found:
-              raise SystemExit("Old placeholder text still present: " + ", ".join(found))
-
-          print("PUBLIC DASHBOARD CONTRACT: PASSED")
+          roots = (Path("app"), Path("src"), Path("scripts"), Path("tests"))
+          files = sorted(path for root in roots for path in root.rglob("*.py"))
+          for path in files:
+              py_compile.compile(str(path), doraise=True)
+          print(f"COMPILED {len(files)} RETAINED PYTHON FILES")
           PY
 
-      - name: Verify public Streamlit runner symbols without runtime imports
+      - name: Verify the four-page public route contract
         run: |
           python - <<'PY'
           import ast
           from pathlib import Path
 
-          tree = ast.parse(Path("app/public_cloud_app.py").read_text(encoding="utf-8"))
-          functions = {
-              node.name
-              for node in ast.walk(tree)
-              if isinstance(node, ast.FunctionDef)
-          }
+          source = Path("app/public_cloud_app.py").read_text(encoding="utf-8")
+          tree = ast.parse(source)
+          names = [node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]
+          duplicates = sorted({name for name in names if names.count(name) > 1})
+          if duplicates:
+              raise SystemExit("Duplicate functions: " + ", ".join(duplicates))
 
-          required = {
-              "render_public_streamlit_cloud_app",
-              "should_use_public_streamlit_cloud_app",
-          }
+          expected_pages = ("Overview", "Analyze Article", "Model Results", "About / Architecture")
+          retired_pages = (
+              "Forecasts", "Historical Intelligence", "Explainability", "Scenario Analysis",
+              "Model Comparison", "Model Training / Evidence", "Provenance",
+              "Architecture / System Design", "3D Intelligence", "About / Project Purpose",
+              "Visual QA / Page Audit",
+          )
+          missing = [page for page in expected_pages if page not in source]
+          present_retired = [page for page in retired_pages if page in source]
+          if missing or present_retired:
+              raise SystemExit(f"Missing={missing}; retired={present_retired}")
 
-          missing = sorted(required - functions)
-          if missing:
-              raise SystemExit("Missing public runner functions: " + ", ".join(missing))
-
-          print("PUBLIC STREAMLIT SYMBOL CONTRACT: PASSED")
+          entrypoint = Path("app/streamlit_app.py").read_text(encoding="utf-8")
+          if "render_public_streamlit_cloud_app(PROJECT_ROOT)" not in entrypoint:
+              raise SystemExit("The Streamlit entry point does not directly render the public app.")
+          print("FOUR-PAGE ROUTE CONTRACT: PASSED")
           PY
 
-  documentation-and-release-hygiene:
-    name: Documentation and release hygiene
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Verify README and closure docs
+      - name: Run offline retained tests
         run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          checks = {
-              "README.md": [
-                  "Live Streamlit App",
-                  "CI/CD",
-                  "Financial News Stock Intelligence",
-                  "System Architecture",
-                  "Public vs Production Design",
-                  "CI/CD and QA Closure Flow",
-                  "Visual QA / Page Audit",
-                  "13 / 13 pages passed",
-                  "not investment advice",
-                  "```mermaid",
-              ],
-              "docs/PUBLIC_DASHBOARD_CLOSURE_REPORT.md": [
-                  "Live verified",
-                  "13 / 13 passed",
-                  "Release Gates Passed",
-                  "not investment advice",
-              ],
-              "docs/PUBLIC_DEPLOYMENT_VERIFICATION.md": [
-                  "Streamlit Cloud",
-                  "Visual QA / Page Audit",
-                  "13 / 13 PASSED",
-                  "Deployment Boundary",
-              ],
-          }
-
-          failures = []
-
-          for path, required_items in checks.items():
-              p = Path(path)
-              if not p.exists():
-                  failures.append(f"{path}: missing file")
-                  continue
-
-              text = p.read_text(encoding="utf-8")
-              for item in required_items:
-                  if item.lower() not in text.lower():
-                      failures.append(f"{path}: missing {item}")
-
-              for idx, line in enumerate(text.splitlines(), start=1):
-                  if line.rstrip() != line:
-                      failures.append(f"{path}: trailing whitespace line {idx}")
-
-          readme = Path("README.md").read_text(encoding="utf-8")
-          if readme.count("```") % 2 != 0:
-              failures.append("README.md: unbalanced fenced code blocks")
-
-          private_markers = ["@gmail.com", "phone", "mobile", "address", "Germany", "Pune"]
-          for path in checks:
-              if Path(path).exists():
-                  lower = Path(path).read_text(encoding="utf-8").lower()
-                  for marker in private_markers:
-                      if marker.lower() in lower:
-                          failures.append(f"{path}: privacy-sensitive marker found: {marker}")
-
-          if failures:
-              print("DOCUMENTATION HYGIENE FAILED")
-              for failure in failures:
-                  print(" - " + failure)
-              raise SystemExit(1)
-
-          print("DOCUMENTATION HYGIENE: PASSED")
-          PY
-
-  static-security:
-    name: Static security
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - name: Install security tools
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install bandit pip-audit
-
-      - name: Secret hygiene scan
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import re
-
-          patterns = [
-              re.compile(r"AKIA[0-9A-Z]{16}"),
-              re.compile(r"-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----"),
-              re.compile(r"ghp_[A-Za-z0-9_]{20,}"),
-              re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),
-              re.compile(r"sk-[A-Za-z0-9]{20,}"),
-          ]
-
-          ignored_dirs = {".git", ".venv", "__pycache__", ".pytest_cache", ".mypy_cache"}
-          failures = []
-
-          for path in Path(".").rglob("*"):
-              if not path.is_file():
-                  continue
-              if any(part in ignored_dirs for part in path.parts):
-                  continue
-              if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".zip"}:
-                  continue
-
-              try:
-                  text = path.read_text(encoding="utf-8", errors="ignore")
-              except Exception:
-                  continue
-
-              for pattern in patterns:
-                  if pattern.search(text):
-                      failures.append(str(path))
-
-          if failures:
-              raise SystemExit("Potential secret-like pattern found in: " + ", ".join(sorted(set(failures))))
-
-          print("SECRET HYGIENE SCAN: PASSED")
-          PY
-
-      - name: Bandit public dashboard static security scan
-        run: |
-          bandit -q app/public_cloud_app.py app/streamlit_app.py \
-            --severity-level medium \
-            --confidence-level high \
-            --skip B101
-
-      - name: Dependency vulnerability advisory for public app requirements
-        continue-on-error: true
-        run: |
-          if [ -f app/requirements.txt ]; then
-            pip-audit -r app/requirements.txt --progress-spinner off
-          else
-            echo "app/requirements.txt not found; skipping dependency advisory."
-          fi
-
-      - name: Public release security scope
-        run: |
-          echo "Root production dependency and private artifact audits are not release blockers for the public Streamlit dashboard badge."
-          echo "The public release CI checks compile, dashboard contract, docs hygiene, secret hygiene, Bandit, and advisory dependency scan."
+          python -m pytest -q \
+            tests/test_public_sentiment_refinement.py \
+            tests/test_streamlit_navigation_branding.py \
+            tests/test_overview_landing.py \
+            tests/test_architecture_observatory.py \
+            tests/test_full_bert_streamlit_integration.py::test_all_public_routes_render \
+            tests/test_full_bert_streamlit_integration.py::test_model_results_experiment_lab_renders_verified_metrics \
+            tests/test_full_bert_inference.py \
+            tests/test_full_bert_model_source.py \
+            tests/test_bert_visualization.py \
+            tests/test_experiment_results.py \
+            tests/test_financial_phrasebank.py \
+            tests/test_financial_phrasebank_split.py \
+            tests/test_bert_training.py \
+            tests/test_distilbert_training.py \
+            tests/test_bert_smoke_runner.py \
+            tests/test_full_bert_runner.py

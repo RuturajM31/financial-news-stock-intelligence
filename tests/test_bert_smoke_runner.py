@@ -324,35 +324,3 @@ def test_artifact_validation_accepts_complete_smoke_evidence(
     assert summary["model_id"] == BERT_MODEL_ID
     assert summary["total_parameters"] == 109_000_000
     assert sum(sum(row) for row in summary["confusion_matrix"]) == 9
-
-# ============================================================
-# 8. MACOS BASH 3.2 LAUNCHER COMPATIBILITY
-# ============================================================
-
-
-def test_shell_launcher_avoids_nounset_empty_array_expansion() -> None:
-    """Protect the real smoke command from the macOS Bash 3.2 array bug.
-
-    Prepare:
-        Read the installed shell launcher as plain text.
-
-    Run:
-        Inspect the real-training branch used after all regression gates pass.
-
-    Check:
-        The launcher uses explicit command branches instead of expanding an
-        empty array while ``set -u`` is active. This is the exact condition
-        that previously stopped the real BERT smoke run before Python began.
-    """
-
-    launcher_path = RUNNER_PATH.with_name(
-        "run_bert_smoke_test_package.sh"
-    )
-    launcher_source = launcher_path.read_text(encoding="utf-8")
-
-    assert "smoke_arguments=()" not in launcher_source
-    assert '${smoke_arguments[@]}' not in launcher_source
-    assert 'scripts/run_bert_smoke.py \\\n            --replace-existing' in launcher_source
-    assert '"${TRANSFORMER_PYTHON}" scripts/run_bert_smoke.py\n' in (
-        launcher_source
-    )

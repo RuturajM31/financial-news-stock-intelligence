@@ -1,37 +1,27 @@
-# Streamlit Community Cloud deployment checklist
+# Streamlit Community Cloud checklist
 
-## Before creating the app
+## Before deployment
 
-- [ ] Package 14.7 passed locally.
-- [ ] Git working tree is clean.
-- [ ] Package 14.7 changes are committed and pushed to `project-foundation-streamlit-closure`.
-- [ ] Repository is available to the GitHub account connected to Streamlit Community Cloud.
-- [ ] No `.streamlit/secrets.toml` file is committed.
+- [ ] The four routes render locally in this order: Overview, Analyze Article, Model Results, About / Architecture.
+- [ ] `app/streamlit_app.py` is the selected entry point.
+- [ ] `app/requirements.txt` is present.
+- [ ] The working tree is clean and the intended branch is pushed.
+- [ ] No `.streamlit/secrets.toml`, model weights, local caches, logs, or virtual environments are staged.
+- [ ] The final local model works, or a read-only Hugging Face `HF_TOKEN` is ready for Community Cloud.
 
-## Create app
+## Create or update the app
 
-- [ ] Sign in to Streamlit Community Cloud with GitHub.
-- [ ] Choose repository `RuturajM31/financial-news-stock-intelligence`.
-- [ ] Choose branch `project-foundation-streamlit-closure`.
-- [ ] Set main file path to `app/streamlit_app.py`.
-- [ ] Select Python 3.10 when selectable; Python 3.14-compatible app dependencies when Streamlit Cloud forces a newer runtime in Advanced settings before first deploy.
-- [ ] Leave secrets empty unless a future optional feature explicitly needs them.
-- [ ] Confirm `app/requirements.txt` exists in the pushed branch.
-- [ ] Deploy to a free `streamlit.app` subdomain.
+- [ ] Select `RuturajM31/financial-news-stock-intelligence`.
+- [ ] Select the reviewed branch.
+- [ ] Set the main file path to `app/streamlit_app.py`.
+- [ ] Confirm Streamlit installs `app/requirements.txt`.
+- [ ] Add `HF_TOKEN` through the Secrets UI only when the deployed runtime needs the private model repository.
 
-## After creation
+## After deployment
 
-- [ ] Open the public app URL.
-- [ ] Confirm the home page renders.
-- [ ] Confirm no secret values are displayed.
-- [ ] Copy the final `https://*.streamlit.app` URL into the closure evidence.
-
-
-## Recovery from failed Python 3.14 build
-
-- [ ] If the app was already created with Python 3.14, delete the failed app.
-- [ ] Recreate the app and select Python 3.10 when selectable; Python 3.14-compatible app dependencies when Streamlit Cloud forces a newer runtime in Advanced settings before clicking Deploy.
-- [ ] Confirm logs no longer install from root `requirements.txt` and no longer mention `torch==2.2.2`.
-
-
-Package 14.7 note: `app/requirements.txt` uses Python-version-flexible public-UI dependencies so Streamlit Community Cloud can resolve wheels even when the platform defaults to Python 3.14. The heavy training/API stack remains isolated in the root requirements and Docker/Kubernetes paths.
+- [ ] Confirm the health/startup log has no import failures.
+- [ ] Confirm all four public pages open.
+- [ ] Confirm Analyze Article accepts the presentation sample.
+- [ ] Confirm model analysis produces sentence evidence when Full BERT is available.
+- [ ] Confirm no credentials or local paths are visible.
+- [ ] Confirm the public boundary states that the app does not predict stock prices or returns.

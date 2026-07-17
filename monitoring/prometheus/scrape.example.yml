@@ -1,8 +1,0 @@
-# Example only. Docker and Kubernetes stages will provide the final target.
-scrape_configs:
-  - job_name: financial-news-intelligence-api
-    metrics_path: /metrics
-    static_configs:
-      - targets: ["127.0.0.1:8000"]
-    # The endpoint uses X-API-Key. Inject the approved secret through the
-    # deployment platform; never commit a key into this file.

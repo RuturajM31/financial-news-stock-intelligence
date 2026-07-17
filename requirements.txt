@@ -1,48 +1,18 @@
-# Core data processing
+# Retained Full BERT, Financial PhraseBank, and benchmark workflow.
+# Streamlit Community Cloud installs app/requirements.txt instead.
+
 numpy==1.26.4
-scipy==1.11.4
-pandas==2.1.4
-pyarrow==16.0.0
 scikit-learn==1.5.0
-joblib==1.4.2
+requests==2.34.2
+beautifulsoup4==4.15.0
 
-# Charts and visual analysis
-matplotlib==3.8.4
-plotly==5.24.1
-
-# Article and document extraction
-beautifulsoup4==4.12.3
-python-docx==1.1.2
-pypdf==5.1.0
-
-# Configuration and financial calendars
-python-dotenv==1.0.1
-PyYAML==6.0.2
-pandas-market-calendars==4.4.2
-rapidfuzz==3.10.1
-
-# PyTorch and Transformer models
-torch==2.2.2
+# Transformer training and inference
+torch==2.7.1
 transformers==4.46.3
-datasets==3.2.0
+huggingface_hub==0.36.2
+safetensors==0.8.0
 accelerate==1.2.1
-peft==0.14.0
-sentence-transformers==3.3.1
-bert-score==0.3.13
-evaluate==0.4.3
-sacrebleu==2.4.3
-nltk==3.9.1
-sentencepiece==0.2.0
+datasets==3.2.0
 
-# API, application, and reports
-pydantic==2.10.4
-fastapi==0.115.6
-uvicorn==0.34.0
-python-multipart==0.0.20
-streamlit==1.41.1
-reportlab==4.2.5
-requests==2.32.3
-urllib3==2.2.3
-charset-normalizer==3.3.2
-
-chardet==5.2.0
+# Local benchmark measurement
+psutil==7.0.0

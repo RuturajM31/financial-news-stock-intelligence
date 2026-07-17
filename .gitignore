@@ -53,12 +53,8 @@ data/private/
 data/processed/
 data/raw/
 
-# Large transformer training outputs
-artifacts/models/bert_smoke/
+# Local Full BERT model artifact
 artifacts/models/bert_sentiment/
-artifacts/models/bert_lora_sentiment/
-artifacts/models/distilbert_smoke/
-artifacts/models/distilbert_sentiment/
 
 # Packaging and build outputs
 build/
@@ -69,9 +65,6 @@ dist/
 .cache/huggingface/
 **/.cache/huggingface/
 huggingface/
-artifacts/models/bert_sentiment/
-*.safetensors
-pytorch_model.bin
 
 # Local release evidence and generated presentation artifacts
 artifacts/screenshots/
@@ -86,3 +79,6 @@ browser-data/
 browser-profiles/
 *.tmp.html
 *.capture.pdf
+
+# Training checkpoints are reproducible local outputs; keep only the final model locally.
+artifacts/models/**/checkpoints/

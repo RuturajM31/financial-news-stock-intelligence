@@ -1,5 +1,5 @@
 {
-  "model_directory": "C:\\Ruturaj\\Projects\\financial-news-stock-intelligence\\artifacts\\models\\bert_sentiment\\final_model",
+  "model_directory": "artifacts/models/bert_sentiment/final_model",
   "model_artifact_size_bytes": 438912889,
   "label_order": [
     "Bearish",

@@ -4,14 +4,14 @@
 
 ## Validation checklist
 
-- [ ] Focused pytest suite passed locally or in CI.
-- [ ] `python scripts/verify_ci_cd_security.py --project-root .` passed.
-- [ ] Docker production contract remains unchanged unless the Docker package is being updated.
-- [ ] Kubernetes/Helm production contract remains unchanged unless the Kubernetes/Helm package is being updated.
-- [ ] Public deployment was not changed unless this pull request is the public deployment package.
+- [ ] Relevant retained pytest tests passed locally or in CI.
+- [ ] The four public routes still render in order.
+- [ ] Full BERT labels, source priority, and article aggregation are unchanged unless this is an approved model change.
+- [ ] Model-result metrics and displayed rounding are unchanged unless regenerated intentionally.
+- [ ] No local model artifacts, checkpoints, caches, logs, or credentials are included.
 
 ## Security checklist
 
 - [ ] No secrets, tokens, credentials, or private data were committed.
 - [ ] New workflows use least-privilege permissions.
-- [ ] New deployment or registry mutation steps are explicitly documented and gated.
+- [ ] Public deployment changes keep `app/streamlit_app.py` and `app/requirements.txt` as the Community Cloud path.

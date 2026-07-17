@@ -1,13 +1,5 @@
+# Full local verification: retained Full BERT workflow plus public Streamlit app.
 -r requirements.txt
+-r app/requirements.txt
 
-# Automated testing and coverage
 pytest==8.3.4
-pytest-cov==6.0.0
-httpx==0.28.1
-
-# Code-quality checks
-ruff==0.8.6
-mypy==1.14.1
-
-# VS Code interactive Python support
-ipykernel==6.29.5

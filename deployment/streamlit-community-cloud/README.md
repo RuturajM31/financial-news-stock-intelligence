@@ -1,46 +1,37 @@
-# Free public deployment — Streamlit Community Cloud
+# Streamlit Community Cloud deployment
 
-This directory documents the free public deployment path for the Financial News and Stock Movement Intelligence app.
-
-## Selected free target
-
-Use **Streamlit Community Cloud** for the public app. Do not use paid Kubernetes hosting, paid image registries, paid virtual machines, paid databases, or paid private app hosting for this stage.
+This is the only supported deployment path for the public Financial News Stock Intelligence application.
 
 ## App settings
 
-In Streamlit Community Cloud, create the app with these values:
+Create a Streamlit Community Cloud app with:
 
 ```text
 Repository: RuturajM31/financial-news-stock-intelligence
-Branch: project-foundation-streamlit-closure
+Branch: the reviewed branch you intend to deploy
 Main file path: app/streamlit_app.py
-Python version: Python 3.10 when selectable; Python 3.14-compatible app dependencies when Streamlit Cloud forces a newer runtime in Advanced settings
-App URL: choose a free streamlit.app subdomain
+Requirements file: app/requirements.txt
 ```
 
-Community Cloud runs `streamlit run` from the repository root. Keep paths relative to the repository root and keep the entrypoint as `app/streamlit_app.py`.
+For a pull-request or cleanup review, select that review branch. Use `main` only after the reviewed change is merged. The application entry point resolves the repository `src/` layout itself, so no custom `PYTHONPATH` setting is required.
 
-## Dependency handling
+## Full BERT access
 
-Community Cloud installs dependency files from the app entrypoint directory before the repository root. This package adds `app/requirements.txt` so Streamlit Cloud installs only the free public UI dependencies instead of the full local analytics/training stack from root `requirements.txt`.
+The local final model is intentionally ignored by Git. When Community Cloud does not have a local final model, the application resolves the private Hugging Face model repository using a read-only `HF_TOKEN`.
 
-## Secrets handling
+Add the token only in Streamlit Community Cloud's Secrets settings:
 
-Never commit `.streamlit/secrets.toml`. Use Streamlit Community Cloud's app settings secrets field only if a future optional feature requires a secret. The free public deployment package does not require paid secrets infrastructure.
+```toml
+HF_TOKEN = "read-only-token"
+```
 
-## What this package does not do
+Do not commit `.streamlit/secrets.toml`, model weights, or an actual token. Without a local artifact or this token, the app still starts and explains that Full BERT analysis is unavailable when the user requests it.
 
-- It does not publish Docker images.
-- It does not create a paid registry.
-- It does not create a Kubernetes cluster.
-- It does not run cluster apply commands or Helm release mutation commands.
-- It does not require a credit card.
-- It does not perform Git operations.
+## Verification after deployment
 
+1. Open the app and confirm the sidebar order: Overview, Analyze Article, Model Results, About / Architecture.
+2. Open Overview, Model Results, and About / Architecture.
+3. In Analyze Article, load the presentation sample and request analysis.
+4. Confirm the result displays Bearish, Neutral, or Bullish evidence and no stock-price prediction claim.
 
-## Fix for Python 3.14 dependency failure
-
-If Streamlit Cloud logs show Python 3.14 and errors for `torch`, `numpy`, or `scipy`, the app was created with the wrong Python/runtime dependency path. Delete the failed app and recreate it using Python 3.10 when selectable; Python 3.14-compatible app dependencies when Streamlit Cloud forces a newer runtime in Advanced settings, branch `project-foundation-streamlit-closure`, and main file `app/streamlit_app.py`.
-
-
-Package 14.7 note: `app/requirements.txt` uses Python-version-flexible public-UI dependencies so Streamlit Community Cloud can resolve wheels even when the platform defaults to Python 3.14. The heavy training/API stack remains isolated in the root requirements and Docker/Kubernetes paths.
+The app is a public financial-news sentiment demonstration. It is not investment advice.

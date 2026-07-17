@@ -44,19 +44,19 @@
   },
   "configuration": {
     "benchmark_role": "full_fine_tuning_comparison",
-    "checkpoint_dir": "C:\\Ruturaj\\Projects\\financial-news-stock-intelligence\\artifacts\\models\\bert_sentiment\\checkpoints",
+    "checkpoint_dir": "artifacts/models/bert_sentiment/checkpoints",
     "evaluation_batch_size": 16,
     "experiment_name": "BERT Financial Sentiment",
-    "final_model_dir": "C:\\Ruturaj\\Projects\\financial-news-stock-intelligence\\artifacts\\models\\bert_sentiment\\final_model",
+    "final_model_dir": "artifacts/models/bert_sentiment/final_model",
     "force_cpu": false,
     "full_determinism": true,
     "gradient_accumulation_steps": 2,
     "learning_rate": 2e-05,
     "logging_steps": 25,
-    "manifest_file": "C:\\Ruturaj\\Projects\\financial-news-stock-intelligence\\artifacts\\manifests\\bert_sentiment_current_run_manifest.json",
+    "manifest_file": "artifacts/manifests/bert_sentiment_current_run_manifest.json",
     "max_length": 128,
     "maximum_gradient_norm": 1.0,
-    "metrics_file": "C:\\Ruturaj\\Projects\\financial-news-stock-intelligence\\reports\\metrics\\bert_sentiment_current_run_metrics.json",
+    "metrics_file": "reports/metrics/bert_sentiment_current_run_metrics.json",
     "model_family": "BERT",
     "model_id": "google-bert/bert-base-uncased",
     "model_revision": "86b5e0934494bd15c9632b12f734a8a67f723594",
@@ -65,11 +65,11 @@
     "random_seed": 42,
     "run_name": "bert_financial_phrasebank_full",
     "save_total_limit": 2,
-    "test_file": "C:\\Ruturaj\\Projects\\financial-news-stock-intelligence\\data\\processed\\transformer\\financial_phrasebank_test.jsonl",
+    "test_file": "data/processed/transformer/financial_phrasebank_test.jsonl",
     "train_batch_size": 8,
-    "train_file": "C:\\Ruturaj\\Projects\\financial-news-stock-intelligence\\data\\processed\\transformer\\financial_phrasebank_train.jsonl",
+    "train_file": "data/processed/transformer/financial_phrasebank_train.jsonl",
     "use_class_weights": true,
-    "validation_file": "C:\\Ruturaj\\Projects\\financial-news-stock-intelligence\\data\\processed\\transformer\\financial_phrasebank_validation.jsonl",
+    "validation_file": "data/processed/transformer/financial_phrasebank_validation.jsonl",
     "warmup_ratio": 0.1,
     "weight_decay": 0.01
   },
@@ -95,7 +95,7 @@
   },
   "device": "cuda:0",
   "experiment_name": "BERT Financial Sentiment",
-  "final_model_directory": "C:\\Ruturaj\\Projects\\financial-news-stock-intelligence\\artifacts\\models\\bert_sentiment\\final_model",
+  "final_model_directory": "artifacts/models/bert_sentiment/final_model",
   "labels": {
     "Bearish": 0,
     "Bullish": 2,
@@ -109,7 +109,7 @@
     "peak_process_rss_mib": 1990.81640625,
     "platform_unit_normalization": "bytes_on_macos; kibibytes_on_linux; bytes_on_windows_psutil; normalized_to_mib"
   },
-  "metrics_file": "C:\\Ruturaj\\Projects\\financial-news-stock-intelligence\\reports\\metrics\\bert_sentiment_current_run_metrics.json",
+  "metrics_file": "reports/metrics/bert_sentiment_current_run_metrics.json",
   "model_family": "BERT",
   "model_id": "google-bert/bert-base-uncased",
   "model_revision": "86b5e0934494bd15c9632b12f734a8a67f723594",
@@ -130,17 +130,17 @@
   "source_files": {
     "test": {
       "checksum_sha256": "96162091a6c5e9d2c0bbab61a6838e66572e15510445ff0b77ef6f9759ea05d8",
-      "path": "C:\\Ruturaj\\Projects\\financial-news-stock-intelligence\\data\\processed\\transformer\\financial_phrasebank_test.jsonl",
+      "path": "data/processed/transformer/financial_phrasebank_test.jsonl",
       "records": 518
     },
     "train": {
       "checksum_sha256": "2cdcbad407b9b78a38ad21d00bd0f7b2a37b1ef175244c954d5174fd7ecb6283",
-      "path": "C:\\Ruturaj\\Projects\\financial-news-stock-intelligence\\data\\processed\\transformer\\financial_phrasebank_train.jsonl",
+      "path": "data/processed/transformer/financial_phrasebank_train.jsonl",
       "records": 2413
     },
     "validation": {
       "checksum_sha256": "a99e2c4b9d03fa58f635189f244b554eeaa28cd0f1c6adaaf95b0b548e85d227",
-      "path": "C:\\Ruturaj\\Projects\\financial-news-stock-intelligence\\data\\processed\\transformer\\financial_phrasebank_validation.jsonl",
+      "path": "data/processed/transformer/financial_phrasebank_validation.jsonl",
       "records": 517
     }
   },

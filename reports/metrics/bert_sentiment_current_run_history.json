@@ -1,6 +1,6 @@
 {
   "best_metric": 0.9068447526462794,
-  "best_model_checkpoint": "C:\\Ruturaj\\Projects\\financial-news-stock-intelligence\\artifacts\\models\\bert_sentiment\\checkpoints\\checkpoint-453",
+  "best_model_checkpoint": "artifacts/models/bert_sentiment/checkpoints/checkpoint-453",
   "epoch": 3.0,
   "global_step": 453,
   "is_local_process_zero": true,

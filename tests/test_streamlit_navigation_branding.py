@@ -1,82 +1,54 @@
-"""Verify portfolio branding, page order, and completed-page status."""
+"""Verify the retained public navigation and portfolio identity."""
 
 from __future__ import annotations
 
-from tests.streamlit_test_support import import_project_module, source_text
+import inspect
 
-EXPECTED_KEYS = (
-    "executive_overview",
-    "analyze",
-    "forecasts",
-    "historical_intelligence",
-    "explainability",
-    "model_training",
-    "model_comparison",
-    "scenario_analysis",
-    "provenance",
-    "about_ruturaj",
+from app.public_cloud_app import _render_sidebar, render_public_streamlit_cloud_app
+
+
+EXPECTED_PAGES = (
+    "Overview",
+    "Analyze Article",
+    "Model Results",
+    "About / Architecture",
+)
+RETIRED_PAGE_LABELS = (
+    "Forecasts",
+    "Historical Intelligence",
+    "Explainability",
+    "Scenario Analysis",
+    "Model Comparison",
+    "Model Training / Evidence",
+    "Provenance",
+    "Architecture / System Design",
+    "3D Intelligence",
+    "About / Project Purpose",
+    "Visual QA / Page Audit",
 )
 
 
-def test_navigation_contains_every_completed_page_in_a_clear_order() -> None:
-    """Require the agreed recruiter-friendly page order without duplicates."""
+def test_sidebar_lists_only_the_four_retained_pages_in_order() -> None:
+    """Keep the visible route order stable across Streamlit reruns."""
 
-    navigation = import_project_module("app.navigation")
-    items = navigation.get_navigation_items()
-    assert tuple(item.key for item in items) == EXPECTED_KEYS
-    assert len({item.key for item in items}) == len(items)
-
-
-def test_all_navigation_pages_are_available_after_package_seven() -> None:
-    """Ensure no completed page is still labelled as a future placeholder."""
-
-    navigation = import_project_module("app.navigation")
-    assert all(item.is_available for item in navigation.get_navigation_items())
+    source = inspect.getsource(_render_sidebar)
+    positions = [source.index(page) for page in EXPECTED_PAGES]
+    assert positions == sorted(positions)
+    assert 'key="public_dashboard_page"' in source
+    assert all(label not in source for label in RETIRED_PAGE_LABELS)
 
 
-def test_navigation_labels_are_readable_and_descriptive() -> None:
-    """Require visible names and simple summaries for every page."""
+def test_route_map_has_one_renderer_for_each_retained_page() -> None:
+    """Prevent a sidebar option from pointing at a missing renderer."""
 
-    navigation = import_project_module("app.navigation")
-    for item in navigation.get_navigation_items():
-        assert item.label.strip()
-        assert len(item.summary.split()) >= 6
-        assert item.key not in item.display_label
+    source = inspect.getsource(render_public_streamlit_cloud_app)
+    assert all(f'"{page}":' in source for page in EXPECTED_PAGES)
+    assert source.count("_render_sentiment_architecture_page") == 1
 
 
-def test_branding_uses_ruturaj_mokashi_as_the_owner() -> None:
-    """Require the approved portfolio identity across the application."""
+def test_public_branding_keeps_the_named_product_and_owner() -> None:
+    """Keep the portfolio identity inside the rendered sidebar source."""
 
-    branding = import_project_module("app.branding")
-    brand = branding.get_portfolio_brand()
-    assert brand.owner_name == "Ruturaj Mokashi"
-    assert "Financial News" in brand.product_name
-    assert "end-to-end" in brand.portfolio_statement
-
-
-def test_branding_html_escapes_untrusted_text() -> None:
-    """Prevent future branding text changes from injecting active HTML."""
-
-    branding = import_project_module("app.branding")
-    unsafe = branding.PortfolioBrand(
-        owner_name="<script>alert(1)</script>",
-        product_name="<b>Product</b>",
-        short_name="Safe",
-        tagline="<img src=x>",
-        portfolio_statement="<iframe>",
-    )
-    header = branding.build_brand_header_html(unsafe)
-    footer = branding.build_footer_html(unsafe)
-    assert "<script>" not in header
-    assert "&lt;script&gt;" in header
-    assert "<iframe>" not in footer
-
-
-def test_about_page_separates_completed_and_future_work() -> None:
-    """Prevent portfolio claims from presenting later phases as finished."""
-
-    about = source_text("app/pages/about_ruturaj.py")
-    assert "Ruturaj Mokashi" in about
-    assert "Completed and verified" in about
-    assert "Next phases" in about
-    assert "public deployment" in about.lower()
+    source = inspect.getsource(_render_sidebar)
+    assert "Financial News Sentiment Analyzer" in source
+    assert "Ruturaj Mokashi" in source

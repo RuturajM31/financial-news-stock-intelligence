@@ -1,15 +1,11 @@
 version: 2
 updates:
   - package-ecosystem: pip
-    directory: "/"
+    directory: "/app"
     schedule:
       interval: weekly
-      day: monday
-      time: "04:30"
     open-pull-requests-limit: 5
-    labels:
-      - dependencies
-      - security
+    labels: [dependencies, security]
     commit-message:
       prefix: deps
       include: scope
@@ -18,12 +14,8 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
-      day: monday
-      time: "04:45"
     open-pull-requests-limit: 5
-    labels:
-      - dependencies
-      - security
+    labels: [dependencies, security]
     commit-message:
       prefix: ci
       include: scope

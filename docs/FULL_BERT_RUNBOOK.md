@@ -1,69 +1,78 @@
-# Full BERT training and local inference
+# Full BERT runbook
 
-## Verified environment
+## Scope
 
-- Python 3.12
-- `torch 2.7.1+cu128` for the local NVIDIA RTX 5070 Laptop GPU
-- `transformers 4.46.3`
+This runbook covers the retained Full BERT and Financial PhraseBank workflow. The public Streamlit app uses the saved final model for inference; training helpers are separate from the public deployment path.
+
+## Model contract
+
 - Base model: `google-bert/bert-base-uncased`
-- Pinned base revision: `86b5e0934494bd15c9632b12f734a8a67f723594`
-- Labels: `0 Bearish`, `1 Neutral`, `2 Bullish`
-- Maximum sequence length: 128
+- Labels and order: `Bearish`, `Neutral`, `Bullish`
+- Maximum sequence length: 128 tokens
+- Article result: arithmetic mean of sentence-level class probabilities
+- Final local artifact: `artifacts/models/bert_sentiment/final_model/`
+- Remote fallback: private Hugging Face repository `ruturajmokashi/financial-news-full-bert`
 
-The repository's deployment requirements remain unchanged. The separate
-`.venv-bert` environment is used because the local Blackwell GPU requires a
-newer CUDA-enabled PyTorch build than the deployment environment.
+Model resolution is deliberate: local final artifact first, private repository with a read-only `HF_TOKEN` second, then the local Hugging Face cache. Inference does not silently fall back to lexical scoring.
 
-## Train
+## Environment
 
-From the repository root in PowerShell:
-
-```powershell
-$env:PYTHONPATH = "src"
-$env:HF_HUB_DISABLE_XET = "1"
-$env:TOKENIZERS_PARALLELISM = "false"
-.venv-bert\Scripts\python.exe scripts\run_full_bert.py
-```
-
-The runner validates dataset checksums, uses the fixed train/validation/test
-split, evaluates the held-out test split once, and writes the final model to:
-
-`artifacts/models/bert_sentiment/final_model`
-
-Current-run metrics are written separately from the historical benchmark:
-
-- `reports/metrics/bert_sentiment_current_run_metrics.json`
-- `reports/metrics/bert_sentiment_current_run_history.json`
-- `artifacts/manifests/bert_sentiment_current_run_manifest.json`
-
-## Validate inference
+For training and the full retained test suite, install the development requirements:
 
 ```powershell
-$env:PYTHONPATH = "src"
-.venv-bert\Scripts\python.exe scripts\benchmark_full_bert_inference.py
+python -m venv .venv-bert
+.\.venv-bert\Scripts\python.exe -m pip install --upgrade pip
+.\.venv-bert\Scripts\python.exe -m pip install -r requirements-dev.txt
 ```
 
-The benchmark checks all three labels and writes measured timing and memory to
-`reports/metrics/bert_sentiment_current_run_benchmark.json`.
+For the public Streamlit application, use `app/requirements.txt` instead. Streamlit Community Cloud installs that file from the app directory.
 
-## Run the public application
+## Verify the saved model
+
+Run the lightweight benchmark against the local final model:
 
 ```powershell
-$env:PYTHONPATH = "src"
-.venv-bert\Scripts\python.exe -m streamlit run app\public_cloud_app.py --server.port 8502
+.\.venv-bert\Scripts\python.exe scripts\benchmark_full_bert_inference.py
 ```
 
-The app caches one model runtime per process, batches article sentences, and
-falls back to CPU automatically when CUDA is unavailable. It produces article
-sentiment and sentence evidence only; it does not predict prices or returns.
+The benchmark reads the existing model and writes no training data. Confirm the three representative sentences retain their expected Bearish, Neutral, and Bullish labels before deleting any local checkpoints.
 
-## Required artifact files
+## Run a controlled smoke workflow
 
-- `config.json`
-- `model.safetensors`
-- `tokenizer.json`
-- `tokenizer_config.json`
-- `vocab.txt`
+`run_bert_smoke.py` creates an isolated balanced subset and dedicated smoke outputs. It never replaces the final Full BERT artifact unless explicitly asked to replace only its own smoke paths.
 
-If any file is missing, the Analyze Article page shows a clear model-artifact
-error and does not reuse an older result.
+The smoke runner deliberately rejects an interpreter that exposes `scikit-learn`, because its isolated Transformer path avoids a known OpenMP conflict. Run it only from a dedicated Transformer-only environment that satisfies that preflight; do not use the public-app environment for this workflow.
+
+```powershell
+<transformer-python> scripts\run_bert_smoke.py
+```
+
+## Run the retained Full BERT workflow
+
+`run_full_bert.py` owns the reproducible Full BERT training run and writes its output paths through the training configuration. Review its command-line help before starting a training job:
+
+```powershell
+.\.venv-bert\Scripts\python.exe scripts\run_full_bert.py --help
+```
+
+A completed run must save a model configuration, tokenizer files, model weights, current-run metrics, trainer history, benchmark evidence, and the current manifest. Do not overwrite the verified final model or current metrics without a deliberate reproduction plan.
+
+## Financial PhraseBank contracts
+
+The retained source and split modules preserve:
+
+- 3,453 original Financial PhraseBank 75%-agreement sentences;
+- five exact duplicates removed;
+- 3,448 records after deduplication;
+- deterministic 70/15/15 stratified train, validation, and test splits;
+- the fixed Bearish/Neutral/Bullish label mapping.
+
+Run the relevant contracts with:
+
+```powershell
+.\.venv-bert\Scripts\python.exe -m pytest tests\test_financial_phrasebank.py tests\test_financial_phrasebank_split.py
+```
+
+## Safety boundary
+
+The model classifies financial-news language. It is not a stock-price prediction model and must not be presented as investment advice.

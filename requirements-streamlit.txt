@@ -1,4 +1,0 @@
-# Exact UI dependencies verified for the portfolio Streamlit application.
-# Streamlit owns the interface. Plotly provides interactive 2D and 3D charts.
-streamlit==1.58.0
-plotly==6.8.0
