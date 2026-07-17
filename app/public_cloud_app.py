@@ -12340,60 +12340,66 @@ def _render_sentiment_analyze_page() -> None:
 
 
 def _model_badge(text: str, kind: str = "current") -> str:
+    """Return the unchanged HTML badge used by Model Results cards."""
     return f'<span class="ml-badge ml-{kind}">{_safe(text)}</span>'
 
 
 def _format_optional_metric(value: float | None, percent: bool = False) -> str:
+    """Format a stored metric without recalculating its experiment value."""
     if value is None:
         return "Not recorded"
     return f"{value * 100:.2f}%" if percent else f"{value:.4f}"
 
 
 def _render_experiment_leaderboard(data: Any) -> None:
+    """Render current and historical experiments in verified rank order."""
     import pandas as pd
 
-    strategies = {
+    experiment_strategies = {
         "Full BERT historical": ("Full fine-tuning", "Performance champion"),
         "DistilBERT historical": ("Full fine-tuning", "Runtime-efficient alternative"),
         "BERT-LoRA historical": ("Parameter-efficient LoRA", "Parameter-efficient experiment"),
     }
-    rows = []
-    for rank, metrics in enumerate(leaderboard(data), start=1):
-        strategy, status = strategies[metrics.name]
-        rows.append({
-            "Rank": rank, "Model": metrics.name.replace(" historical", ""),
-            "Accuracy": f"{metrics.accuracy * 100:.2f}%", "Macro-F1": f"{metrics.macro_f1:.4f}",
-            "Macro precision": _format_optional_metric(metrics.macro_precision),
-            "Macro recall": _format_optional_metric(metrics.macro_recall),
-            "Tuning strategy": strategy, "Experiment status": status,
+    comparison_rows = []
+    for rank, model_metrics in enumerate(leaderboard(data), start=1):
+        training_strategy, experiment_status = experiment_strategies[model_metrics.name]
+        comparison_rows.append({
+            "Rank": rank, "Model": model_metrics.name.replace(" historical", ""),
+            "Accuracy": f"{model_metrics.accuracy * 100:.2f}%", "Macro-F1": f"{model_metrics.macro_f1:.4f}",
+            "Macro precision": _format_optional_metric(model_metrics.macro_precision),
+            "Macro recall": _format_optional_metric(model_metrics.macro_recall),
+            "Tuning strategy": training_strategy, "Experiment status": experiment_status,
         })
-    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch", height=178)
+    st.dataframe(pd.DataFrame(comparison_rows), hide_index=True, width="stretch", height=178)
 
 
 def _render_experiment_comparison(data: Any) -> None:
+    """Compare stored accuracy and macro-F1 values across model runs."""
     import plotly.graph_objects as go
 
-    runs = [data.current, *data.historical.values()]
-    labels = [item.name for item in runs]
-    colors = ["#22d3ee", "#818cf8", "#38bdf8", "#a78bfa"]
-    fig = go.Figure()
+    experiment_runs = [data.current, *data.historical.values()]
+    model_names = [model_result.name for model_result in experiment_runs]
+    model_colors = ["#22d3ee", "#818cf8", "#38bdf8", "#a78bfa"]
+    chart_figure = go.Figure()
+    # Accuracy counts all correct predictions; macro-F1 weights each class equally.
     for metric_name, field, shade in [("Accuracy", "accuracy", 1.0), ("Macro-F1", "macro_f1", .65)]:
-        fig.add_trace(go.Bar(
-            name=metric_name, y=labels, x=[getattr(item, field) * 100 for item in runs], orientation="h",
-            marker_color=colors, marker_opacity=shade,
-            text=[f"{getattr(item, field) * 100:.2f}%" for item in runs], textposition="outside",
-            customdata=[[item.source, "Current reproduced run" if item is data.current else "Verified historical experiment"] for item in runs],
+        chart_figure.add_trace(go.Bar(
+            name=metric_name, y=model_names, x=[getattr(model_result, field) * 100 for model_result in experiment_runs], orientation="h",
+            marker_color=model_colors, marker_opacity=shade,
+            text=[f"{getattr(model_result, field) * 100:.2f}%" for model_result in experiment_runs], textposition="outside",
+            customdata=[[model_result.source, "Current reproduced run" if model_result is data.current else "Verified historical experiment"] for model_result in experiment_runs],
             hovertemplate="<b>%{y}</b><br>" + metric_name + ": %{x:.4f}%<br>%{customdata[1]}<br>Source: %{customdata[0]}<extra></extra>",
         ))
-    fig.update_layout(
+    chart_figure.update_layout(
         **_plotly_layout(height=420, showlegend=True, barmode="group", margin={"l": 165, "r": 75, "t": 65, "b": 55}),
         xaxis={"title": "Held-out test score (%)", "range": [78, 94], "ticksuffix": "%", "gridcolor": "rgba(148,163,184,.12)"},
         yaxis={"title": "", "autorange": "reversed"}, legend={"orientation": "h", "y": 1.12},
     )
-    st.plotly_chart(fig, width="stretch", config=_plotly_config(), key="ml_performance_comparison")
+    st.plotly_chart(chart_figure, width="stretch", config=_plotly_config(), key="ml_performance_comparison")
 
 
 def _render_training_loss(data: Any) -> None:
+    """Plot training and validation losses recorded during the completed run."""
     import plotly.graph_objects as go
 
     training = [item for item in data.history if "loss" in item and "eval_loss" not in item]
@@ -12415,6 +12421,7 @@ def _render_training_loss(data: Any) -> None:
 
 
 def _render_validation_dynamics(data: Any) -> None:
+    """Plot stored validation accuracy and macro-F1 by training epoch."""
     import plotly.graph_objects as go
 
     evaluations = [item for item in data.history if "eval_accuracy" in item and "eval_macro_f1" in item]
@@ -12431,6 +12438,7 @@ def _render_validation_dynamics(data: Any) -> None:
 
 
 def _render_learning_rate(data: Any) -> None:
+    """Plot the learning-rate values preserved in trainer history."""
     import plotly.graph_objects as go
 
     logged = [item for item in data.history if "learning_rate" in item]
@@ -12443,11 +12451,13 @@ def _render_learning_rate(data: Any) -> None:
 
 
 def _render_training_timeline() -> None:
+    """Render the fixed sequence of completed experiment stages."""
     labels = ["Financial PhraseBank", "Deduplication", "Stratified split", "BERT tokenization", "GPU fine-tuning", "Validation", "Best checkpoint", "Held-out test"]
     st.markdown('<div class="ml-timeline">' + ''.join(f'<div><span>{index:02d}</span><strong>{_safe(label)}</strong></div>' for index, label in enumerate(labels, 1)) + '</div>', unsafe_allow_html=True)
 
 
 def _render_training_configuration(data: Any) -> None:
+    """Render verified model and training settings from stored artifacts."""
     import pandas as pd
 
     config = data.manifest.get("configuration", {})
@@ -12476,6 +12486,7 @@ def _render_training_configuration(data: Any) -> None:
 
 
 def _render_resource_panel(data: Any) -> None:
+    """Render measured training and inference resource information."""
     benchmark = data.benchmark
     timing = data.manifest.get("timing", {})
     cards = [
@@ -12490,6 +12501,7 @@ def _render_resource_panel(data: Any) -> None:
 
 
 def _render_efficiency_frontier(data: Any) -> None:
+    """Compare stored model quality with measured artifact size and latency."""
     import plotly.graph_objects as go
 
     benchmark = data.benchmark
@@ -12510,6 +12522,7 @@ def _render_efficiency_frontier(data: Any) -> None:
 
 
 def _render_runtime_panel(data: Any) -> None:
+    """Render the saved Full BERT runtime benchmark values."""
     benchmark = data.benchmark
     values = [
         ("Model load", f'{benchmark.get("model_load_seconds"):.2f} seconds' if isinstance(benchmark.get("model_load_seconds"), (int, float)) else "Not recorded"),
@@ -12523,6 +12536,7 @@ def _render_runtime_panel(data: Any) -> None:
 
 
 def _render_architecture_cards(data: Any) -> None:
+    """Summarize the compared Transformer experiment architectures."""
     cards = [
         ("Full BERT", "Complete Transformer encoder", "Full fine-tuning", "Strongest verified balanced performance", "Selected local inference model"),
         ("DistilBERT", "Compressed Transformer architecture", "Lower operational footprint", "Small verified performance reduction", "Efficient deployment alternative"),
@@ -12532,30 +12546,33 @@ def _render_architecture_cards(data: Any) -> None:
 
 
 def _render_confusion_lab(data: Any) -> None:
+    """Render the current confusion matrix in fixed sentiment-class order."""
     import plotly.graph_objects as go
 
-    mode = st.segmented_control("Matrix view", ["Counts", "Normalized by actual class", "Normalized by predicted class"], default="Counts", key="ml_confusion_mode", width="stretch") or "Counts"
-    matrix = data.current.confusion_matrix
-    displayed = normalize_confusion(matrix, mode)
-    row_totals = [sum(row) for row in matrix]
-    column_totals = [sum(matrix[row][column] for row in range(3)) for column in range(3)]
-    custom = [[[
-        matrix[row][column], 100 * matrix[row][column] / row_totals[row] if row_totals[row] else 0,
-        100 * matrix[row][column] / column_totals[column] if column_totals[column] else 0,
-    ] for column in range(3)] for row in range(3)]
-    annotations = [[f"{value:.1f}%" if mode != "Counts" else str(int(value)) for value in row] for row in displayed]
-    fig = go.Figure(go.Heatmap(
-        z=displayed, x=list(BERT_LABEL_ORDER), y=list(BERT_LABEL_ORDER), customdata=custom,
+    matrix_view = st.segmented_control("Matrix view", ["Counts", "Normalized by actual class", "Normalized by predicted class"], default="Counts", key="ml_confusion_mode", width="stretch") or "Counts"
+    confusion_matrix = data.current.confusion_matrix
+    matrix_values = normalize_confusion(confusion_matrix, matrix_view)
+    row_totals = [sum(matrix_row) for matrix_row in confusion_matrix]
+    column_totals = [sum(confusion_matrix[row_index][column_index] for row_index in range(3)) for column_index in range(3)]
+    # Rows are actual classes and columns are predictions in fixed BERT class order.
+    hover_values = [[[
+        confusion_matrix[row_index][column_index], 100 * confusion_matrix[row_index][column_index] / row_totals[row_index] if row_totals[row_index] else 0,
+        100 * confusion_matrix[row_index][column_index] / column_totals[column_index] if column_totals[column_index] else 0,
+    ] for column_index in range(3)] for row_index in range(3)]
+    annotations = [[f"{value:.1f}%" if matrix_view != "Counts" else str(int(value)) for value in matrix_row] for matrix_row in matrix_values]
+    chart_figure = go.Figure(go.Heatmap(
+        z=matrix_values, x=list(BERT_LABEL_ORDER), y=list(BERT_LABEL_ORDER), customdata=hover_values,
         text=annotations, texttemplate="%{text}", textfont={"size": 16},
         colorscale=[[0, "#0b1628"], [.5, "#155e75"], [1, "#34d399"]],
         hovertemplate="True: %{y}<br>Predicted: %{x}<br>Count: %{customdata[0]}<br>Row percentage: %{customdata[1]:.2f}%<br>Column percentage: %{customdata[2]:.2f}%<extra></extra>",
-        colorbar={"title": "%" if mode != "Counts" else "Records", "thickness": 13},
+        colorbar={"title": "%" if matrix_view != "Counts" else "Records", "thickness": 13},
     ))
-    fig.update_layout(**_plotly_layout(height=430, margin={"l": 78, "r": 35, "t": 35, "b": 68}), xaxis={"title": "Predicted label", "side": "bottom"}, yaxis={"title": "True label", "autorange": "reversed"})
-    st.plotly_chart(fig, width="stretch", config=_plotly_config(), key="ml_confusion_matrix")
+    chart_figure.update_layout(**_plotly_layout(height=430, margin={"l": 78, "r": 35, "t": 35, "b": 68}), xaxis={"title": "Predicted label", "side": "bottom"}, yaxis={"title": "True label", "autorange": "reversed"})
+    st.plotly_chart(chart_figure, width="stretch", config=_plotly_config(), key="ml_confusion_matrix")
 
 
 def _render_per_class_metrics(data: Any) -> None:
+    """Render stored precision, recall, and F1 for each sentiment class."""
     import plotly.graph_objects as go
 
     fig = go.Figure()
@@ -12566,6 +12583,7 @@ def _render_per_class_metrics(data: Any) -> None:
 
 
 def _render_error_flows(data: Any) -> None:
+    """Visualize misclassification counts from the stored confusion matrix."""
     import plotly.graph_objects as go
 
     flows = sorted(error_flows(data.current.confusion_matrix), key=lambda item: (-item[2], item[0], item[1]))
@@ -12580,6 +12598,7 @@ def _render_error_flows(data: Any) -> None:
 
 
 def _render_diagnostics(data: Any) -> None:
+    """Render evaluation diagnostics without rerunning model training."""
     findings = diagnostic_findings(data.current)
     strongest = findings["strongest"]
     weakest_label, weakest_measure, weakest_value = findings["weakest"]
@@ -12597,6 +12616,7 @@ def _render_diagnostics(data: Any) -> None:
 
 
 def _render_dataset_provenance(data: Any) -> None:
+    """Render stored Financial PhraseBank counts and split provenance."""
     import plotly.graph_objects as go
 
     summary = data.manifest.get("dataset_summary", {})
@@ -12624,6 +12644,7 @@ def _render_dataset_provenance(data: Any) -> None:
 
 
 def _render_metric_provenance(data: Any) -> None:
+    """Show where current and historical experiment metrics were loaded."""
     st.markdown("""
     **Current reproduced run**
     Test accuracy, macro metrics, class metrics and confusion matrix: `bert_sentiment_current_run_metrics.json`
@@ -12643,17 +12664,18 @@ def _render_metric_provenance(data: Any) -> None:
 
 
 def _render_verified_model_results_page() -> None:
-    """Render the verified four-tab AI Experiment Lab."""
+    """Render the AI Experiment Lab from verified stored results."""
 
     try:
-        data = load_experiment_lab_data(PROJECT_ROOT)
-    except ExperimentDataError as exc:
+        experiment_results = load_experiment_lab_data(PROJECT_ROOT)
+    except ExperimentDataError as data_error:
         st.markdown('<div class="fs-head"><div class="fs-eye">MODEL EVALUATION · VERIFIED EXPERIMENTS</div><h1 class="fs-title">Full BERT Experiment Lab</h1></div>', unsafe_allow_html=True)
-        st.error(f"Verified experiment data could not be loaded: {exc}")
+        st.error(f"Verified experiment data could not be loaded: {data_error}")
         return
-    current = data.current
-    historical_bert = data.historical["Full BERT historical"]
-    training_seconds = data.manifest.get("timing", {}).get("training_seconds")
+    # These are stored experiment results; rendering this page never retrains a model.
+    current_result = experiment_results.current
+    historical_bert = experiment_results.historical["Full BERT historical"]
+    training_seconds = experiment_results.manifest.get("timing", {}).get("training_seconds")
     st.markdown(
         '<div class="fs-head"><div class="fs-eye">MODEL EVALUATION · VERIFIED EXPERIMENTS</div>'
         '<h1 class="fs-title">Full BERT Experiment Lab</h1>'
@@ -12663,22 +12685,22 @@ def _render_verified_model_results_page() -> None:
     st.markdown(
         f'<div class="fs-card ml-champion"><div><span class="fs-badge">FULL BERT</span><h2>Deployed local inference model</h2>'
         f'<p>Current reproduced run {_model_badge("CURRENT RUN")} and verified historical experiment {_model_badge("HISTORICAL", "historical")} are reported separately.</p></div>'
-        f'<div class="ml-champion-metrics"><div><span>Current test accuracy</span><strong>{current.accuracy * 100:.2f}%</strong></div>'
-        f'<div><span>Current macro-F1</span><strong>{current.macro_f1:.4f}</strong></div>'
+        f'<div class="ml-champion-metrics"><div><span>Current test accuracy</span><strong>{current_result.accuracy * 100:.2f}%</strong></div>'
+        f'<div><span>Current macro-F1</span><strong>{current_result.macro_f1:.4f}</strong></div>'
         f'<div><span>Historical best accuracy</span><strong>{historical_bert.accuracy * 100:.2f}%</strong></div>'
         f'<div><span>Historical best macro-F1</span><strong>{historical_bert.macro_f1:.4f}</strong></div>'
-        f'<div><span>Best checkpoint</span><strong>{_safe(data.best_checkpoint)}</strong></div>'
+        f'<div><span>Best checkpoint</span><strong>{_safe(experiment_results.best_checkpoint)}</strong></div>'
         f'<div><span>Training time</span><strong>{training_seconds:.2f} seconds</strong></div></div></div>', unsafe_allow_html=True,
     )
-    strip = ["3 Transformer experiments", "3,448 deduplicated sentences", "Full GPU fine-tuning", "3 sentiment classes", "Fixed held-out test evaluation"]
-    st.markdown('<div class="ml-summary-strip">' + ''.join(f'<span>{_safe(item)}</span>' for item in strip) + '</div>', unsafe_allow_html=True)
+    summary_items = ["3 Transformer experiments", "3,448 deduplicated sentences", "Full GPU fine-tuning", "3 sentiment classes", "Fixed held-out test evaluation"]
+    st.markdown('<div class="ml-summary-strip">' + ''.join(f'<span>{_safe(summary_item)}</span>' for summary_item in summary_items) + '</div>', unsafe_allow_html=True)
 
     executive, training, efficiency, errors = st.tabs(["Executive Results", "Training Dynamics", "Benchmark & Efficiency", "Error Analysis"])
     with executive:
         _section_heading("LEADERBOARD", "Verified model leaderboard", "Ranked by verified historical macro-F1.")
-        _render_experiment_leaderboard(data)
+        _render_experiment_leaderboard(experiment_results)
         _section_heading("COMPARISON", "Current and historical held-out performance")
-        _render_experiment_comparison(data)
+        _render_experiment_comparison(experiment_results)
         st.caption("Accuracy measures overall correctness. Macro-F1 gives equal importance to all three sentiment classes.")
         _section_heading("INTERPRETATION", "Champion interpretation")
         st.markdown("""
@@ -12691,55 +12713,55 @@ def _render_verified_model_results_page() -> None:
         loss_col, validation_col = st.columns(2, gap="large")
         with loss_col:
             _section_heading("LOSS", "Training and validation loss")
-            _render_training_loss(data)
+            _render_training_loss(experiment_results)
         with validation_col:
             _section_heading("VALIDATION", "Validation performance")
-            _render_validation_dynamics(data)
+            _render_validation_dynamics(experiment_results)
         _section_heading("SCHEDULE", "Logged learning-rate progression")
-        _render_learning_rate(data)
+        _render_learning_rate(experiment_results)
         _section_heading("PROCESS", "Training workflow")
         _render_training_timeline()
         config_col, resource_col = st.columns([1.15, .85], gap="large")
         with config_col:
             _section_heading("CONFIGURATION", "Verified training configuration")
-            _render_training_configuration(data)
+            _render_training_configuration(experiment_results)
         with resource_col:
             _section_heading("RESOURCES", "Current-run resource evidence")
-            _render_resource_panel(data)
+            _render_resource_panel(experiment_results)
     with efficiency:
         frontier, runtime = st.columns([1.08, .92], gap="large")
         with frontier:
             _section_heading("MEASURED FRONTIER", "Performance–efficiency frontier")
-            _render_efficiency_frontier(data)
+            _render_efficiency_frontier(experiment_results)
         with runtime:
             _section_heading("RUNTIME", "Current Full BERT runtime")
-            _render_runtime_panel(data)
+            _render_runtime_panel(experiment_results)
         _section_heading("ARCHITECTURES", "Experiment architecture comparison")
-        _render_architecture_cards(data)
+        _render_architecture_cards(experiment_results)
         _section_heading("DEPLOYMENT", "Deployment interpretation")
         _scope_note("Full BERT is suitable for the local presentation application. Its approximately 419 MiB artifact requires deliberate cloud distribution. DistilBERT remains a practical constrained-deployment alternative. No public-cloud runtime claim is made until hosting and runtime are validated.")
     with errors:
         matrix_col, class_col = st.columns(2, gap="large")
         with matrix_col:
             _section_heading("CONFUSION MATRIX", "Current reproduced-run errors")
-            _render_confusion_lab(data)
+            _render_confusion_lab(experiment_results)
         with class_col:
             _section_heading("PER CLASS", "Precision, recall and F1")
-            _render_per_class_metrics(data)
+            _render_per_class_metrics(experiment_results)
         flow_col, findings_col = st.columns([1.05, .95], gap="large")
         with flow_col:
             _section_heading("ERROR FLOW", "Ranked misclassification directions")
-            _render_error_flows(data)
+            _render_error_flows(experiment_results)
         with findings_col:
             _section_heading("DIAGNOSTICS", "Calculated diagnostic findings")
-            _render_diagnostics(data)
+            _render_diagnostics(experiment_results)
 
     with st.expander("Dataset preparation"):
-        _render_dataset_provenance(data)
+        _render_dataset_provenance(experiment_results)
     with st.expander("Experiment configuration"):
-        _render_training_configuration(data)
+        _render_training_configuration(experiment_results)
     with st.expander("Metric provenance"):
-        _render_metric_provenance(data)
+        _render_metric_provenance(experiment_results)
 
 def _ar_flow(nodes: list[tuple[str, str, str]]) -> str:
     """Render one responsive technical connector lane."""
