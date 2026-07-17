@@ -554,8 +554,9 @@ def _plotly_config() -> dict[str, bool]:
 
 
 def _apply_theme() -> None:
-    """Apply the complete target dashboard theme."""
+    """Configure Streamlit and inject shared CSS for every public page."""
 
+    # This wrapper applies presentation only; it does not render a route or load a model.
     st.set_page_config(
         page_title="Financial News Sentiment Analyzer",
         page_icon="📰",
@@ -563,6 +564,7 @@ def _apply_theme() -> None:
         initial_sidebar_state="expanded",
     )
 
+    # These selectors must stay synchronized with the HTML classes emitted by page renderers.
     st.markdown(
         """
         <style>
@@ -10847,8 +10849,9 @@ def _render_recruiter_landing_page() -> None:
 
 
 def _render_premium_sentiment_styles() -> None:
-    """Apply shared visual tokens for the four focused public pages."""
+    """Inject unchanged shared CSS used by all four focused public pages."""
 
+    # unsafe_allow_html is required because Streamlit receives the existing style element directly.
     st.markdown(
         """
         <style>
