@@ -21,7 +21,7 @@ class _Window:
 
 
 class FixedWindowRateLimiter:
-    """Count requests per client and route inside one named time window."""
+    """Limit requests per client-and-route key within a fixed time window."""
 
     def __init__(self, maximum_requests: int, window_seconds: int) -> None:
         if maximum_requests < 1 or window_seconds < 1:
@@ -36,15 +36,15 @@ class FixedWindowRateLimiter:
 
         current_time = time.monotonic() if now is None else now
         with self._lock:
-            window = self._windows.get(key)
+            active_window = self._windows.get(key)
             if (
-                window is None
-                or current_time - window.started_at >= self.window_seconds
+                active_window is None
+                or current_time - active_window.started_at >= self.window_seconds
             ):
                 self._windows[key] = _Window(current_time, 1)
                 self._cleanup(current_time)
                 return
-            if window.request_count >= self.maximum_requests:
+            if active_window.request_count >= self.maximum_requests:
                 raise ApiProblem(
                     status_code=429,
                     error_code="rate_limit_exceeded",
@@ -58,15 +58,15 @@ class FixedWindowRateLimiter:
                         f"Wait {self.window_seconds} seconds and retry once."
                     ),
                 )
-            window.request_count += 1
+            active_window.request_count += 1
 
     def _cleanup(self, now: float) -> None:
         """Remove expired windows so client keys do not grow without bound."""
 
-        expired = [
+        expired_keys = [
             key
             for key, window in self._windows.items()
             if now - window.started_at >= self.window_seconds * 2
         ]
-        for key in expired:
+        for key in expired_keys:
             self._windows.pop(key, None)

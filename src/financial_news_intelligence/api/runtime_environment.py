@@ -52,26 +52,26 @@ def absolute_launcher_path(file_path: Path) -> Path:
 
 
 def environment_python(project_root: Path, environment_name: str) -> Path:
-    """Return one executable virtual-environment launcher without dereferencing it."""
+    """Return the executable launcher for one project virtual environment."""
 
-    launcher = absolute_launcher_path(
+    environment_launcher = absolute_launcher_path(
         project_root.expanduser() / environment_name / "bin" / "python"
     )
     if (
-        not launcher.exists()
-        or not launcher.is_file()
-        or not os.access(launcher, os.X_OK)
+        not environment_launcher.exists()
+        or not environment_launcher.is_file()
+        or not os.access(environment_launcher, os.X_OK)
     ):
         raise RuntimeEnvironmentError(
             "Python environment validation failed.",
-            str(launcher),
+            str(environment_launcher),
             (
                 "The required virtual-environment Python launcher is missing "
                 "or not executable."
             ),
             f"Restore {environment_name} and rerun FastAPI verification.",
         )
-    return launcher
+    return environment_launcher
 
 
 def require_active_environment(
@@ -99,10 +99,10 @@ def require_active_environment(
             f"Restore {environment_name} and rerun FastAPI verification.",
         )
     try:
-        same_environment = os.path.samefile(observed_prefix, expected_prefix)
+        environment_matches = os.path.samefile(observed_prefix, expected_prefix)
     except OSError:
-        same_environment = observed_prefix.resolve() == expected_prefix.resolve()
-    if not same_environment:
+        environment_matches = observed_prefix.resolve() == expected_prefix.resolve()
+    if not environment_matches:
         raise RuntimeEnvironmentError(
             "Python environment validation failed.",
             str(observed_prefix),

@@ -25,13 +25,14 @@ def request_id_from_header(value: str | None) -> str:
 
 
 def api_key_dependency(settings: ApiSettings) -> Callable[..., None]:
-    """Create a FastAPI dependency that compares keys in constant time."""
+    """Create the FastAPI dependency that enforces the configured API key."""
 
     def require_api_key(
         x_api_key: str | None = Header(default=None, alias="X-API-Key"),
     ) -> None:
         if not settings.require_api_key:
             return
+        # Constant-time comparison avoids revealing matching key prefixes.
         if not x_api_key or not hmac.compare_digest(
             x_api_key,
             settings.api_key or "",

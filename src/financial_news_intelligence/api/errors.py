@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 
 @dataclass
 class ApiProblem(RuntimeError):
-    """One safe client-facing failure description."""
+    """Store the stable HTTP failure details returned to API clients."""
 
     status_code: int
     error_code: str
@@ -40,7 +40,7 @@ def problem_response(
     problem: ApiProblem,
     request_id: str | None,
 ) -> JSONResponse:
-    """Convert an ApiProblem into a JSON response."""
+    """Convert a structured API failure into its public JSON response."""
 
     return JSONResponse(
         status_code=problem.status_code,
