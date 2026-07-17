@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="https://financial-news-stock-intelligence.streamlit.app/">
+  <a href="https://financial-news-stock-intelligence-v1.streamlit.app/">
     <img alt="Live Streamlit App" src="https://img.shields.io/badge/Live%20App-Streamlit%20Cloud-ff4b4b?logo=streamlit&logoColor=white">
   </a>
   <img alt="Public Dashboard QA" src="https://img.shields.io/badge/Public%20Dashboard%20QA-13%2F13%20passed-22c55e">
