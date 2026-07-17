@@ -2,8 +2,8 @@
 
 <p align="center">
   <strong>
-    Public financial AI dashboard for article intelligence, movement signals, forecasts,
-    scenarios, explainability, evidence, provenance, architecture, and deployment QA.
+    Public financial AI dashboard for Full BERT sentiment analysis, sentence evidence,
+    lexical cues, model results, architecture, and deployment readiness.
   </strong>
 </p>
 
@@ -11,7 +11,7 @@
   <a href="https://financial-news-stock-intelligence-v1.streamlit.app/">
     <img alt="Live Streamlit App" src="https://img.shields.io/badge/Live%20App-Streamlit%20Cloud-ff4b4b?logo=streamlit&logoColor=white">
   </a>
-  <img alt="Public Dashboard QA" src="https://img.shields.io/badge/Public%20Dashboard%20QA-13%2F13%20passed-22c55e">
+  <img alt="Public Dashboard QA" src="https://img.shields.io/badge/Public%20Dashboard%20QA-4%2F4%20passed-22c55e">
   <img alt="Deployment" src="https://img.shields.io/badge/Deployment-Live%20Verified-16a34a">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.x-3776ab?logo=python&logoColor=white">
   <img alt="Streamlit" src="https://img.shields.io/badge/UI-Streamlit-ff4b4b?logo=streamlit&logoColor=white">
@@ -21,12 +21,12 @@
 
 <p align="center">
   <a href="https://github.com/RuturajM31/financial-news-stock-intelligence/actions/workflows/ci.yml">
-    <img alt="CI/CD" src="https://github.com/RuturajM31/financial-news-stock-intelligence/actions/workflows/ci.yml/badge.svg?branch=project-foundation-streamlit-closure">
+    <img alt="CI/CD" src="https://github.com/RuturajM31/financial-news-stock-intelligence/actions/workflows/ci.yml/badge.svg?branch=main">
   </a>
 </p>
 
 <p align="center">
-  <a href="https://financial-news-stock-intelligence.streamlit.app/"><strong>Open the live dashboard</strong></a>
+  <a href="https://financial-news-stock-intelligence-v1.streamlit.app/"><strong>Open the live dashboard</strong></a>
 </p>
 
 ---
@@ -37,13 +37,13 @@
 
 The project demonstrates how a financial AI product can move beyond a simple sentiment label and show:
 
-- article-level signal analysis;
-- forecast and scenario reasoning;
-- historical event comparison;
-- explainability and model evidence;
+- article-level Full BERT sentiment analysis;
+- sentence-level model evidence and visualizations;
+- separate lexical and risk-cue evidence;
+- verified current and historical experiment results;
 - provenance and trust boundaries;
 - architecture and deployment readiness;
-- final public dashboard QA.
+- four-page public dashboard navigation.
 
 The live Streamlit dashboard is designed as a **portfolio-grade AI product**, not only a model demo.
 
@@ -53,12 +53,12 @@ The live Streamlit dashboard is designed as a **portfolio-grade AI product**, no
 
 | Item | Value |
 |---|---|
-| Public app | [https://financial-news-stock-intelligence.streamlit.app/](https://financial-news-stock-intelligence.streamlit.app/) |
+| Public app | [https://financial-news-stock-intelligence-v1.streamlit.app/](https://financial-news-stock-intelligence-v1.streamlit.app/) |
 | Repository | [github.com/RuturajM31/financial-news-stock-intelligence](https://github.com/RuturajM31/financial-news-stock-intelligence) |
-| Deployment branch | `project-foundation-streamlit-closure` |
-| Final verified commit | `6665adb` |
-| Dashboard status | `13 / 13 pages passed` |
-| Live verification | `Passed` |
+| Deployment branch | `main` |
+| Previous verified commit | `6665adb` |
+| Dashboard status | `4 active pages` |
+| Live verification | `Live` |
 
 ---
 
@@ -70,13 +70,13 @@ This project converts financial-news text into a structured dashboard experience
 
 | Layer | Purpose |
 |---|---|
-| Article intelligence | Extract article context and convert it into readable signals. |
-| Sentiment and movement | Separate language tone from likely market-direction pressure. |
-| Forecasts | Show forward-looking scenarios and probability mixes. |
-| Historical intelligence | Compare current-style events with comparable historical examples. |
-| Explainability | Show why a model-style conclusion is produced. |
-| Evidence and QA | Display training, validation, testing, provenance, and launch readiness. |
-| Architecture | Show how the public app maps to a production-style AI system. |
+| Article intelligence | Extract article context and prepare it for analysis. |
+| Sentiment analysis | Use Full BERT for sentence-level and article-level financial-news sentiment. |
+| Evidence visuals | Show probabilities, a heatmap, sentiment journey, semantic map, and token views. |
+| Lexical cues | Keep positive, negative, and risk language as separate explanatory evidence. |
+| Model results | Present verified current and historical experiment metrics. |
+| Evidence and QA | Display dataset and metric provenance with trust boundaries. |
+| Architecture | Show the article-to-evidence workflow and deployment components. |
 
 ---
 
@@ -84,19 +84,10 @@ This project converts financial-news text into a structured dashboard experience
 
 | # | Page | Purpose | Status |
 |---:|---|---|---|
-| 1 | Executive Overview | Product landing page and reviewer overview | Passed |
-| 2 | Analyze Article | Article URL, upload/paste, sentiment and movement analysis | Passed |
-| 3 | Forecasts | Forecast calendar, fan chart, probabilities, driver impact | Passed |
-| 4 | Historical Intelligence | Comparable events, timelines, return distributions | Passed |
-| 5 | Explainability | Token impact, sentence impact, waterfall, evidence table | Passed |
-| 6 | Scenario Analysis | Upside/base/downside cases and stress testing | Passed |
-| 7 | Model Comparison | Champion model selection and tradeoff analysis | Passed |
-| 8 | Model Training / Evidence | Training, validation, testing, and evidence board | Passed |
-| 9 | Provenance | Source verification, trust boundaries, disclaimers | Passed |
-| 10 | Architecture / System Design | Public vs production architecture and CI/CD gates | Passed |
-| 11 | 3D Intelligence | 3D signal cube, decision surface, trajectory, fallback | Passed |
-| 12 | About / Project Purpose | Privacy-safe portfolio story and reviewer guide | Passed |
-| 13 | Visual QA / Page Audit | Final public launch QA cockpit | Passed |
+| 1 | Overview | Product landing page and current project overview | Active |
+| 2 | Analyze Article | URL, manual, and sample input with Full BERT evidence | Active |
+| 3 | Model Results | Current and historical experiments, metrics, and provenance | Active |
+| 4 | About / Architecture | Article-to-evidence workflow and deployment architecture | Active |
 
 ---
 
@@ -107,14 +98,14 @@ This project converts financial-news text into a structured dashboard experience
 flowchart LR
     A["Financial news article"] --> B["Public Streamlit dashboard"]
     B --> C["Article ingestion"]
-    C --> D["Sentiment and risk signal layer"]
-    D --> E["Movement intelligence layer"]
-    E --> F["Forecast and scenario views"]
-    E --> G["Historical intelligence views"]
-    E --> H["Explainability views"]
-    B --> I["Model comparison and evidence"]
-    B --> J["Provenance and trust boundaries"]
-    B --> K["Visual QA and launch audit"]
+    C --> D["Full BERT sentiment inference"]
+    D --> E["Article-level class probabilities"]
+    D --> F["Sentence evidence and visualizations"]
+    F --> G["Semantic and token views"]
+    F --> H["Separate lexical cue evidence"]
+    B --> I["Model results and metric provenance"]
+    B --> J["Architecture and deployment view"]
+    B --> K["Four-page public navigation"]
 
     classDef input fill:#0f172a,stroke:#38bdf8,color:#e0f2fe;
     classDef app fill:#111827,stroke:#a78bfa,color:#f5f3ff;
@@ -197,14 +188,14 @@ flowchart LR
 
 | Area | Implementation Focus |
 |---|---|
-| UI product | Streamlit multi-page public dashboard with routed sidebar navigation. |
-| Visualization | Plotly charts, 3D signal views, evidence boards, QA cockpit, Mermaid diagrams. |
-| NLP reasoning | Financial-news text converted into sentiment, risk, movement, and explanation layers. |
-| Forecasting UX | Forecast calendar, fan charts, probability mix, scenario stress testing. |
-| Explainability | Token impact, sentence impact, waterfall reasoning, evidence tables. |
-| MLOps evidence | Training/evidence pages, validation boards, quality gates, reproducibility framing. |
-| Provenance | Source verification, trust boundaries, public-demo disclaimers. |
-| Deployment | Public Streamlit Cloud deployment with final live verification. |
+| UI product | Four-page Streamlit public dashboard with routed sidebar navigation. |
+| Visualization | Plotly probability charts, sentiment heatmaps, journeys, semantic maps, and token views. |
+| NLP reasoning | Full BERT article sentiment with lexical cues shown as separate explanatory evidence. |
+| Article analysis UX | URL extraction, manual input, a presentation sample, and a highlighted article reader. |
+| Evidence views | Sentence evidence, WordPiece token landscape, contextual token network, and lexical cues. |
+| MLOps evidence | Current and historical experiment comparison, validation artifacts, and reproducibility framing. |
+| Provenance | Dataset and metric provenance, trust boundaries, and public-demo disclaimers. |
+| Deployment | Public Streamlit Cloud deployment with the active four-page application. |
 
 ---
 
@@ -218,11 +209,11 @@ The public dashboard closure passed the following release gates:
 | Git whitespace check | Passed |
 | Static dashboard contract | Passed |
 | Streamlit boot smoke | Passed |
-| 13 public page contracts | Passed |
-| Visual QA / Page Audit live check | Passed |
+| 4 active public page contracts | Passed |
+| Route and navigation check | Passed |
 | Public deployment verification | Passed |
 
-Final verified deployment commit:
+Previous verified deployment commit:
 
 ```text
 6665adb Finalize public dashboard QA audit and closure
@@ -251,7 +242,7 @@ cd financial-news-stock-intelligence
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r app/requirements.txt
-python3 -m streamlit run app/public_cloud_app.py
+PYTHONPATH=src python3 -m streamlit run app/streamlit_app.py
 ```
 
 Use the live deployed app as the source of truth for public verification.
@@ -271,12 +262,10 @@ It is **not investment advice**, trading instruction, or a guarantee of future m
 For a fast review:
 
 1. Open the live dashboard.
-2. Start with **Executive Overview**.
+2. Start with **Overview**.
 3. Test an article in **Analyze Article**.
-4. Review **Forecasts**, **Explainability**, and **Scenario Analysis**.
-5. Check **Model Training / Evidence** and **Provenance**.
-6. Review **Architecture / System Design**.
-7. End with **Visual QA / Page Audit**.
+4. Review **Model Results**.
+5. Review **About / Architecture**.
 
 ---
 
@@ -287,7 +276,9 @@ For a fast review:
 
 ## Financial News Sentiment Analyzer release
 
-The public application uses Full BERT as its primary inference model to classify financial-news language as Bearish, Neutral or Bullish and expose sentence-level evidence. The current reproduced run reached 90.93% accuracy and 0.8864 macro-F1. The historical Full BERT result, 91.31% accuracy and 0.8900 macro-F1, is displayed separately.
+The public application uses Full BERT as its primary inference model to classify financial-news language as Bearish, Neutral, or Bullish and expose sentence-level evidence. It is based on `google-bert/bert-base-uncased`, uses a maximum sequence length of 128, and has approximately 109.5 million parameters. Article sentiment is the arithmetic mean of sentence-level Full BERT probabilities; lexical cues are separate explanatory evidence only.
+
+Model loading prioritizes a local artifact, then the private Hugging Face repository, then its local cache. There is no silent lexical fallback. The current reproduced run reached 90.93% accuracy and 0.8864 macro-F1. Historical results shown separately are Full BERT at 91.31% accuracy and 0.8900 macro-F1, DistilBERT at 89.96% and 0.8779, and BERT-LoRA at 84.17% and 0.8154.
 
 The four public pages are Overview, Analyze Article, Model Results, and About / Architecture.
 
@@ -298,6 +289,6 @@ Local launch:
 
 Run tests with .venv-bert\Scripts\python.exe -m pytest.
 
-Streamlit Community Cloud uses app/requirements.txt and retrieves the private repository ruturajmokashi/financial-news-full-bert with a deployment-only Hugging Face READ token. Cold starts may download approximately 419 MiB and cloud inference runs on CPU. The application never presents lexical scoring as Full BERT output.
+Streamlit Community Cloud uses app/requirements.txt. When a local artifact is unavailable, it retrieves the private repository `ruturajmokashi/financial-news-full-bert` with a deployment-only Hugging Face READ token. The application never presents lexical scoring as Full BERT output.
 
 Author: Ruturaj Mokashi
