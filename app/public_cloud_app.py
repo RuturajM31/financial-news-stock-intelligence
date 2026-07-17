@@ -10945,73 +10945,158 @@ def _render_premium_sentiment_styles() -> None:
 
 
 def _section_heading(eyebrow: str, title: str, copy: str = "") -> None:
-    description = f"<p>{_safe(copy)}</p>" if copy else ""
-    st.markdown(f'<div class="fs-section"><div class="fs-eye">{_safe(eyebrow)}</div><h2>{_safe(title)}</h2>{description}</div>', unsafe_allow_html=True)
+    """Render a reusable escaped heading for a Streamlit page section."""
+
+    section_description = f"<p>{_safe(copy)}</p>" if copy else ""
+    section_html = (
+        f'<div class="fs-section"><div class="fs-eye">{_safe(eyebrow)}</div>'
+        f"<h2>{_safe(title)}</h2>{section_description}</div>"
+    )
+    st.markdown(section_html, unsafe_allow_html=True)
 
 
 def _scope_note(text: str) -> None:
-    st.markdown(f'<div class="fs-note">{_safe(text)}</div>', unsafe_allow_html=True)
+    """Render escaped explanatory text in the shared note style."""
+
+    note_html = f'<div class="fs-note">{_safe(text)}</div>'
+    st.markdown(note_html, unsafe_allow_html=True)
 
 
 def _plotly_layout(height: int = 390, **overrides: Any) -> dict[str, Any]:
-    layout: dict[str, Any] = {"height":height,"paper_bgcolor":"rgba(0,0,0,0)","plot_bgcolor":"rgba(0,0,0,0)","font":{"family":"Inter, sans-serif","color":"#dbeafe","size":13},"margin":{"l":70,"r":34,"t":55,"b":55},"hoverlabel":{"bgcolor":"#0f2038","font_color":"#f8fafc"},"showlegend":False}
-    layout.update(overrides)
-    return layout
+    """Return the shared Plotly layout with optional chart-specific settings."""
+
+    chart_layout: dict[str, Any] = {
+        "height": height,
+        "paper_bgcolor": "rgba(0,0,0,0)",
+        "plot_bgcolor": "rgba(0,0,0,0)",
+        "font": {"family": "Inter, sans-serif", "color": "#dbeafe", "size": 13},
+        "margin": {"l": 70, "r": 34, "t": 55, "b": 55},
+        "hoverlabel": {"bgcolor": "#0f2038", "font_color": "#f8fafc"},
+        "showlegend": False,
+    }
+    chart_layout.update(overrides)
+    return chart_layout
+
 
 @st.cache_resource(show_spinner=False)
 def _load_public_bert_runtime():
-    """Load the local or private-Hub Full BERT artifact once per process."""
+    """Cache the expensive Full BERT runtime across Streamlit script reruns.
+
+    Real loading and local-versus-remote resolution remain delegated to the
+    shared Full BERT module.
+    """
 
     return load_bert_runtime()
 
 
 def _render_bert_probability_chart(result: Any) -> None:
+    """Render article-level Full BERT class scores as a bar chart."""
+
     import plotly.graph_objects as go
 
-    colors = {"Bearish": "#fb7185", "Neutral": "#22d3ee", "Bullish": "#34d399"}
-    fig = go.Figure(go.Bar(
-        x=list(BERT_LABEL_ORDER),
-        y=[result.probabilities[label] * 100 for label in BERT_LABEL_ORDER],
-        marker_color=[colors[label] for label in BERT_LABEL_ORDER],
-        customdata=[[result.probabilities[label]] for label in BERT_LABEL_ORDER],
-        hovertemplate="<b>%{x}</b><br>Mean sentence probability: %{customdata[0]:.1%}<extra></extra>",
-    ))
-    fig.update_layout(**_plotly_layout(height=310), yaxis={"title": "Mean sentence probability (%)", "range": [0, 100]}, xaxis={"title": ""})
-    st.plotly_chart(fig, width="stretch", config=_plotly_config())
+    sentiment_colors = {
+        "Bearish": "#fb7185",
+        "Neutral": "#22d3ee",
+        "Bullish": "#34d399",
+    }
+    article_class_scores = [
+        result.probabilities[label] * 100
+        for label in BERT_LABEL_ORDER
+    ]
+    chart_figure = go.Figure(
+        go.Bar(
+            x=list(BERT_LABEL_ORDER),
+            y=article_class_scores,
+            marker_color=[sentiment_colors[label] for label in BERT_LABEL_ORDER],
+            customdata=[
+                [result.probabilities[label]]
+                for label in BERT_LABEL_ORDER
+            ],
+            hovertemplate="<b>%{x}</b><br>Mean sentence probability: %{customdata[0]:.1%}<extra></extra>",
+        )
+    )
+    chart_figure.update_layout(
+        **_plotly_layout(height=310),
+        yaxis={"title": "Mean sentence probability (%)", "range": [0, 100]},
+        xaxis={"title": ""},
+    )
+    st.plotly_chart(chart_figure, width="stretch", config=_plotly_config())
 
 
 def _render_bert_sentence_map(result: Any) -> None:
+    """Render Full BERT class scores for each sentence in article order."""
+
     import plotly.graph_objects as go
 
-    colors = {"Bearish": "#fb7185", "Neutral": "#22d3ee", "Bullish": "#34d399"}
+    sentiment_colors = {
+        "Bearish": "#fb7185",
+        "Neutral": "#22d3ee",
+        "Bullish": "#34d399",
+    }
     sentence_numbers = list(range(1, len(result.sentences) + 1))
-    fig = go.Figure()
-    for label in BERT_LABEL_ORDER:
-        fig.add_trace(go.Scatter(
-            x=sentence_numbers,
-            y=[item.probabilities[label] * 100 for item in result.sentences],
-            mode="lines+markers",
-            name=label,
-            line={"color": colors[label], "width": 2},
-            marker={"size": 7},
-            customdata=[[item.text] for item in result.sentences],
-            hovertemplate=f"<b>{label}</b><br>Sentence %{{x}}<br>Probability: %{{y:.1f}}%<br>%{{customdata[0]}}<extra></extra>",
-        ))
-    fig.update_layout(**_plotly_layout(height=370, showlegend=True), xaxis={"title": "Sentence order", "dtick": 1}, yaxis={"title": "Model probability (%)", "range": [0, 100]}, legend={"orientation": "h", "y": 1.12})
-    st.plotly_chart(fig, width="stretch", config=_plotly_config())
+    chart_figure = go.Figure()
+
+    for sentiment_label in BERT_LABEL_ORDER:
+        sentence_scores = [
+            sentence.probabilities[sentiment_label] * 100
+            for sentence in result.sentences
+        ]
+        chart_figure.add_trace(
+            go.Scatter(
+                x=sentence_numbers,
+                y=sentence_scores,
+                mode="lines+markers",
+                name=sentiment_label,
+                line={"color": sentiment_colors[sentiment_label], "width": 2},
+                marker={"size": 7},
+                customdata=[[sentence.text] for sentence in result.sentences],
+                hovertemplate=f"<b>{sentiment_label}</b><br>Sentence %{{x}}<br>Probability: %{{y:.1f}}%<br>%{{customdata[0]}}<extra></extra>",
+            )
+        )
+
+    chart_figure.update_layout(
+        **_plotly_layout(height=370, showlegend=True),
+        xaxis={"title": "Sentence order", "dtick": 1},
+        yaxis={"title": "Model probability (%)", "range": [0, 100]},
+        legend={"orientation": "h", "y": 1.12},
+    )
+    st.plotly_chart(chart_figure, width="stretch", config=_plotly_config())
 
 
 def _render_bert_evidence(result: Any) -> None:
-    _section_heading("BERT EVIDENCE", "Sentence-level Transformer evidence", "The article result is the mean of the sentence probabilities shown below.")
+    """Render sentence evidence and lazy WordPiece inspection for Full BERT."""
+
+    _section_heading(
+        "BERT EVIDENCE",
+        "Sentence-level Transformer evidence",
+        "The article result is the mean of the sentence probabilities shown below.",
+    )
     _render_bert_sentence_map(result)
-    tabs = st.tabs(["Bullish evidence", "Neutral evidence", "Bearish evidence"])
-    runtime = _load_public_bert_runtime()
-    for tab, label in zip(tabs, ("Bullish", "Neutral", "Bearish")):
-        with tab:
-            for rank, item in enumerate(result.strongest_by_label[label], start=1):
-                st.markdown(f"**{rank}. {item.probabilities[label]:.1%} {label}** — {item.text}")
-                with st.expander(f"View WordPiece tokens for sentence {rank}"):
-                    st.code(" · ".join(wordpiece_tokens(runtime, item.text)), language=None)
+    evidence_tabs = st.tabs(
+        ["Bullish evidence", "Neutral evidence", "Bearish evidence"]
+    )
+    bert_runtime = _load_public_bert_runtime()
+
+    for evidence_tab, sentiment_label in zip(
+        evidence_tabs,
+        ("Bullish", "Neutral", "Bearish"),
+    ):
+        with evidence_tab:
+            strongest_sentences = result.strongest_by_label[sentiment_label]
+            for sentence_rank, sentence_result in enumerate(
+                strongest_sentences,
+                start=1,
+            ):
+                sentence_score = sentence_result.probabilities[sentiment_label]
+                st.markdown(
+                    f"**{sentence_rank}. {sentence_score:.1%} {sentiment_label}** — "
+                    f"{sentence_result.text}"
+                )
+                with st.expander(
+                    f"View WordPiece tokens for sentence {sentence_rank}"
+                ):
+                    tokens = wordpiece_tokens(bert_runtime, sentence_result.text)
+                    st.code(" · ".join(tokens), language=None)
 
 def _initialize_sentiment_analyzer_state() -> None:
     """Initialize the small, persistent state used by the public analyzer."""
@@ -11150,21 +11235,21 @@ def _navigate_public_page(page: str) -> None:
 
 
 def _render_sentiment_overview_page() -> None:
-    """Render the lightweight editorial AI-product landing page."""
+    """Render the Overview from saved experiment evidence and static product HTML."""
 
     _initialize_sentiment_analyzer_state()
     try:
-        lab = load_experiment_lab_data(PROJECT_ROOT)
+        experiment_data = load_experiment_lab_data(PROJECT_ROOT)
     except ExperimentDataError as exc:
         st.error(f"Verified product metrics could not be loaded: {exc}")
         return
-    current = lab.current
-    full_historical = lab.historical["Full BERT historical"]
-    distilbert = lab.historical["DistilBERT historical"]
-    lora = lab.historical["BERT-LoRA historical"]
-    latency = lab.benchmark.get("warm_sentence_milliseconds")
-    config = lab.manifest.get("configuration", {})
-    parameters = lab.manifest.get("parameter_counts", {}).get("total_parameters")
+    current_metrics = experiment_data.current
+    full_bert_historical = experiment_data.historical["Full BERT historical"]
+    distilbert_metrics = experiment_data.historical["DistilBERT historical"]
+    lora_metrics = experiment_data.historical["BERT-LoRA historical"]
+    warm_sentence_latency = experiment_data.benchmark.get("warm_sentence_milliseconds")
+    training_config = experiment_data.manifest.get("configuration", {})
+    parameter_count = experiment_data.manifest.get("parameter_counts", {}).get("total_parameters")
 
     st.markdown(
         f'''
@@ -11191,19 +11276,19 @@ def _render_sentiment_overview_page() -> None:
         ''',
         unsafe_allow_html=True,
     )
-    primary, secondary, spacer = st.columns([1.05, 1.05, 2.9], gap="small")
-    with primary:
+    primary_action, secondary_action, _hero_spacer = st.columns([1.05, 1.05, 2.9], gap="small")
+    with primary_action:
         st.button("Analyze an article", key="overview_analyze", type="primary", width="stretch", on_click=_navigate_public_page, args=("Analyze Article",))
-    with secondary:
+    with secondary_action:
         st.button("Explore model results", key="overview_models", width="stretch", on_click=_navigate_public_page, args=("Model Results",))
 
     st.markdown(
         f'''
         <section class="ov-metric-ribbon">
-          <div title="Current reproduced run"><strong>{current.accuracy * 100:.2f}%</strong><span>Current test accuracy</span><small>CURRENT RUN</small></div>
-          <div title="Current reproduced run"><strong>{current.macro_f1:.4f}</strong><span>Current macro-F1</span><small>CURRENT RUN</small></div>
+          <div title="Current reproduced run"><strong>{current_metrics.accuracy * 100:.2f}%</strong><span>Current test accuracy</span><small>CURRENT RUN</small></div>
+          <div title="Current reproduced run"><strong>{current_metrics.macro_f1:.4f}</strong><span>Current macro-F1</span><small>CURRENT RUN</small></div>
           <div title="Verified Financial PhraseBank dataset"><strong>3,448</strong><span>Deduplicated sentences</span><small>VERIFIED DATASET</small></div>
-          <div title="Current runtime benchmark"><strong>{latency:.2f} ms</strong><span>Warm GPU inference / sentence</span><small>RUNTIME BENCHMARK</small></div>
+          <div title="Current runtime benchmark"><strong>{warm_sentence_latency:.2f} ms</strong><span>Warm GPU inference / sentence</span><small>RUNTIME BENCHMARK</small></div>
           <div title="Verified historical experiments"><strong>3</strong><span>Transformer experiments</span><small>VERIFIED EXPERIMENTS</small></div>
         </section>
         ''', unsafe_allow_html=True,
@@ -11238,7 +11323,7 @@ def _render_sentiment_overview_page() -> None:
             <article class="ov-feature ov-feature-lexical"><small>SECONDARY RULE-BASED EVIDENCE</small><h3>Lexical and risk cues</h3><p><mark>positive phrase matches</mark> <mark class="negative">negative phrase matches</mark> <mark class="risk">risk-related language</mark></p><span>Contextual contribution analysis supplements—but does not determine—the Full BERT result.</span></article>
             <article class="ov-feature ov-feature-experiments">
               <div><small>VERIFIED EXPERIMENTATION</small><h3>Verified Transformer experimentation</h3></div>
-              <div class="ov-model-strip"><div><strong>Full BERT</strong><span>{current.accuracy * 100:.2f}% current accuracy</span><span>{current.macro_f1:.4f} current macro-F1</span><small>CURRENT · PERFORMANCE CHAMPION</small></div><div><strong>DistilBERT</strong><span>{distilbert.accuracy * 100:.2f}% historical accuracy</span><span>{distilbert.macro_f1:.4f} historical macro-F1</span><small>HISTORICAL · EFFICIENT ALTERNATIVE</small></div><div><strong>BERT-LoRA</strong><span>{lora.accuracy * 100:.2f}% historical accuracy</span><span>{lora.macro_f1:.4f} historical macro-F1</span><small>HISTORICAL · PARAMETER-EFFICIENT</small></div></div>
+              <div class="ov-model-strip"><div><strong>Full BERT</strong><span>{current_metrics.accuracy * 100:.2f}% current accuracy</span><span>{current_metrics.macro_f1:.4f} current macro-F1</span><small>CURRENT · PERFORMANCE CHAMPION</small></div><div><strong>DistilBERT</strong><span>{distilbert_metrics.accuracy * 100:.2f}% historical accuracy</span><span>{distilbert_metrics.macro_f1:.4f} historical macro-F1</span><small>HISTORICAL · EFFICIENT ALTERNATIVE</small></div><div><strong>BERT-LoRA</strong><span>{lora_metrics.accuracy * 100:.2f}% historical accuracy</span><span>{lora_metrics.macro_f1:.4f} historical macro-F1</span><small>HISTORICAL · PARAMETER-EFFICIENT</small></div></div>
             </article>
           </div>
         </section>
@@ -11251,8 +11336,8 @@ def _render_sentiment_overview_page() -> None:
           <div class="ov-section-intro"><div class="ov-eyebrow">TECHNICAL DOSSIER</div><h2>Proof, not promise</h2></div>
           <div class="ov-dossier">
             <article><small>DATA</small><strong>Financial PhraseBank</strong><span>sentences_75agree</span><span>3,453 original records</span><span>3,448 after deduplication</span><span>5 duplicates removed</span></article>
-            <article><small>MODEL</small><strong>google-bert/bert-base-uncased</strong><span>{parameters / 1_000_000:.1f}M parameters</span><span>Three sentiment classes</span><span>Maximum sequence length: {config.get("max_length", 128)}</span></article>
-            <article><small>EVALUATION</small><strong>{current.accuracy * 100:.2f}% reproduced accuracy</strong><span>{current.macro_f1:.4f} reproduced macro-F1</span><span>Fixed held-out test split</span><span>Interactive error analysis</span></article>
+            <article><small>MODEL</small><strong>google-bert/bert-base-uncased</strong><span>{parameter_count / 1_000_000:.1f}M parameters</span><span>Three sentiment classes</span><span>Maximum sequence length: {training_config.get("max_length", 128)}</span></article>
+            <article><small>EVALUATION</small><strong>{current_metrics.accuracy * 100:.2f}% reproduced accuracy</strong><span>{current_metrics.macro_f1:.4f} reproduced macro-F1</span><span>Fixed held-out test split</span><span>Interactive error analysis</span></article>
             <article><small>ENGINEERING</small><strong>Cached local inference</strong><span>Batched sentence processing</span><span>GPU and CPU support</span><span>Deterministic semantic visualisations</span><span>Tested state and extraction workflows</span></article>
           </div>
         </section>
@@ -11274,8 +11359,8 @@ def _render_sentiment_overview_page() -> None:
         </section>
         ''', unsafe_allow_html=True,
     )
-    story_cta, story_space = st.columns([1.15, 4.85])
-    with story_cta:
+    story_action, _story_spacer = st.columns([1.15, 4.85])
+    with story_action:
         st.button("Open this analysis", key="overview_open_sample", width="stretch", on_click=_navigate_to_analyzer, kwargs={"load_sample": True})
 
     st.markdown(
@@ -11286,108 +11371,171 @@ def _render_sentiment_overview_page() -> None:
         </section>
         ''', unsafe_allow_html=True,
     )
-    close_analyze, close_models, close_arch, close_space = st.columns([1, 1, 1, 1.7], gap="small")
-    with close_analyze:
+    analyze_action, models_action, architecture_action, _closing_spacer = st.columns([1, 1, 1, 1.7], gap="small")
+    with analyze_action:
         st.button("Analyze financial news", key="overview_close_analyze", type="primary", width="stretch", on_click=_navigate_public_page, args=("Analyze Article",))
-    with close_models:
+    with models_action:
         st.button("Explore model performance", key="overview_close_models", width="stretch", on_click=_navigate_public_page, args=("Model Results",))
-    with close_arch:
+    with architecture_action:
         st.button("View system architecture", key="overview_close_arch", width="stretch", on_click=_navigate_public_page, args=("About / Architecture",))
 
 def _article_domain(url: str) -> str:
+    """Return a display-friendly domain from an article URL."""
+
     if not url:
         return ""
     try:
         from urllib.parse import urlparse
-        return urlparse(url).netloc.removeprefix("www.")
+
+        article_domain = urlparse(url).netloc.removeprefix("www.")
+        return article_domain
     except Exception:
         return ""
 
 
 def _supporting_sentence(text: str, phrase: str) -> str:
-    for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
-        if _term_count(sentence, phrase):
-            return sentence.strip()[:300]
+    """Return the first submitted sentence containing a complete phrase match."""
+
+    candidate_sentences = re.split(r"(?<=[.!?])\s+|\n+", text)
+    for candidate_sentence in candidate_sentences:
+        if _term_count(candidate_sentence, phrase):
+            return candidate_sentence.strip()[:300]
     return "Matched in the submitted article."
 
 
 def _contextual_phrase(text: str, term: str) -> str:
-    """Return a concise 2–5 word phrase around a genuine configured match."""
+    """Return a concise two-to-five-word phrase around a configured match."""
 
-    sentence = _supporting_sentence(text, term)
-    match = re.search(rf"(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])", sentence, re.IGNORECASE)
-    if not match:
+    supporting_sentence = _supporting_sentence(text, term)
+    term_pattern = rf"(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])"
+    term_match = re.search(term_pattern, supporting_sentence, re.IGNORECASE)
+    if not term_match:
         return term
-    stop = {"a", "an", "and", "as", "at", "but", "by", "for", "from", "in", "is", "of", "on", "or", "the", "to", "was", "were", "with"}
-    before = [word for word in re.findall(r"[A-Za-z0-9][A-Za-z0-9'’.-]*", sentence[:match.start()]) if word.lower() not in stop]
-    after = [word for word in re.findall(r"[A-Za-z0-9][A-Za-z0-9'’.-]*", sentence[match.end():]) if word.lower() not in stop]
-    term_words = re.findall(r"[A-Za-z0-9][A-Za-z0-9'’.-]*", match.group(0))
-    selected = before[-1:] + term_words + after[:1]
-    if len(selected) < 2 and len(after) > 1:
-        selected += after[1:2]
-    if len(selected) < 2 and len(before) > 1:
-        selected = before[-2:-1] + selected
-    return " ".join(selected[:5]).strip(" ,.;:-") or term
 
-def _evidence_contributions(text: str, signal: ArticleSignal) -> list[dict[str, Any]]:
-    """Expose exact unique-term contributions from the unchanged score formula."""
+    stop_words = {
+        "a", "an", "and", "as", "at", "but", "by", "for", "from",
+        "in", "is", "of", "on", "or", "the", "to", "was", "were", "with",
+    }
+    word_pattern = r"[A-Za-z0-9][A-Za-z0-9'’.-]*"
+    words_before = [
+        word
+        for word in re.findall(word_pattern, supporting_sentence[:term_match.start()])
+        if word.lower() not in stop_words
+    ]
+    words_after = [
+        word
+        for word in re.findall(word_pattern, supporting_sentence[term_match.end():])
+        if word.lower() not in stop_words
+    ]
+    matched_words = re.findall(word_pattern, term_match.group(0))
 
-    rows = []
-    for term, category, weight in [
-        *[(item, "Positive", 1.2 / 6.0) for item in signal.positive_hits],
-        *[(item, "Negative", -(1.05 / 6.0)) for item in signal.negative_hits],
-    ]:
-        rows.append({
-            "term": term,
-            "phrase": _contextual_phrase(text, term),
-            "category": category,
-            "occurrences": _term_count(text, term),
-            "individual_weight": weight,
-            "contribution": weight,
-            "context": _supporting_sentence(text, term),
-        })
-    return sorted(rows, key=lambda row: (-abs(row["contribution"]), row["term"]))[:10]
+    selected_words = words_before[-1:] + matched_words + words_after[:1]
+    if len(selected_words) < 2 and len(words_after) > 1:
+        selected_words += words_after[1:2]
+    if len(selected_words) < 2 and len(words_before) > 1:
+        selected_words = words_before[-2:-1] + selected_words
+
+    evidence_phrase = " ".join(selected_words[:5]).strip(" ,.;:-")
+    return evidence_phrase or term
 
 
-def _evidence_cloud_items(text: str, signal: ArticleSignal) -> list[dict[str, Any]]:
-    """Return detected sentiment and risk evidence only."""
+def _evidence_contributions(
+    text: str,
+    signal: ArticleSignal,
+) -> list[dict[str, Any]]:
+    """Prepare display rows from the unchanged lexical sentiment weights."""
 
-    rows = _evidence_contributions(text, signal)
+    weighted_terms = [
+        *[(term, "Positive", 1.2 / 6.0) for term in signal.positive_hits],
+        *[(term, "Negative", -(1.05 / 6.0)) for term in signal.negative_hits],
+    ]
+    evidence_rows = []
+
+    for term, category, contribution_score in weighted_terms:
+        evidence_rows.append(
+            {
+                "term": term,
+                "phrase": _contextual_phrase(text, term),
+                "category": category,
+                "occurrences": _term_count(text, term),
+                "individual_weight": contribution_score,
+                "contribution": contribution_score,
+                "context": _supporting_sentence(text, term),
+            }
+        )
+
+    return sorted(
+        evidence_rows,
+        key=lambda evidence: (-abs(evidence["contribution"]), evidence["term"]),
+    )[:10]
+
+
+def _evidence_cloud_items(
+    text: str,
+    signal: ArticleSignal,
+) -> list[dict[str, Any]]:
+    """Prepare sentiment and risk phrases for the lexical evidence cloud."""
+
+    evidence_items = _evidence_contributions(text, signal)
     for term in signal.risk_hits:
-        rows.append({
-            "term": term,
-            "phrase": _contextual_phrase(text, term),
-            "category": "Risk-related",
-            "occurrences": _term_count(text, term),
-            "individual_weight": 0.13,
-            "contribution": 0.13,
-            "context": _supporting_sentence(text, term),
-        })
-    return sorted(rows, key=lambda row: (-abs(row["contribution"]), -row["occurrences"], row["term"]))
+        evidence_items.append(
+            {
+                "term": term,
+                "phrase": _contextual_phrase(text, term),
+                "category": "Risk-related",
+                "occurrences": _term_count(text, term),
+                "individual_weight": 0.13,
+                "contribution": 0.13,
+                "context": _supporting_sentence(text, term),
+            }
+        )
+
+    return sorted(
+        evidence_items,
+        key=lambda evidence: (
+            -abs(evidence["contribution"]),
+            -evidence["occurrences"],
+            evidence["term"],
+        ),
+    )
 
 
 def _risk_theme_rows(text: str, signal: ArticleSignal) -> list[dict[str, Any]]:
-    groups = {
+    """Group matched risk terms into the themes displayed by the risk chart."""
+
+    risk_theme_terms = {
         "Uncertainty": {"uncertainty", "macro"},
         "Regulation and policy": {"regulation", "policy", "export", "controls", "china"},
         "Competition": {"competition"},
         "Volatility": {"volatility"},
         "Operational pressure": {"risk", "supply", "constraints", "inventory", "margin"},
     }
-    rows = []
-    for theme, terms in groups.items():
-        matched = sorted(set(signal.risk_hits).intersection(terms))
-        if not matched:
+    risk_theme_rows = []
+
+    for risk_theme, theme_terms in risk_theme_terms.items():
+        matched_terms = sorted(set(signal.risk_hits).intersection(theme_terms))
+        if not matched_terms:
             continue
-        contexts = [_contextual_phrase(text, term) for term in matched]
-        rows.append({
-            "theme": theme,
-            "contextual_label": contexts[0],
-            "terms": ", ".join(matched),
-            "count": sum(_term_count(text, term) for term in matched),
-            "contribution": len(matched) * 0.13,
-        })
-    return sorted(rows, key=lambda row: (row["contribution"], row["count"]), reverse=True)
+
+        contextual_phrases = [
+            _contextual_phrase(text, term)
+            for term in matched_terms
+        ]
+        risk_theme_rows.append(
+            {
+                "theme": risk_theme,
+                "contextual_label": contextual_phrases[0],
+                "terms": ", ".join(matched_terms),
+                "count": sum(_term_count(text, term) for term in matched_terms),
+                "contribution": len(matched_terms) * 0.13,
+            }
+        )
+
+    return sorted(
+        risk_theme_rows,
+        key=lambda risk_theme: (risk_theme["contribution"], risk_theme["count"]),
+        reverse=True,
+    )
 
 
 def _highlight_submitted_text(
@@ -11395,152 +11543,313 @@ def _highlight_submitted_text(
     signal: ArticleSignal,
     selected_category: str = "All evidence",
 ) -> str:
-    """Highlight one selected evidence category without changing article text."""
+    """Safely highlight one lexical evidence category in submitted text."""
 
-    categories = {phrase.lower(): ("fs-pos", "Positive") for phrase in signal.positive_hits}
-    categories.update({phrase.lower(): ("fs-neg", "Negative") for phrase in signal.negative_hits})
-    categories.update({phrase.lower(): ("fs-risk", "Risk-related") for phrase in signal.risk_hits})
+    evidence_categories = {
+        phrase.lower(): ("fs-pos", "Positive")
+        for phrase in signal.positive_hits
+    }
+    evidence_categories.update(
+        {
+            phrase.lower(): ("fs-neg", "Negative")
+            for phrase in signal.negative_hits
+        }
+    )
+    evidence_categories.update(
+        {
+            phrase.lower(): ("fs-risk", "Risk-related")
+            for phrase in signal.risk_hits
+        }
+    )
+
     if selected_category != "All evidence":
-        categories = {term: value for term, value in categories.items() if value[1] == selected_category}
-    if not categories:
+        evidence_categories = {
+            term: category
+            for term, category in evidence_categories.items()
+            if category[1] == selected_category
+        }
+    if not evidence_categories:
         return _safe(text).replace("\n\n", "</p><p>")
-    pattern = re.compile(
-        "|".join(rf"(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])" for term in sorted(categories, key=len, reverse=True)),
+
+    # Longest-first matching keeps a phrase from being split by a shorter term.
+    ordered_terms = sorted(evidence_categories, key=len, reverse=True)
+    evidence_pattern = re.compile(
+        "|".join(
+            rf"(?<![A-Za-z0-9]){re.escape(term)}(?![A-Za-z0-9])"
+            for term in ordered_terms
+        ),
         re.IGNORECASE,
     )
-    pieces, cursor = [], 0
-    for match in pattern.finditer(text):
-        pieces.append(_safe(text[cursor:match.start()]))
-        css_class, _ = categories[match.group(0).lower()]
-        pieces.append(f'<mark class="{css_class}">{_safe(match.group(0))}</mark>')
-        cursor = match.end()
-    pieces.append(_safe(text[cursor:]))
-    return "".join(pieces).replace("\n\n", "</p><p>")
+
+    highlighted_parts = []
+    text_cursor = 0
+    for evidence_match in evidence_pattern.finditer(text):
+        highlighted_parts.append(_safe(text[text_cursor:evidence_match.start()]))
+        css_class, _category = evidence_categories[
+            evidence_match.group(0).lower()
+        ]
+        highlighted_parts.append(
+            f'<mark class="{css_class}">{_safe(evidence_match.group(0))}</mark>'
+        )
+        text_cursor = evidence_match.end()
+
+    highlighted_parts.append(_safe(text[text_cursor:]))
+    highlighted_text = "".join(highlighted_parts)
+    return highlighted_text.replace("\n\n", "</p><p>")
 
 
 def _render_sentiment_spectrum(signal: ArticleSignal) -> None:
+    """Render the rule-based article sentiment score on its lexical spectrum."""
+
     import plotly.graph_objects as go
 
-    score = signal.sentiment_score
-    interpretation = _sentiment_interpretation(score)
-    color = "#34d399" if interpretation == "Bullish" else "#fb7185" if interpretation == "Bearish" else "#22d3ee"
-    fig = go.Figure()
-    for x0, x1, fill in [(-1, -.15, "rgba(251,113,133,.18)"), (-.15, .15, "rgba(34,211,238,.12)"), (.15, 1, "rgba(52,211,153,.18)")]:
-        fig.add_vrect(x0=x0, x1=x1, fillcolor=fill, line_width=0, layer="below")
-    fig.add_trace(go.Scatter(
-        x=[score], y=[0], mode="markers",
-        marker={"size":24,"color":color,"line":{"width":3,"color":"#f8fafc"}},
-        customdata=[[interpretation]],
-        hovertemplate="<b>%{customdata[0]}</b><br>Sentiment score: %{x:+.3f}<extra></extra>",
-    ))
-    fig.add_annotation(x=score,y=.26,text=f"{interpretation} · {score:+.2f}",showarrow=True,arrowcolor=color,font={"color":"#f8fafc","size":14},bgcolor="rgba(15,32,56,.92)",bordercolor=color,borderpad=7)
-    fig.update_layout(
-        **_plotly_layout(height=260,margin={"l":38,"r":38,"t":45,"b":55}),
-        xaxis={"range":[-1.04,1.04],"tickvals":[-1,-.15,0,.15,1],"ticktext":["Bearish","Bearish edge","Neutral","Bullish edge","Bullish"],"gridcolor":"rgba(148,163,184,.12)","zerolinecolor":"rgba(226,232,240,.45)","fixedrange":True},
-        yaxis={"visible":False,"range":[-.35,.55],"fixedrange":True},
+    sentiment_score = signal.sentiment_score
+    sentiment_label = _sentiment_interpretation(sentiment_score)
+    sentiment_color = (
+        "#34d399"
+        if sentiment_label == "Bullish"
+        else "#fb7185"
+        if sentiment_label == "Bearish"
+        else "#22d3ee"
     )
-    st.plotly_chart(fig, width="stretch", config=_plotly_config())
+    chart_figure = go.Figure()
+    sentiment_regions = [
+        (-1, -.15, "rgba(251,113,133,.18)"),
+        (-.15, .15, "rgba(34,211,238,.12)"),
+        (.15, 1, "rgba(52,211,153,.18)"),
+    ]
+    for region_start, region_end, fill_color in sentiment_regions:
+        chart_figure.add_vrect(
+            x0=region_start,
+            x1=region_end,
+            fillcolor=fill_color,
+            line_width=0,
+            layer="below",
+        )
+
+    chart_figure.add_trace(
+        go.Scatter(
+            x=[sentiment_score],
+            y=[0],
+            mode="markers",
+            marker={
+                "size": 24,
+                "color": sentiment_color,
+                "line": {"width": 3, "color": "#f8fafc"},
+            },
+            customdata=[[sentiment_label]],
+            hovertemplate="<b>%{customdata[0]}</b><br>Sentiment score: %{x:+.3f}<extra></extra>",
+        )
+    )
+    chart_figure.add_annotation(
+        x=sentiment_score,
+        y=.26,
+        text=f"{sentiment_label} · {sentiment_score:+.2f}",
+        showarrow=True,
+        arrowcolor=sentiment_color,
+        font={"color": "#f8fafc", "size": 14},
+        bgcolor="rgba(15,32,56,.92)",
+        bordercolor=sentiment_color,
+        borderpad=7,
+    )
+    chart_figure.update_layout(
+        **_plotly_layout(height=260, margin={"l": 38, "r": 38, "t": 45, "b": 55}),
+        xaxis={
+            "range": [-1.04, 1.04],
+            "tickvals": [-1, -.15, 0, .15, 1],
+            "ticktext": ["Bearish", "Bearish edge", "Neutral", "Bullish edge", "Bullish"],
+            "gridcolor": "rgba(148,163,184,.12)",
+            "zerolinecolor": "rgba(226,232,240,.45)",
+            "fixedrange": True,
+        },
+        yaxis={"visible": False, "range": [-.35, .55], "fixedrange": True},
+    )
+    st.plotly_chart(chart_figure, width="stretch", config=_plotly_config())
 
 
 def _render_evidence_cloud(text: str, signal: ArticleSignal) -> None:
-    """Render deterministic, non-overlapping evidence terms with native tooltips."""
+    """Render matched lexical phrases as deterministic HTML evidence chips."""
 
-    items = _evidence_cloud_items(text, signal)
-    if not items:
+    evidence_items = _evidence_cloud_items(text, signal)
+    if not evidence_items:
         st.markdown('<div class="fs-card fs-empty" style="min-height:180px"><div class="fs-empty-icon">≋</div><strong>No configured evidence was detected.</strong><p>The submitted article contains no matched positive, negative, or risk terms.</p></div>', unsafe_allow_html=True)
         return
-    colors = {"Positive": "#34d399", "Negative": "#fb7185", "Risk-related": "#fbbf24"}
-    chips = []
-    for item in items:
-        size = min(30, 16 + int(abs(item["contribution"]) * 42) + min(item["occurrences"], 3))
+
+    evidence_colors = {
+        "Positive": "#34d399",
+        "Negative": "#fb7185",
+        "Risk-related": "#fbbf24",
+    }
+    evidence_chips = []
+    for evidence_item in evidence_items:
+        font_size = min(
+            30,
+            16
+            + int(abs(evidence_item["contribution"]) * 42)
+            + min(evidence_item["occurrences"], 3),
+        )
         tooltip = (
-            f'Matched term: {item["term"]} | Category: {item["category"]} | '
-            f'Contribution: {item["contribution"]:+.3f} | Occurrences: {item["occurrences"]} | '
-            f'Context: {item["context"]}'
+            f'Matched term: {evidence_item["term"]} | Category: {evidence_item["category"]} | '
+            f'Contribution: {evidence_item["contribution"]:+.3f} | Occurrences: {evidence_item["occurrences"]} | '
+            f'Context: {evidence_item["context"]}'
         )
-        chips.append(
-            f'<span class="fs-cloud-term" style="color:{colors[item["category"]]};font-size:{size}px" '
-            f'title="{_safe(tooltip)}">{_safe(item["phrase"])}</span>'
+        evidence_chips.append(
+            f'<span class="fs-cloud-term" style="color:{evidence_colors[evidence_item["category"]]};font-size:{font_size}px" '
+            f'title="{_safe(tooltip)}">{_safe(evidence_item["phrase"])}</span>'
         )
-    container_class = "fs-card fs-cloud" if len(items) >= 3 else "fs-card fs-token-row"
-    st.markdown(f'<div class="{container_class}">' + "".join(chips) + "</div>", unsafe_allow_html=True)
-    if len(items) < 3:
+
+    container_class = (
+        "fs-card fs-cloud"
+        if len(evidence_items) >= 3
+        else "fs-card fs-token-row"
+    )
+    cloud_html = f'<div class="{container_class}">' + "".join(evidence_chips) + "</div>"
+    st.markdown(cloud_html, unsafe_allow_html=True)
+    if len(evidence_items) < 3:
         st.caption("Only the genuine configured phrases detected in this article are shown.")
 
 
 def _render_evidence_chart(text: str, signal: ArticleSignal) -> None:
-    rows = _evidence_contributions(text, signal)
-    if not rows:
+    """Render lexical sentiment contributions as a horizontal bar chart."""
+
+    evidence_rows = _evidence_contributions(text, signal)
+    if not evidence_rows:
         st.markdown('<div class="fs-card fs-empty" style="min-height:190px"><div class="fs-empty-icon">≋</div><strong>No configured sentiment phrases were detected.</strong></div>', unsafe_allow_html=True)
         return
+
     import plotly.graph_objects as go
 
-    display = list(reversed(rows))
-    fig = go.Figure(go.Bar(
-        x=[row["contribution"] for row in display],
-        y=[row["phrase"] for row in display],
-        orientation="h",
-        marker_color=["#34d399" if row["contribution"] > 0 else "#fb7185" for row in display],
-        customdata=[[
-            row["term"], row["category"], row["occurrences"], row["individual_weight"], row["context"]
-        ] for row in display],
-        hovertemplate=(
-            "<b>%{y}</b><br>Configured term: %{customdata[0]}<br>Category: %{customdata[1]}<br>"
-            "Occurrences: %{customdata[2]}<br>Individual weight: %{customdata[3]:+.3f}<br>"
-            "Total contribution: %{x:+.3f}<br>Supporting sentence: %{customdata[4]}<extra></extra>"
-        ),
-    ))
-    fig.add_vline(x=0, line_color="rgba(226,232,240,.6)", line_width=2)
-    fig.update_layout(
-        **_plotly_layout(height=max(320, 58 * len(display) + 110), margin={"l":210,"r":45,"t":35,"b":58}),
-        xaxis={"title":"Contribution to rule-based article score","gridcolor":"rgba(148,163,184,.12)","zeroline":False},
-        yaxis={"title":"","automargin":True,"tickfont":{"size":12}},
+    displayed_evidence = list(reversed(evidence_rows))
+    chart_figure = go.Figure(
+        go.Bar(
+            x=[evidence["contribution"] for evidence in displayed_evidence],
+            y=[evidence["phrase"] for evidence in displayed_evidence],
+            orientation="h",
+            marker_color=[
+                "#34d399" if evidence["contribution"] > 0 else "#fb7185"
+                for evidence in displayed_evidence
+            ],
+            customdata=[
+                [
+                    evidence["term"],
+                    evidence["category"],
+                    evidence["occurrences"],
+                    evidence["individual_weight"],
+                    evidence["context"],
+                ]
+                for evidence in displayed_evidence
+            ],
+            hovertemplate=(
+                "<b>%{y}</b><br>Configured term: %{customdata[0]}<br>Category: %{customdata[1]}<br>"
+                "Occurrences: %{customdata[2]}<br>Individual weight: %{customdata[3]:+.3f}<br>"
+                "Total contribution: %{x:+.3f}<br>Supporting sentence: %{customdata[4]}<extra></extra>"
+            ),
+        )
     )
-    st.plotly_chart(fig, width="stretch", config=_plotly_config())
+    chart_figure.add_vline(x=0, line_color="rgba(226,232,240,.6)", line_width=2)
+    chart_figure.update_layout(
+        **_plotly_layout(
+            height=max(320, 58 * len(displayed_evidence) + 110),
+            margin={"l": 210, "r": 45, "t": 35, "b": 58},
+        ),
+        xaxis={
+            "title": "Contribution to rule-based article score",
+            "gridcolor": "rgba(148,163,184,.12)",
+            "zeroline": False,
+        },
+        yaxis={"title": "", "automargin": True, "tickfont": {"size": 12}},
+    )
+    st.plotly_chart(chart_figure, width="stretch", config=_plotly_config())
     st.caption("Bars show how configured matched language contributed to the rule-based article score.")
 
 
 def _render_risk_gauge(signal: ArticleSignal) -> None:
-    """Render a compact non-overlapping bullet gauge."""
+    """Render the heuristic lexical risk score as a compact bullet gauge."""
 
     import plotly.graph_objects as go
 
-    score = signal.risk_score * 100
-    fig = go.Figure()
-    for x0, x1, color in [
+    risk_score = signal.risk_score * 100
+    chart_figure = go.Figure()
+    risk_regions = [
         (0, 33, "rgba(52,211,153,.24)"),
         (33, 66, "rgba(251,191,36,.24)"),
         (66, 100, "rgba(251,113,133,.24)"),
-    ]:
-        fig.add_shape(type="rect", x0=x0, x1=x1, y0=-.13, y1=.13, fillcolor=color, line_width=0)
-    fig.add_trace(go.Scatter(
-        x=[score], y=[0], mode="markers+text", text=[f"{score:.0f}%"], textposition="top center",
-        marker={"symbol":"line-ns","size":34,"color":"#f8fafc","line":{"width":4,"color":"#fbbf24"}},
-        hovertemplate="Heuristic article-risk indicator: %{x:.1f}%<extra></extra>",
-    ))
-    fig.update_layout(
-        **_plotly_layout(height=190, margin={"l":28,"r":28,"t":38,"b":50}),
-        xaxis={"range":[0,100],"tickvals":[16.5,49.5,83],"ticktext":["Low","Moderate","Elevated"],"fixedrange":True,"showgrid":False,"zeroline":False},
-        yaxis={"visible":False,"range":[-.28,.36],"fixedrange":True},
+    ]
+    for region_start, region_end, fill_color in risk_regions:
+        chart_figure.add_shape(
+            type="rect",
+            x0=region_start,
+            x1=region_end,
+            y0=-.13,
+            y1=.13,
+            fillcolor=fill_color,
+            line_width=0,
+        )
+
+    chart_figure.add_trace(
+        go.Scatter(
+            x=[risk_score],
+            y=[0],
+            mode="markers+text",
+            text=[f"{risk_score:.0f}%"],
+            textposition="top center",
+            marker={
+                "symbol": "line-ns",
+                "size": 34,
+                "color": "#f8fafc",
+                "line": {"width": 4, "color": "#fbbf24"},
+            },
+            hovertemplate="Heuristic article-risk indicator: %{x:.1f}%<extra></extra>",
+        )
     )
-    st.plotly_chart(fig, width="stretch", config=_plotly_config())
+    chart_figure.update_layout(
+        **_plotly_layout(height=190, margin={"l": 28, "r": 28, "t": 38, "b": 50}),
+        xaxis={
+            "range": [0, 100],
+            "tickvals": [16.5, 49.5, 83],
+            "ticktext": ["Low", "Moderate", "Elevated"],
+            "fixedrange": True,
+            "showgrid": False,
+            "zeroline": False,
+        },
+        yaxis={"visible": False, "range": [-.28, .36], "fixedrange": True},
+    )
+    st.plotly_chart(chart_figure, width="stretch", config=_plotly_config())
 
 
 def _render_risk_theme_chart(text: str, signal: ArticleSignal) -> None:
-    rows = _risk_theme_rows(text, signal)
-    if not rows:
+    """Render grouped lexical risk themes as a horizontal bar chart."""
+
+    risk_theme_rows = _risk_theme_rows(text, signal)
+    if not risk_theme_rows:
         st.markdown('<div class="fs-card fs-empty" style="min-height:190px"><div class="fs-empty-icon">✓</div><strong>No configured risk themes were detected.</strong></div>', unsafe_allow_html=True)
         return
+
     import plotly.graph_objects as go
 
-    display = list(reversed(rows))
-    fig = go.Figure(go.Bar(
-        x=[row["contribution"] for row in display],y=[row["contextual_label"] for row in display],orientation="h",marker_color="#fbbf24",
-        customdata=[[row["theme"],row["terms"],row["count"]] for row in display],
-        hovertemplate="<b>%{y}</b><br>Theme: %{customdata[0]}<br>Matched terms: %{customdata[1]}<br>Occurrences: %{customdata[2]}<br>Risk-language contribution: %{x:.2f}<extra></extra>",
-    ))
-    fig.update_layout(**_plotly_layout(height=max(280,52*len(display)+105)),xaxis={"title":"Contribution to heuristic risk score","gridcolor":"rgba(148,163,184,.12)"},yaxis={"title":"","automargin":True})
-    st.plotly_chart(fig, width="stretch", config=_plotly_config())
+    displayed_themes = list(reversed(risk_theme_rows))
+    chart_figure = go.Figure(
+        go.Bar(
+            x=[theme["contribution"] for theme in displayed_themes],
+            y=[theme["contextual_label"] for theme in displayed_themes],
+            orientation="h",
+            marker_color="#fbbf24",
+            customdata=[
+                [theme["theme"], theme["terms"], theme["count"]]
+                for theme in displayed_themes
+            ],
+            hovertemplate="<b>%{y}</b><br>Theme: %{customdata[0]}<br>Matched terms: %{customdata[1]}<br>Occurrences: %{customdata[2]}<br>Risk-language contribution: %{x:.2f}<extra></extra>",
+        )
+    )
+    chart_figure.update_layout(
+        **_plotly_layout(height=max(280, 52 * len(displayed_themes) + 105)),
+        xaxis={
+            "title": "Contribution to heuristic risk score",
+            "gridcolor": "rgba(148,163,184,.12)",
+        },
+        yaxis={"title": "", "automargin": True},
+    )
+    st.plotly_chart(chart_figure, width="stretch", config=_plotly_config())
 
 _BERT_COLORS = {"Bearish": "#fb7185", "Neutral": "#22d3ee", "Bullish": "#34d399"}
 
